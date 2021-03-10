@@ -1,3 +1,14 @@
+##############
+### My own ###
+##############
+
+#Measurement data
+data/
+
+###########################################
+### GitHub template for Python projects ###
+###########################################
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
