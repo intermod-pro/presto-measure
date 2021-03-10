@@ -1,12 +1,26 @@
+# -*- coding: utf-8 -*-
+"""
+Perform a readout of a resonator with the Pulsed mode.
+Copyright (C) 2021  Intermodulation Products AB.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see
+<https://www.gnu.org/licenses/>.
+"""
 import sys
 import time
 
-from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
-
-import pulsed
-from utils import untwist_downconversion
+from matplotlib import rcParams
+from presto import pulsed
+from presto.utils import untwist_downconversion
 
 rcParams['figure.dpi'] = 108.8
 
@@ -20,8 +34,7 @@ JPA = False
 if JPA:
     if '/home/riccardo/IntermodulatorSuite' not in sys.path:
         sys.path.append('/home/riccardo/IntermodulatorSuite')
-    from mlaapi import mla_api
-    from mlaapi import mla_globals
+    from mlaapi import mla_api, mla_globals
     settings = mla_globals.read_config()
     mla = mla_api.MLA(settings)
 

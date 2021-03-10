@@ -1,4 +1,17 @@
-"""Power-dependent single-frequency 2D sweep using the test firmware (measure in time domain).
+# -*- coding: utf-8 -*-
+"""
+2D sweep of drive power and frequency with the Test mode.
+Copyright (C) 2021  Intermodulation Products AB.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see
+<https://www.gnu.org/licenses/>.
 """
 import os
 import sys
@@ -6,18 +19,17 @@ import time
 
 import h5py
 import numpy as np
+from presto import commands as cmd
+from presto import rflockin
+from presto.utils import format_sec, get_sourcecode
 
-import commands as cmd
-import rflockin
-from utils import get_sourcecode, format_sec
 import load_sweep_power
 
 JPA = False
 if JPA:
     if '/home/riccardo/IntermodulatorSuite' not in sys.path:
         sys.path.append('/home/riccardo/IntermodulatorSuite')
-    from mlaapi import mla_api
-    from mlaapi import mla_globals
+    from mlaapi import mla_api, mla_globals
     settings = mla_globals.read_config()
     mla = mla_api.MLA(settings)
 
@@ -152,11 +164,14 @@ if JPA:
 # *************************
 # *** Save data to HDF5 ***
 # *************************
-script_filename = os.path.splitext(os.path.basename(__file__))[0]  # name of current script
+script_path = os.path.realpath(__file__)  # full path of current script
+current_dir, script_basename = os.path.split(script_path)
+script_filename = os.path.splitext(script_basename)[0]  # name of current script
 timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
-save_filename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
+save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
+save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
 source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
-with h5py.File(save_filename, "w") as h5f:
+with h5py.File(save_path, "w") as h5f:
     dt = h5py.string_dtype(encoding='utf-8')
     ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
     for ii, line in enumerate(source_code):
@@ -168,8 +183,9 @@ with h5py.File(save_filename, "w") as h5f:
     h5f.create_dataset("freq_arr", data=freq_arr)
     h5f.create_dataset("amp_arr", data=amp_arr)
     h5f.create_dataset("resp_arr", data=resp_arr)
+print(f"Data saved to: {save_path}")
 
 # ********************
 # *** Plot results ***
 # ********************
-fig1 = load_sweep_power.load(save_filename)
+fig1 = load_sweep_power.load(save_path)
