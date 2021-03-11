@@ -1,4 +1,18 @@
 # -*- coding: utf-8 -*-
+"""
+Loader for files saved by jpa_sweep_pwr_bias_gain.py
+Copyright (C) 2021  Intermodulation Products AB.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see
+<https://www.gnu.org/licenses/>.
+"""
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,6 +21,7 @@ load_filename = "jpa_sweep_pwr_bias_gain_20201226_065543.h5"
 load_filename = "jpa_sweep_pwr_bias_gain_20201227_011557.h5"
 load_filename = "jpa_sweep_pwr_bias_gain_20201227_132023.h5"
 load_filename = "jpa_sweep_pwr_bias_gain_20201228_055817.h5"
+
 with h5py.File(load_filename, "r") as h5f:
     df = h5f.attrs["df"]
     Navg = h5f.attrs["Navg"]
