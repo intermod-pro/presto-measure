@@ -18,11 +18,11 @@ import sys
 import time
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 from presto import commands as cmd
-from presto import rflockin
+from presto import test
 from presto.utils import format_sec, get_sourcecode
+import load_jpa_bias_sweep_w_pump
 
 if '/home/riccardo/IntermodulatorSuite' not in sys.path:
     sys.path.append('/home/riccardo/IntermodulatorSuite')
@@ -36,18 +36,20 @@ ADDRESS = "130.237.35.90"
 PORT = 42878
 EXT_CLK_REF = False
 
-f_center = 6.031e9
-f_span = 20e6
+f_center = 6.1e9
+f_span = 100e6
 f_start = f_center - f_span / 2
 f_stop = f_center + f_span / 2
 df = 1e5
 Navg = 10
 
 pump_freq = 2 * f_center
-pump_pwr = 0  # lmx units
+pump_pwr = 7  # lmx units
 
-bias_min = +0.400
-bias_max = +0.500
+# bias_min = +0.400
+# bias_max = +0.500
+bias_min = +0.388
+bias_max = +0.462
 nr_bias = 201
 bias_arr = np.linspace(bias_min, bias_max, nr_bias)
 
@@ -60,7 +62,7 @@ dither = True
 extra = 500
 
 mla.connect()
-with rflockin.Test(
+with test.Test(
         address=ADDRESS,
         port=PORT,
         ext_ref_clk=EXT_CLK_REF,
@@ -200,28 +202,11 @@ with h5py.File(save_path, "w") as h5f:
     h5f.attrs["pump_pwr"] = pump_pwr
     h5f.create_dataset("freq_arr", data=freq_arr)
     h5f.create_dataset("bias_arr", data=bias_arr)
+    h5f.create_dataset("ref_arr", data=ref_arr)
     h5f.create_dataset("resp_arr", data=resp_arr)
 print(f"Data saved to: {save_path}")
 
 # *****************
 # *** Plot data ***
 # *****************
-ref_db = 20 * np.log10(np.abs(ref_arr))
-data_db = 20 * np.log10(np.abs(resp_arr))
-gain_db = data_db - ref_db
-
-low = np.percentile(gain_db, 1)
-high = np.percentile(gain_db, 99)
-lim = max(abs(low), abs(high))
-
-fig, ax = plt.subplots(tight_layout=True)
-im = ax.imshow(
-    gain_db,
-    origin='lower',
-    aspect='auto',
-    extent=(1e-9 * freq_arr[0], 1e-9 * freq_arr[-1], bias_min, bias_max),
-    vmin=-lim,
-    vmax=lim,
-    cmap="RdBu_r",
-)
-fig.show()
+fig1 = load_jpa_bias_sweep_w_pump.load(save_path)

@@ -17,8 +17,8 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
-load_filename = "jpa_bias_sweep_20210205_102845.h5"
-load_filename = "jpa_bias_sweep_20210226_074737.h5"
+load_filename = "data/jpa_bias_sweep_20210205_102845.h5"
+load_filename = "data/jpa_bias_sweep_20210226_074737.h5"
 
 with h5py.File(load_filename, "r") as h5f:
     df = h5f.attrs["df"]

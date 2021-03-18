@@ -21,7 +21,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from presto import commands as cmd
-from presto import rflockin
+from presto import test
 from presto.utils import format_sec, get_sourcecode
 
 if '/home/riccardo/IntermodulatorSuite' not in sys.path:
@@ -55,7 +55,7 @@ dither = True
 extra = 2_000
 
 mla.connect()
-with rflockin.Test(
+with test.Test(
         address=ADDRESS,
         port=PORT,
         ext_ref_clk=EXT_CLK_REF,

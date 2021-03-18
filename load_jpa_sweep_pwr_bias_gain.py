@@ -17,10 +17,11 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
-load_filename = "jpa_sweep_pwr_bias_gain_20201226_065543.h5"
-load_filename = "jpa_sweep_pwr_bias_gain_20201227_011557.h5"
-load_filename = "jpa_sweep_pwr_bias_gain_20201227_132023.h5"
-load_filename = "jpa_sweep_pwr_bias_gain_20201228_055817.h5"
+load_filename = "data/jpa_sweep_pwr_bias_gain_20201226_065543.h5"
+load_filename = "data/jpa_sweep_pwr_bias_gain_20201227_011557.h5"
+load_filename = "data/jpa_sweep_pwr_bias_gain_20201227_132023.h5"
+load_filename = "data/jpa_sweep_pwr_bias_gain_20201228_055817.h5"
+load_filename = "data/jpa_sweep_pwr_bias_gain_20210226_100604.h5"
 
 with h5py.File(load_filename, "r") as h5f:
     df = h5f.attrs["df"]
@@ -62,9 +63,9 @@ low = np.percentile(gain_db, 1)
 high = np.percentile(gain_db, 99)
 lim = max(abs(low), abs(high))
 
-fig, ax = plt.subplots(6, 10, sharex=True, sharey=True, tight_layout=True)
-for ii in range(60):
-    _ax = ax[ii // 10][ii % 10]
+fig, ax = plt.subplots(3, 4, sharex=True, sharey=True, tight_layout=True)
+for ii in range(12):
+    _ax = ax[ii // 4][ii % 4]
     im = _ax.imshow(gain_db[ii, :, :],
                     origin='lower',
                     aspect='auto',
@@ -75,20 +76,20 @@ for ii in range(60):
     _ax.set_title(str(pump_pwr_arr[ii]))
 fig.show()
 
-bias_idx = np.argmin(np.abs(bias_arr - 0.44))
-fig, ax = plt.subplots()
-for pp in range(25, 35):
-    pwr = pump_pwr_arr[pp]
-    ax.plot(1e-9 * freq_arr, gain_db[pp, bias_idx, :], label=str(pwr))
-ax.legend()
-fig.show()
+# bias_idx = np.argmin(np.abs(bias_arr - 0.44))
+# fig, ax = plt.subplots()
+# for pp in range(25, 35):
+#     pwr = pump_pwr_arr[pp]
+#     ax.plot(1e-9 * freq_arr, gain_db[pp, bias_idx, :], label=str(pwr))
+# ax.legend()
+# fig.show()
 
-pwr_idx = np.argmin(np.abs(pump_pwr_arr - 7.5))
-bias_start = np.argmin(np.abs(bias_arr - 0.43))
-bias_stop = np.argmin(np.abs(bias_arr - 0.45))
-fig, ax = plt.subplots()
-for bb in range(bias_start, bias_stop):
-    bias = bias_arr[bb]
-    ax.plot(1e-9 * freq_arr, gain_db[pwr_idx, bb, :], label=str(bias))
-ax.legend()
-fig.show()
+# pwr_idx = np.argmin(np.abs(pump_pwr_arr - 7.5))
+# bias_start = np.argmin(np.abs(bias_arr - 0.43))
+# bias_stop = np.argmin(np.abs(bias_arr - 0.45))
+# fig, ax = plt.subplots()
+# for bb in range(bias_start, bias_stop):
+#     bias = bias_arr[bb]
+#     ax.plot(1e-9 * freq_arr, gain_db[pwr_idx, bb, :], label=str(bias))
+# ax.legend()
+# fig.show()

@@ -19,11 +19,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-from utils import untwist_downconversion
+from presto.utils import untwist_downconversion
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "rabi_time_20210306_012647.h5"
+which = "I"  # Which plot to show on its own. Any of A, P, I or Q.
+
+load_filename = "data/rabi_time_20210306_012647.h5"
 
 
 def load(load_filename):
@@ -119,7 +121,49 @@ def load(load_filename):
     ax2[-1].set_xlabel("Pulse length [ns]")
     fig2.show()
 
-    return fig1, fig2
+    # Plot one of them on its own
+    if which == "A":
+        data = np.abs(resp_arr)
+        data_fit = func(len_arr, *popt_a)
+        quantity = "Amplitude"
+        unit = "FS"
+    elif which == "P":
+        data = np.angle(resp_arr)
+        data_fit = func(len_arr, *popt_p)
+        quantity = "Phase"
+        unit = "rad"
+    elif which == "I":
+        data = np.real(resp_arr)
+        data_fit = func(len_arr, *popt_x)
+        quantity = "I quadrature"
+        unit = "FS"
+    elif which == "Q":
+        data = np.imag(resp_arr)
+        data_fit = func(len_arr, *popt_y)
+        quantity = "Q quadrature"
+        unit = "FS"
+    data_max = np.abs(data).max()
+    if data_max < 1e-6:
+        unit = f"n{unit:s}"
+        data *= 1e9
+        data_fit *= 1e9
+    elif data_max < 1e-3:
+        unit = f"μ{unit:s}"
+        data *= 1e6
+        data_fit *= 1e6
+    elif data_max < 1e0:
+        unit = f"m{unit:s}"
+        data *= 1e3
+        data_fit *= 1e3
+
+    fig3, ax3 = plt.subplots(tight_layout=True)
+    ax3.plot(1e9 * len_arr, data, '.')
+    ax3.plot(1e9 * len_arr, data_fit, '--')
+    ax3.set_xlabel("Pulse length [ns]")
+    ax3.set_ylabel(f"{quantity:s} [{unit:s}]")
+    fig3.show()
+
+    return fig1, fig2, fig3
 
 
 def func(t, offset, amplitude, T2, period, phase):
@@ -156,4 +200,4 @@ def fit_period(x, y):
 
 
 if __name__ == "__main__":
-    fig1, fig2 = load(load_filename)
+    fig1, fig2, fig3 = load(load_filename)

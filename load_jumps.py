@@ -18,11 +18,12 @@ from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import leastsq
-from sklearn.mixture import GaussianMixture
-
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "jumps_20210302_075538.h5"
+LOGSCALE = True  # plot amplitude histogram in logarithmic scale
+PHASE = False  # plot also phase time trace
+
+load_filename = "data/jumps_20210302_075538.h5"
 
 
 def single_gaussian(x, m, s):
@@ -55,26 +56,46 @@ def load(load_filename):
         t_arr = h5f["t_arr"][()]
         resp_arr = h5f["resp_arr"][()]
 
-    fig = plt.figure(figsize=(12.8, 4.8), tight_layout=True)
-    ax1 = fig.add_subplot(2, 2, 1)
-    ax2 = fig.add_subplot(2, 2, 3, sharex=ax1)
-    ax3 = fig.add_subplot(1, 2, 2)
-    ax1.plot(1e3 * t_arr, np.abs(resp_arr))
-    ax2.plot(1e3 * t_arr, np.angle(resp_arr))
-    ax1.set_ylabel("Amplitude [FS]")
-    ax2.set_ylabel("phase [rad]")
-    ax2.set_xlabel("Time [ms]")
-    for tick in ax1.get_xticklabels():
-        tick.set_visible(False)
-
     amps = np.abs(resp_arr)
+    amps_max = amps.max()
+    unit = ""
+    if amps_max < 1e-6:
+        unit = "n"
+        amps *= 1e9
+    elif amps_max < 1e-3:
+        unit = "μ"
+        amps *= 1e6
+    elif amps_max < 1e0:
+        unit = "m"
+        amps *= 1e3
+
+    fig = plt.figure(figsize=(12.8, 4.8), tight_layout=True)
+    if PHASE:
+        ax1 = fig.add_subplot(2, 2, 1)
+        ax2 = fig.add_subplot(2, 2, 3, sharex=ax1)
+    else:
+        ax1 = fig.add_subplot(1, 2, 1)
+    ax3 = fig.add_subplot(1, 2, 2)
+    ax1.plot(1e3 * t_arr, amps)
+    ax1.set_ylabel(f"Amplitude [{unit:s}FS]")
+    if PHASE:
+        ax2.plot(1e3 * t_arr, np.angle(resp_arr))
+        ax2.set_ylabel("phase [rad]")
+        ax2.set_xlabel("Time [ms]")
+        for tick in ax1.get_xticklabels():
+            tick.set_visible(False)
+    else:
+        ax1.set_xlabel("Time [ms]")
+    ax1.set_xlim(134.75, 140.25)
+    ax1.set_ylim(-0.15, 3.15)
 
     # Make and plot histogram
     hist, bins, patches = ax3.hist(amps, bins=256, density=False)
     bin_width = bins[1] - bins[0]
     scale = len(amps) * bin_width
-    ax3.set_yscale("log")
-    ax3.set_xlabel("Amplitude [FS]")
+    if LOGSCALE:
+        ax3.set_yscale("log")
+    ax3.set_xlabel(f"Amplitude [{unit:s}FS]")
     ax3.set_ylabel("Counts")
     ax3.yaxis.set_label_position("right")
     ax3.yaxis.tick_right()
@@ -98,13 +119,16 @@ def load(load_filename):
     w_fit = np.atleast_1d(pfit[2::3])
 
     # Plot fit
-    ax3.autoscale(False)
+    if LOGSCALE:
+        ax3.autoscale(False)
     ax3.plot(x_data, scale * w_fit[0] * single_gaussian(x_data, m_fit[0], s_fit[0]), label=f"{w_fit[0]:.1%}")
     ax3.plot(x_data, scale * w_fit[1] * single_gaussian(x_data, m_fit[1], s_fit[1]), label=f"{w_fit[1]:.1%}")
-    ax3.legend()
+    ax3.legend(title="Gaussian fit")
 
     fig.show()
 
+    return fig
+
 
 if __name__ == "__main__":
-    fig = load(load_filename)
+    fig1 = load(load_filename)

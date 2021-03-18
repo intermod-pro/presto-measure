@@ -20,7 +20,7 @@ import time
 import h5py
 import numpy as np
 from presto import commands as cmd
-from presto import rflockin
+from presto import test
 from presto.utils import get_sourcecode
 
 import load_jumps
@@ -60,7 +60,7 @@ if JPA:
     bias_port = 1
     mla.connect()
 
-with rflockin.Test(
+with test.Test(
         address=ADDRESS,
         port=PORT,
         ext_ref_clk=EXT_REF_CLK,

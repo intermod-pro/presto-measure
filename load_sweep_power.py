@@ -14,33 +14,36 @@ You should have received a copy of the GNU General Public License along with thi
 <https://www.gnu.org/licenses/>.
 """
 import h5py
+from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import matplotlib.widgets as mwidgets
 import numpy as np
 from resonator_tools import circuit
+rcParams['figure.dpi'] = 108.8
 
-NORM = True
-AMP_IDX = 0
-BLIT = False
+NORM = True  # normalize response amplitude by drive amplitude
+PORTRAIT = False  # Arrange plots vertically
+BLIT = False  # Use blitting when plotting. Faster but doesn't work well with fitting
+AMP_IDX = 0  # internal use
 
-# load_filename = "sweep_power_20210205_083929.h5"
+# load_filename = "data/sweep_power_20210205_083929.h5"
 
-# load_filename = "sweep_power_20210206_221320.h5"  # 6.025 GHz
-# load_filename = "sweep_power_20210207_012855.h5"  # 6.025 GHz, 6425 uA, dither False
-# load_filename = "sweep_power_20210207_104941.h5"  # 6.025 GHz, 6425 uA, dither False, with JPA
+# load_filename = "data/sweep_power_20210206_221320.h5"  # 6.025 GHz
+# load_filename = "data/sweep_power_20210207_012855.h5"  # 6.025 GHz, 6425 uA, dither False
+# load_filename = "data/sweep_power_20210207_104941.h5"  # 6.025 GHz, 6425 uA, dither False, with JPA
 
-# load_filename = "sweep_power_20210206_110947.h5"  # 6.164 GHz
-# load_filename = "sweep_power_20210206_133635.h5"  # 6.306 GHz
-# load_filename = "sweep_power_20210206_165933.h5"  # 6.607 GHz
-# load_filename = "sweep_power_20210206_194753.h5"  # 6.770 GHz
+# load_filename = "data/sweep_power_20210206_110947.h5"  # 6.164 GHz
+# load_filename = "data/sweep_power_20210206_133635.h5"  # 6.306 GHz
+# load_filename = "data/sweep_power_20210206_165933.h5"  # 6.607 GHz
+# load_filename = "data/sweep_power_20210206_194753.h5"  # 6.770 GHz
 
-# load_filename = "sweep_power_20210226_000906.h5"  # 32_000 uA
-load_filename = "sweep_power_20210226_191421.h5"  # 6_425 uA, jumps
-# load_filename = "sweep_power_20210227_094842.h5"  # 6_425 uA, jumps
-# load_filename = "sweep_power_20210227_130531.h5"  # 20_000 uA, jumps
-# load_filename = "sweep_power_20210227_154445.h5"  # 32_000 uA, few jumps
-# load_filename = "sweep_power_20210227_195737.h5"  # 32_000 uA, no jumps?
-# load_filename = "sweep_power_20210228_001222.h5"  # 32_000 uA, no jumps?
+load_filename = "data/sweep_power_20210226_000906.h5"  # 32_000 uA
+# load_filename = "data/sweep_power_20210226_191421.h5"  # 6_425 uA, jumps
+# load_filename = "data/sweep_power_20210227_094842.h5"  # 6_425 uA, jumps
+# load_filename = "data/sweep_power_20210227_130531.h5"  # 20_000 uA, jumps
+# load_filename = "data/sweep_power_20210227_154445.h5"  # 32_000 uA, few jumps
+# load_filename = "data/sweep_power_20210227_195737.h5"  # 32_000 uA, no jumps?
+# load_filename = "data/sweep_power_20210228_001222.h5"  # 32_000 uA, no jumps?
 
 
 def load(load_filename):
@@ -82,8 +85,12 @@ def load(load_filename):
     y_max = amp_dBFS[-1]
     dy = amp_dBFS[1] - amp_dBFS[0]
 
-    fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
-    ax1 = fig1.add_subplot(2, 1, 1)
+    if PORTRAIT:
+        fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
+        ax1 = fig1.add_subplot(2, 1, 1)
+    else:
+        fig1 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
+        ax1 = fig1.add_subplot(1, 2, 1)
     im = ax1.imshow(
         resp_dB,
         origin='lower',
@@ -98,13 +105,24 @@ def load(load_filename):
     ax1.set_xlabel("Frequency [GHz]")
     ax1.set_ylabel("Drive amplitude [dBFS]")
     cb = fig1.colorbar(im)
-    cb.set_label("Response amplitude [dB]")
+    if PORTRAIT:
+        cb.set_label("Response amplitude [dB]")
+    else:
+        ax1.set_title("Response amplitude [dB]")
 
-    ax2 = fig1.add_subplot(4, 1, 3)
-    ax3 = fig1.add_subplot(4, 1, 4, sharex=ax2)
+    if PORTRAIT:
+        ax2 = fig1.add_subplot(4, 1, 3)
+        ax3 = fig1.add_subplot(4, 1, 4, sharex=ax2)
+    else:
+        ax2 = fig1.add_subplot(2, 2, 2)
+        ax3 = fig1.add_subplot(2, 2, 4, sharex=ax2)
+        ax2.yaxis.set_label_position("right")
+        ax2.yaxis.tick_right()
+        ax3.yaxis.set_label_position("right")
+        ax3.yaxis.tick_right()
 
-    line_a, = ax2.plot(1e-9 * freq_arr, resp_dB[AMP_IDX], animated=BLIT)
-    line_fit_a, = ax2.plot(1e-9 * freq_arr, np.full_like(freq_arr, np.nan), ls="--", animated=BLIT)
+    line_a, = ax2.plot(1e-9 * freq_arr, resp_dB[AMP_IDX], label="measured", animated=BLIT)
+    line_fit_a, = ax2.plot(1e-9 * freq_arr, np.full_like(freq_arr, np.nan), ls="--", label="fit", animated=BLIT)
     line_p, = ax3.plot(1e-9 * freq_arr, np.angle(resp_arr[AMP_IDX]), animated=BLIT)
     line_fit_p, = ax3.plot(1e-9 * freq_arr, np.full_like(freq_arr, np.nan), ls="--", animated=BLIT)
 
@@ -125,6 +143,8 @@ def load(load_filename):
     ax3.set_xlabel("Frequency [GHz]")
     ax2.set_ylabel("Response amplitude [dB]")
     ax3.set_ylabel("Response phase [rad]")
+
+    ax2.legend(loc="lower right")
 
     def onbuttonpress(event):
         if event.inaxes == ax1:
