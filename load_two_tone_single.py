@@ -14,8 +14,11 @@ You should have received a copy of the GNU General Public License along with thi
 <https://www.gnu.org/licenses/>.
 """
 import h5py
+from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
+
+rcParams['figure.dpi'] = 331.3
 
 load_filename = ""
 
@@ -39,11 +42,13 @@ def load(load_filename):
     fig, ax = plt.subplots(2, 1, sharex=True, tight_layout=True)
     ax1, ax2 = ax
 
-    ax1.plot(1e-9 * qubit_freq_arr, resp_dB)
+    # ax1.plot(1e-9 * qubit_freq_arr, resp_dB)
+    ax1.plot(1e-9 * qubit_freq_arr, np.abs(resp_arr))
     ax2.plot(1e-9 * qubit_freq_arr, np.angle(resp_arr))
 
     ax2.set_xlabel("Frequency [GHz]")
-    ax1.set_ylabel("Response amplitude [dBFS]")
+    # ax1.set_ylabel("Response amplitude [dBFS]")
+    ax1.set_ylabel("Response amplitude [FS]")
     ax2.set_ylabel("Response phase [rad]")
 
     fig.show()

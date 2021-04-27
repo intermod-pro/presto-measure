@@ -17,11 +17,13 @@ import os
 import time
 
 import h5py
+import numpy as np
+
 from presto import commands as cmd
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
 
-import load_t1
+# import load_ramsey
 
 # Presto's IP address or hostname
 ADDRESS = "192.0.2.53"
@@ -34,8 +36,11 @@ readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-control_freq = 4.141 * 1e9  # Hz
-control_amp = 0.154  # FS
+control_center_freq = 4.146 * 1e9  # Hz
+control_center_if = 100 * 1e6  # Hz
+control_span = 1 * 1e6  # Hz
+nr_freqs = 256
+control_amp = 0.154 / 2  # FS
 control_duration = 100 * 1e-9  # s, duration of the control pulse
 control_port = 5
 
@@ -43,12 +48,19 @@ control_port = 5
 sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
 
-# T1 experiment
-num_averages = 10_000
-nr_delays = 128  # number of steps when changing delay between control and readout pulses
-dt_delays = 2.5 * 1e-6  # s, step size when changing delay between control and readout pulses
+# Ramsey experiment
+num_averages = 1_000
+nr_delays = 256  # number of steps when changing delay between control and readout pulses
+dt_delays = 20 * 1e-9  # s, step size when changing delay between control and readout pulses
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
 readout_sample_delay = 300 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+
+# build frequency array -- don't care about tuning (for now)
+control_nco = control_center_freq - control_center_if
+f_start = control_center_if - control_span / 2
+f_stop = control_center_if + control_span / 2
+control_if_arr = np.linspace(f_start, f_stop, nr_freqs)
+control_freq_arr = control_nco + control_if_arr
 
 # Instantiate interface class
 with pulsed.Pulsed(
@@ -71,7 +83,7 @@ with pulsed.Pulsed(
         sync=False,  # sync in next call
     )
     pls.hardware.configure_mixer(
-        freq=control_freq,
+        freq=control_nco,
         out_ports=control_port,
         sync=True,  # sync here
     )
@@ -92,9 +104,9 @@ with pulsed.Pulsed(
     pls.setup_freq_lut(
         output_ports=control_port,
         group=0,
-        frequencies=0.0,
-        phases=0.0,
-        phases_q=0.0,
+        frequencies=control_if_arr,
+        phases=np.full_like(control_if_arr, 0.0),
+        phases_q=np.full_like(control_if_arr, -np.pi / 2),
     )
 
     # Setup lookup tables for amplitudes
@@ -141,12 +153,15 @@ with pulsed.Pulsed(
     # ******************************
     T = 0.0  # s, start at time zero ...
     for ii in range(nr_delays):
-        # pi pulse
+        # first pi/2 pulse
         pls.reset_phase(T, control_port)
+        pls.output_pulse(T, control_pulse)
+        # second pi/2 pulse
+        T += control_duration + ii * dt_delays
         pls.output_pulse(T, control_pulse)
         # Readout pulse starts after control pulse,
         # with an increasing delay
-        T += control_duration + ii * dt_delays
+        T += control_duration
         pls.reset_phase(T, readout_port)
         pls.output_pulse(T, readout_pulse)
         # Sampling window
@@ -154,13 +169,15 @@ with pulsed.Pulsed(
         # Move to next iteration
         T += readout_duration
         T += wait_delay
+    pls.next_frequency(T, control_port)
+    T += wait_delay
 
     # **************************
     # *** Run the experiment ***
     # **************************
     pls.run(
         period=T,
-        repeat_count=1,
+        repeat_count=nr_freqs,
         num_averages=num_averages,
         print_time=True,
     )
@@ -184,7 +201,7 @@ with h5py.File(save_path, "w") as h5f:
     for ii, line in enumerate(source_code):
         ds[ii] = line
     h5f.attrs["num_averages"] = num_averages
-    h5f.attrs["control_freq"] = control_freq
+    h5f.attrs["control_center_if"] = control_center_if
     h5f.attrs["readout_freq"] = readout_freq
     h5f.attrs["readout_duration"] = readout_duration
     h5f.attrs["control_duration"] = control_duration
@@ -197,9 +214,10 @@ with h5py.File(save_path, "w") as h5f:
     h5f.attrs["readout_sample_delay"] = readout_sample_delay
     h5f.create_dataset("t_arr", data=t_arr)
     h5f.create_dataset("store_arr", data=store_arr)
+    h5f.create_dataset("control_freq_arr", data=control_freq_arr)
 print(f"Data saved to: {save_path}")
 
 # *****************
 # *** Plot data ***
 # *****************
-fig1, fig2 = load_t1.load(save_path)
+# load_ramsey.load(save_path)

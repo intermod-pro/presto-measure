@@ -34,17 +34,17 @@ if JPA:
     mla = mla_api.MLA(settings)
 
 # Presto's IP address or hostname
-ADDRESS = "130.237.35.90"
-PORT = 42878
+ADDRESS = "192.0.2.53"
+PORT = None
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
-center_freq = 6.027e9  # Hz, center frequency for sweep
+center_freq = 6.213 * 1e9  # Hz, center frequency for sweep
 
-span = 10e6  # Hz, span for frequency sweep
+span = 20e6  # Hz, span for frequency sweep
 df = 1e4  # Hz, measurement bandwidth for each point in sweep
-Navg = 1
+Navg = 3
 
-output_port = [1, 9]
+output_port = 1
 input_port = 1
 dither = False
 extra = 500

@@ -14,10 +14,13 @@ You should have received a copy of the GNU General Public License along with thi
 <https://www.gnu.org/licenses/>.
 """
 import h5py
+from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import matplotlib.widgets as mwidgets
 import numpy as np
 from resonator_tools import circuit
+
+rcParams['figure.dpi'] = 331.3
 
 load_filename = "sweep_nco_time_20210205_081214.h5"
 load_filename = "sweep_nco_time_20210205_093012.h5"

@@ -34,22 +34,21 @@ if JPA:
     mla = mla_api.MLA(settings)
 
 # Presto's IP address or hostname
-ADDRESS = "130.237.35.90"
-PORT = 42878
+ADDRESS = "192.0.2.53"
+PORT = None
 EXT_CLK_REF = False
 
-output_port = [1, 9]
+output_port = 1
 input_port = 1
 
-# amp = 0.707
-amp = 1e-3  # FS
+amp = 10**(-10.0 / 20)  # FS
 phase = 0.0
 dither = True
 
 extra = 500
 # f_start = 5.6e9
 # f_stop = 7e9
-f_center = 6.029 * 1e9
+f_center = 6.213 * 1e9
 f_span = 5 * 1e6
 f_start = f_center - f_span / 2
 f_stop = f_center + f_span / 2

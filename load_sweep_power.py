@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 import matplotlib.widgets as mwidgets
 import numpy as np
 from resonator_tools import circuit
-rcParams['figure.dpi'] = 108.8
+
+rcParams['figure.dpi'] = 331.3
 
 NORM = True  # normalize response amplitude by drive amplitude
 PORTRAIT = False  # Arrange plots vertically

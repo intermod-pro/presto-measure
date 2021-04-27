@@ -14,7 +14,6 @@ You should have received a copy of the GNU General Public License along with thi
 <https://www.gnu.org/licenses/>.
 """
 import os
-import sys
 import time
 
 import h5py
@@ -25,47 +24,29 @@ from presto.utils import format_sec, get_sourcecode
 
 import load_two_tone_power
 
-JPA = True
-if JPA:
-    if '/home/riccardo/IntermodulatorSuite' not in sys.path:
-        sys.path.append('/home/riccardo/IntermodulatorSuite')
-    from mlaapi import mla_api, mla_globals
-    settings = mla_globals.read_config()
-    mla = mla_api.MLA(settings)
-
 # Presto's IP address or hostname
-ADDRESS = "130.237.35.90"
-PORT = 42878
+ADDRESS = "192.0.2.53"
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
-center_freq = 3.970e9  # Hz, center frequency for qubit sweep
+center_freq = 4.0 * 1e9  # Hz, center frequency for qubit sweep
 span = 500e6  # Hz, span for qubit frequency sweep
-df = 1e5  # Hz, measurement bandwidth for each point in sweep
+df = 1e6  # Hz, measurement bandwidth for each point in sweep
 
-cavity_freq = 6.029035e9  # Hz, frequency for cavity
-cavity_amp = 3e-3
+cavity_freq = 6.213095 * 1e9  # Hz, frequency for cavity
+cavity_amp = 10**(-20.0 / 20)  # FS
 
 nr_amps = 61
 qubit_amp_arr = np.logspace(-3, 0, nr_amps)
 
 cavity_port = 1
-# qubit_port = [5, 7, 9]  # drive both for now, plus one channel for oscilloscope
-qubit_port = 7  # qubit 2
+qubit_port = 5
 input_port = 1
 dither = True
 extra = 500
 Navg = 100
 
-if JPA:
-    jpa_pump_freq = 2 * 6.031e9  # Hz
-    jpa_pump_pwr = 7  # lmx units
-    jpa_bias = +0.432  # V
-    bias_port = 1
-    mla.connect()
-
 with test.Test(
         address=ADDRESS,
-        port=PORT,
         ext_ref_clk=EXT_REF_CLK,
         reset=True,
         adc_mode=cmd.AdcMixed,
@@ -78,12 +59,6 @@ with test.Test(
     lck.hardware.set_dac_current(qubit_port, 32_000)
     lck.hardware.set_inv_sinc(cavity_port, 0)
     lck.hardware.set_inv_sinc(qubit_port, 0)
-    if JPA:
-        lck.hardware.set_lmx(jpa_pump_freq, jpa_pump_pwr)
-        mla.lockin.set_dc_offset(bias_port, jpa_bias)
-        time.sleep(1.0)
-    else:
-        lck.hardware.set_lmx(0.0, 0)
 
     fs = lck.get_fs()
     nr_samples = int(round(fs / df))
@@ -171,11 +146,6 @@ with test.Test(
     lck.hardware.set_run(False)
     lck.set_scale(cavity_port, 0.0, 0.0)
     lck.set_scale(qubit_port, 0.0, 0.0)
-    lck.hardware.set_lmx(0.0, 0)
-
-if JPA:
-    mla.lockin.set_dc_offset(bias_port, 0.0)
-    mla.disconnect()
 
 # *************************
 # *** Save data to HDF5 ***

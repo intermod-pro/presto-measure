@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Loader for files saved by rabi_amp.py
+Loader for files saved by t1.py
 Copyright (C) 2021  Intermodulation Products AB.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -23,22 +23,24 @@ from presto.utils import untwist_downconversion
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = ""
+load_filename = "/home/riccardo/presto-measure/data/ramsey_20210427_185015.h5"
 
 
 def load(load_filename):
     with h5py.File(load_filename, "r") as h5f:
         num_averages = h5f.attrs["num_averages"]
-        control_freq = h5f.attrs["control_freq"]
+        control_freq_arr = h5f.attrs["control_freq_arr"]
+        control_center_if = h5f.attrs["control_center_if"]
         readout_freq = h5f.attrs["readout_freq"]
         readout_duration = h5f.attrs["readout_duration"]
         control_duration = h5f.attrs["control_duration"]
         readout_amp = h5f.attrs["readout_amp"]
+        control_amp = h5f.attrs["control_amp"]
         sample_duration = h5f.attrs["sample_duration"]
-        rabi_n = h5f.attrs["rabi_n"]
+        nr_delays = h5f.attrs["nr_delays"]
+        dt_delays = h5f.attrs["dt_delays"]
         wait_delay = h5f.attrs["wait_delay"]
         readout_sample_delay = h5f.attrs["readout_sample_delay"]
-        control_amp_arr = h5f["control_amp_arr"][()]
         t_arr = h5f["t_arr"][()]
         store_arr = h5f["store_arr"][()]
         source_code = h5f["source_code"][()]
@@ -61,74 +63,67 @@ def load(load_filename):
     ax12.set_xlabel("Time [ns]")
     fig1.show()
 
-    # Analyze Rabi
+    # Analyze T1
     resp_arr = np.mean(store_arr[:, 0, idx], axis=-1)
+    nr_freqs = len(control_freq_arr)
+    resp_arr.shape = (nr_freqs, nr_delays)
+    delay_arr = dt_delays * np.arange(nr_delays)
 
-    # Fit data
-    popt_a, perr_a = fit_period(control_amp_arr, np.abs(resp_arr))
-    popt_p, perr_p = fit_period(control_amp_arr, np.angle(resp_arr))
-    popt_x, perr_x = fit_period(control_amp_arr, np.real(resp_arr))
-    popt_y, perr_y = fit_period(control_amp_arr, np.imag(resp_arr))
+    # # Fit data
+    # popt_a, perr_a = fit_simple(delay_arr, np.abs(resp_arr))
+    # popt_p, perr_p = fit_simple(delay_arr, np.unwrap(np.angle(resp_arr)))
+    # popt_x, perr_x = fit_simple(delay_arr, np.real(resp_arr))
+    # popt_y, perr_y = fit_simple(delay_arr, np.imag(resp_arr))
 
-    period = popt_x[3]
-    period_err = perr_x[3]
-    pi_amp = period / 2
-    pi_2_amp = period / 4
-    print("Tau pulse amplitude: {} +- {} FS".format(period, period_err))
-    print("Pi pulse amplitude: {:.0f} FS".format(pi_amp))
-    print("Pi/2 pulse amplitude: {:.0f} FS".format(pi_2_amp))
+    # T1 = popt_a[0]
+    # T1_err = perr_a[0]
+    # print("T1 time A: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+    # T1 = popt_p[0]
+    # T1_err = perr_p[0]
+    # print("T1 time P: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+    # T1 = popt_x[0]
+    # T1_err = perr_x[0]
+    # print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+    # T1 = popt_y[0]
+    # T1_err = perr_y[0]
+    # print("T1 time Q: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
 
-    fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-    ax21, ax22, ax23, ax24 = ax2
-    ax21.plot(control_amp_arr, np.abs(resp_arr))
-    ax21.plot(control_amp_arr, func(control_amp_arr, *popt_a), '--')
-    ax22.plot(control_amp_arr, np.angle(resp_arr))
-    ax22.plot(control_amp_arr, func(control_amp_arr, *popt_p), '--')
-    ax23.plot(control_amp_arr, np.real(resp_arr))
-    ax23.plot(control_amp_arr, func(control_amp_arr, *popt_x), '--')
-    ax24.plot(control_amp_arr, np.imag(resp_arr))
-    ax24.plot(control_amp_arr, func(control_amp_arr, *popt_y), '--')
+    # fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
+    # ax21, ax22, ax23, ax24 = ax2
+    # ax21.plot(1e9 * delay_arr, np.abs(resp_arr))
+    # # ax21.plot(1e9 * delay_arr, decay(delay_arr, *popt_a), '--')
+    # ax22.plot(1e9 * delay_arr, np.unwrap(np.angle(resp_arr)))
+    # # ax22.plot(1e9 * delay_arr, decay(delay_arr, *popt_p), '--')
+    # ax23.plot(1e9 * delay_arr, np.real(resp_arr))
+    # # ax23.plot(1e9 * delay_arr, decay(delay_arr, *popt_x), '--')
+    # ax24.plot(1e9 * delay_arr, np.imag(resp_arr))
+    # # ax24.plot(1e9 * delay_arr, decay(delay_arr, *popt_y), '--')
 
-    ax21.set_ylabel("Amplitude [FS]")
-    ax22.set_ylabel("Phase [rad]")
-    ax23.set_ylabel("I [FS]")
-    ax24.set_ylabel("Q [FS]")
-    ax2[-1].set_xlabel("Pulse amplitude [FS]")
+    # ax21.set_ylabel("Amplitude [FS]")
+    # ax22.set_ylabel("Phase [rad]")
+    # ax23.set_ylabel("I [FS]")
+    # ax24.set_ylabel("Q [FS]")
+    # ax2[-1].set_xlabel("Ramsey delay [ns]")
+    # fig2.show()
+    fig2, ax2 = plt.subplots()
+    ax2.imshow(np.abs(resp_arr))
     fig2.show()
 
     return fig1, fig2
 
 
-def func(t, offset, amplitude, T2, period, phase):
-    frequency = 1 / period
-    return offset + amplitude * np.exp(-t / T2) * np.cos(2. * np.pi * frequency * t + phase)
+def decay(t, *p):
+    T1, xe, xg = p
+    return xg + (xe - xg) * np.exp(-t / T1)
 
 
-def fit_period(x, y):
-    pkpk = np.max(y) - np.min(y)
-    offset = np.min(y) + pkpk / 2
-    amplitude = 0.5 * pkpk
-    T2 = 0.5 * (np.max(x) - np.min(x))
-    freqs = np.fft.rfftfreq(len(x), x[1] - x[0])
-    fft = np.fft.rfft(y)
-    frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
-    period = 1 / frequency
-    first = (y[0] - offset) / amplitude
-    if first > 1.:
-        first = 1.
-    elif first < -1.:
-        first = -1.
-    phase = np.arccos(first)
-    p0 = (
-        offset,
-        amplitude,
-        T2,
-        period,
-        phase,
-    )
-    popt, pcov = curve_fit(func, x, y, p0=p0)
+def fit_simple(t, x):
+    T1 = 0.5 * (t[-1] - t[0])
+    xe, xg = x[0], x[-1]
+    p0 = (T1, xe, xg)
+    print(p0)
+    popt, pcov = curve_fit(decay, t, x, p0)
     perr = np.sqrt(np.diag(pcov))
-    offset, amplitude, T2, period, phase = popt
     return popt, perr
 
 

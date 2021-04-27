@@ -14,45 +14,33 @@ You should have received a copy of the GNU General Public License along with thi
 <https://www.gnu.org/licenses/>.
 """
 import os
-import sys
 import time
 
 import h5py
 import numpy as np
+from presto import commands as cmd
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
 
 import load_rabi_amp
 
 # Presto's IP address or hostname
-ADDRESS = "130.237.35.90"
-PORT = 42878
+ADDRESS = "192.0.2.53"
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
-# Use JPA?
-JPA = False
-if JPA:
-    if '/home/riccardo/IntermodulatorSuite' not in sys.path:
-        sys.path.append('/home/riccardo/IntermodulatorSuite')
-    from mlaapi import mla_api, mla_globals
-    settings = mla_globals.read_config()
-    mla = mla_api.MLA(settings)
-
-freq_if = 100 * 1e6
-
 # cavity drive: readout
-readout_freq = 6.029 * 1e9  # Hz
-readout_amp = 3e-3  # FS
+readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout
+readout_amp = 10**(-10.0 / 20)  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-control_freq = 4.0807 * 1e9  # Hz
+control_freq = 4.141 * 1e9  # Hz
 control_duration = 100e-9  # s, duration of the control pulse
-control_port = 7
+control_port = 5
 
 # cavity readout: sample
-sample_duration = 2100 * 1e-9  # s, duration of the sampling window
+sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
 
 # Rabi experiment
@@ -60,21 +48,16 @@ num_averages = 10_000
 rabi_n = 128  # number of steps when changing duration of control pulse
 control_amp_arr = np.linspace(0.0, 0.707, rabi_n)  # FS, amplitudes for control pulse
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 250 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+readout_sample_delay = 300 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 
 # Instantiate interface class
-if JPA:
-    jpa_pump_freq = 2 * 6.031e9  # Hz
-    jpa_pump_pwr = 7  # lmx units
-    jpa_bias = +0.432  # V
-    bias_port = 1
-    mla.connect()
 with pulsed.Pulsed(
         address=ADDRESS,
-        port=PORT,
         ext_ref_clk=EXT_REF_CLK,
-        adc_mode=pulsed.MODE_MIX,
-        dac_mode=pulsed.MODE_LSB if freq_if > 0.0 else pulsed.MODE_MIX,
+        adc_mode=cmd.AdcMixed,
+        adc_fsample=cmd.AdcG2,
+        dac_mode=[cmd.DacMixed42, cmd.DacMixed02, cmd.DacMixed02, cmd.DacMixed02],
+        dac_fsample=[cmd.DacG10, cmd.DacG6, cmd.DacG6, cmd.DacG6],
 ) as pls:
     pls.hardware.set_adc_attenuation(sample_port, 0.0)
     pls.hardware.set_dac_current(readout_port, 32_000)
@@ -82,42 +65,48 @@ with pulsed.Pulsed(
     pls.hardware.set_inv_sinc(readout_port, 0)
     pls.hardware.set_inv_sinc(control_port, 0)
     pls.hardware.configure_mixer(
-        freq=readout_freq + freq_if,
-        in_ports=None if pls.adc_mode == pulsed.MODE_DIRECT else sample_port,
+        freq=readout_freq,
+        in_ports=sample_port,
         out_ports=readout_port,
         sync=False,  # sync in next call
     )
     pls.hardware.configure_mixer(
-        freq=control_freq + freq_if,
+        freq=control_freq,
         out_ports=control_port,
+        sync=True,  # sync here
     )
-    if JPA:
-        pls.hardware.set_lmx(jpa_pump_freq, jpa_pump_pwr)
-        mla.lockin.set_dc_offset(bias_port, jpa_bias)
-        time.sleep(1.0)
-    else:
-        pls.hardware.set_lmx(0.0, 0)
 
     # ************************************
     # *** Setup measurement parameters ***
     # ************************************
 
     # Setup lookup tables for frequencies
-    # we only need to use carrier 1
     pls.setup_freq_lut(
         output_ports=readout_port,
-        carrier=1,
-        frequencies=freq_if,
+        group=0,
+        frequencies=0.0,
         phases=0.0,
+        phases_q=0.0,
     )
-    pls.setup_freq_lut(control_port, 1, freq_if, 0.0)
+    pls.setup_freq_lut(
+        output_ports=control_port,
+        group=0,
+        frequencies=0.0,
+        phases=0.0,
+        phases_q=0.0,
+    )
 
     # Setup lookup tables for amplitudes
     pls.setup_scale_lut(
         output_ports=readout_port,
+        group=0,
         scales=readout_amp,
     )
-    pls.setup_scale_lut(control_port, control_amp_arr)
+    pls.setup_scale_lut(
+        output_ports=control_port,
+        group=0,
+        scales=control_amp_arr,
+    )
 
     # Setup readout and control pulses
     # use setup_long_drive to create a pulse with square envelope
@@ -125,8 +114,10 @@ with pulsed.Pulsed(
     # but we keep it simple here
     readout_pulse = pls.setup_long_drive(
         output_port=readout_port,
-        carrier=1,
+        group=0,
         duration=readout_duration,
+        amplitude=1.0,
+        amplitude_q=1.0,
         rise_time=0e-9,
         fall_time=0e-9,
     )
@@ -136,8 +127,10 @@ with pulsed.Pulsed(
     control_envelope = sin2(control_ns)
     control_pulse = pls.setup_template(
         output_port=control_port,
+        group=0,
         template=control_envelope,
-        envelope=1,
+        template_q=control_envelope,
+        envelope=True,
     )
 
     # Setup sampling window
@@ -168,12 +161,15 @@ with pulsed.Pulsed(
     # **************************
     # repeat the whole sequence `rabi_n` times
     # then average `num_averages` times
-    t_arr, store_arr = pls.run(
+    pls.run(
         period=T,
         repeat_count=rabi_n,
         num_averages=num_averages,
         print_time=True,
     )
+    t_arr, (data_I, data_Q) = pls.get_store_data()
+
+store_arr = data_I + 1j * data_Q
 
 # *************************
 # *** Save data to HDF5 ***
@@ -200,7 +196,6 @@ with h5py.File(save_path, "w") as h5f:
     h5f.attrs["rabi_n"] = rabi_n
     h5f.attrs["wait_delay"] = wait_delay
     h5f.attrs["readout_sample_delay"] = readout_sample_delay
-    h5f.attrs["freq_if"] = freq_if
     h5f.create_dataset("control_amp_arr", data=control_amp_arr)
     h5f.create_dataset("t_arr", data=t_arr)
     h5f.create_dataset("store_arr", data=store_arr)
