@@ -19,11 +19,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-from presto.utils import untwist_downconversion
+from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = ""
+load_filename = "data/rabi_amp_20210428_101944.h5"
 
 
 def load(load_filename):
@@ -63,31 +63,32 @@ def load(load_filename):
 
     # Analyze Rabi
     resp_arr = np.mean(store_arr[:, 0, idx], axis=-1)
+    data = rotate_opt(resp_arr)
 
     # Fit data
-    popt_a, perr_a = fit_period(control_amp_arr, np.abs(resp_arr))
-    popt_p, perr_p = fit_period(control_amp_arr, np.angle(resp_arr))
-    popt_x, perr_x = fit_period(control_amp_arr, np.real(resp_arr))
-    popt_y, perr_y = fit_period(control_amp_arr, np.imag(resp_arr))
+    # popt_a, perr_a = fit_period(control_amp_arr, np.abs(data))
+    # popt_p, perr_p = fit_period(control_amp_arr, np.angle(data))
+    popt_x, perr_x = fit_period(control_amp_arr, np.real(data))
+    # popt_y, perr_y = fit_period(control_amp_arr, np.imag(data))
 
     period = popt_x[3]
     period_err = perr_x[3]
     pi_amp = period / 2
     pi_2_amp = period / 4
     print("Tau pulse amplitude: {} +- {} FS".format(period, period_err))
-    print("Pi pulse amplitude: {:.0f} FS".format(pi_amp))
-    print("Pi/2 pulse amplitude: {:.0f} FS".format(pi_2_amp))
+    print("Pi pulse amplitude: {} +- {} FS".format(pi_amp, period_err / 2))
+    print("Pi/2 pulse amplitude: {} +- {} FS".format(pi_2_amp, period_err / 4))
 
     fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
     ax21, ax22, ax23, ax24 = ax2
-    ax21.plot(control_amp_arr, np.abs(resp_arr))
-    ax21.plot(control_amp_arr, func(control_amp_arr, *popt_a), '--')
-    ax22.plot(control_amp_arr, np.angle(resp_arr))
-    ax22.plot(control_amp_arr, func(control_amp_arr, *popt_p), '--')
-    ax23.plot(control_amp_arr, np.real(resp_arr))
+    ax21.plot(control_amp_arr, np.abs(data))
+    # ax21.plot(control_amp_arr, func(control_amp_arr, *popt_a), '--')
+    ax22.plot(control_amp_arr, np.angle(data))
+    # ax22.plot(control_amp_arr, func(control_amp_arr, *popt_p), '--')
+    ax23.plot(control_amp_arr, np.real(data))
     ax23.plot(control_amp_arr, func(control_amp_arr, *popt_x), '--')
-    ax24.plot(control_amp_arr, np.imag(resp_arr))
-    ax24.plot(control_amp_arr, func(control_amp_arr, *popt_y), '--')
+    ax24.plot(control_amp_arr, np.imag(data))
+    # ax24.plot(control_amp_arr, func(control_amp_arr, *popt_y), '--')
 
     ax21.set_ylabel("Amplitude [FS]")
     ax22.set_ylabel("Phase [rad]")
@@ -95,6 +96,13 @@ def load(load_filename):
     ax24.set_ylabel("Q [FS]")
     ax2[-1].set_xlabel("Pulse amplitude [FS]")
     fig2.show()
+
+    fig3, ax3 = plt.subplots(tight_layout=True)
+    ax3.plot(control_amp_arr, np.real(data))
+    ax3.plot(control_amp_arr, func(control_amp_arr, *popt_x), '--')
+    ax3.set_ylabel("I [FS]")
+    ax3.set_xlabel("Pulse amplitude [FS]")
+    fig3.show()
 
     return fig1, fig2
 

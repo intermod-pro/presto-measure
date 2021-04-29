@@ -30,17 +30,22 @@ ADDRESS = "192.0.2.53"
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
 # cavity drive: readout
-readout_freq = 6.213095 * 1e9  # Hz
+# readout_freq = 6.213095 * 1e9  # Hz, resonator 1
+readout_freq = 6.376650 * 1e9  # Hz, resonator 2
 readout_amp = 10**(-10.0 / 20)  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-control_freq = 4.146 * 1e9  # Hz
-control_if = 100 * 1e6  # Hz
-control_amp = 0.154 / 2  # FS
+# control_freq = 4.146391 * 1e9  # Hz <-- from data/ramsey_20210428_041929.h5, qubit 1
+control_freq = 4.776805 * 1e9  # Hz <-- from data/ramsey_20210428_160241.h5 , qubit 2
+control_freq += 40_000.0  # Hz, detune from qubit frequency
+# control_amp = 0.07968  # FS <-- pi/2 pulse from data/rabi_amp_20210428_101944.h5, qubit 1
+control_amp = 0.05941  # FS <-- pi/2 pulse from data/rabi_amp_20210428_164251.h5, qubit 2
+control_if = 0 * 1e6  # Hz
 control_duration = 100 * 1e-9  # s, duration of the control pulse
-control_port = 5
+# control_port = 5  # qubit 1
+control_port = 7  # qubit 2
 
 # cavity readout: sample
 sample_duration = 4 * 1e-6  # s, duration of the sampling window
@@ -48,8 +53,8 @@ sample_port = 1
 
 # Ramsey experiment
 num_averages = 1_000
-nr_delays = 128  # number of steps when changing delay between control and readout pulses
-dt_delays = 10 * 1e-9  # s, step size when changing delay between control and readout pulses
+nr_delays = 256  # number of steps when changing delay between control and readout pulses
+dt_delays = 1 * 1e-6  # s, step size when changing delay between control and readout pulses
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
 readout_sample_delay = 300 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 

@@ -24,8 +24,7 @@ LINECUT = False  # Plot an horizontal line cut of the 2D sweep. Interactive.
 BLIT = True  # Use blitting when plotting. Faster if it works.
 AMP_IDX = 0  # internal use
 
-load_filename = "data/two_tone_power_20210301_084047.h5"
-load_filename = "data/two_tone_power_20210304_090631.h5"
+load_filename = "data/two_tone_power_20210427_145458.h5"
 
 
 def load(load_filename):

@@ -23,7 +23,7 @@ from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "data/ramsey_single_20210427_181631.h5"
+load_filename = "data/ramsey_single_20210428_105814.h5"
 
 
 def load(load_filename):
@@ -53,26 +53,26 @@ def load(load_filename):
     idx = np.arange(idx_low, idx_high)
     nr_samples = len(idx)
 
-    # # Plot raw store data for first iteration as a check
-    # fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-    # ax11, ax12 = ax1
-    # ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-    # ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-    # ax11.plot(1e9 * t_arr, np.abs(store_arr[0, 0, :]))
-    # ax12.plot(1e9 * t_arr, np.angle(store_arr[0, 0, :]))
-    # ax12.set_xlabel("Time [ns]")
-    # fig1.show()
+    # Plot raw store data for first iteration as a check
+    fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+    ax11, ax12 = ax1
+    ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+    ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+    ax11.plot(1e9 * t_arr, np.abs(store_arr[0, 0, :]))
+    ax12.plot(1e9 * t_arr, np.angle(store_arr[0, 0, :]))
+    ax12.set_xlabel("Time [ns]")
+    fig1.show()
 
     # Analyze T2
     resp_arr = np.mean(store_arr[:, 0, idx], axis=-1)
-    resp_arr = rotate_opt(resp_arr)
+    data = rotate_opt(resp_arr)
     delay_arr = dt_delays * np.arange(nr_delays)
 
     # Fit data
-    popt_a, perr_a = fit_simple(delay_arr, np.abs(resp_arr))
-    popt_p, perr_p = fit_simple(delay_arr, np.unwrap(np.angle(resp_arr)))
-    popt_x, perr_x = fit_simple(delay_arr, np.real(resp_arr))
-    popt_y, perr_y = fit_simple(delay_arr, np.imag(resp_arr))
+    popt_a, perr_a = fit_simple(delay_arr, np.abs(data))
+    popt_p, perr_p = fit_simple(delay_arr, np.unwrap(np.angle(data)))
+    popt_x, perr_x = fit_simple(delay_arr, np.real(data))
+    popt_y, perr_y = fit_simple(delay_arr, np.imag(data))
 
     # T2 = popt_a[2]
     # T2_err = perr_a[2]
@@ -80,46 +80,43 @@ def load(load_filename):
     # T2 = popt_p[2]
     # T2_err = perr_p[2]
     # print("T2 time P: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
-    # T2 = popt_x[2]
-    # T2_err = perr_x[2]
-    # print("T2 time I: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+    T2 = popt_x[2]
+    T2_err = perr_x[2]
+    print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+    det = popt_x[3]
+    det_err = perr_x[3]
+    print("detuning: {} +- {} Hz".format(det, det_err))
     # T2 = popt_y[2]
     # T2_err = perr_y[2]
     # print("T2 time Q: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
 
     fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
     ax21, ax22, ax23, ax24 = ax2
-    ax21.plot(1e9 * delay_arr, np.abs(resp_arr))
-    ax21.plot(1e9 * delay_arr, func(delay_arr, *popt_a), '--')
-    ax22.plot(1e9 * delay_arr, np.unwrap(np.angle(resp_arr)))
-    ax22.plot(1e9 * delay_arr, func(delay_arr, *popt_p), '--')
-    ax23.plot(1e9 * delay_arr, np.real(resp_arr))
-    ax23.plot(1e9 * delay_arr, func(delay_arr, *popt_x), '--')
-    ax24.plot(1e9 * delay_arr, np.imag(resp_arr))
-    ax24.plot(1e9 * delay_arr, func(delay_arr, *popt_y), '--')
+    ax21.plot(1e6 * delay_arr, np.abs(data))
+    # ax21.plot(1e6 * delay_arr, func(delay_arr, *popt_a), '--')
+    ax22.plot(1e6 * delay_arr, np.unwrap(np.angle(data)))
+    # ax22.plot(1e6 * delay_arr, func(delay_arr, *popt_p), '--')
+    ax23.plot(1e6 * delay_arr, np.real(data))
+    ax23.plot(1e6 * delay_arr, func(delay_arr, *popt_x), '--')
+    ax24.plot(1e6 * delay_arr, np.imag(data))
+    # ax24.plot(1e6 * delay_arr, func(delay_arr, *popt_y), '--')
 
     ax21.set_ylabel("Amplitude [FS]")
     ax22.set_ylabel("Phase [rad]")
     ax23.set_ylabel("I [FS]")
     ax24.set_ylabel("Q [FS]")
-    ax2[-1].set_xlabel("Ramsey delay [ns]")
+    ax2[-1].set_xlabel("Ramsey delay [us]")
     fig2.show()
 
-    return fig1#, fig2
+    fig3, ax3 = plt.subplots(tight_layout=True)
+    ax3.plot(1e6 * delay_arr, np.real(data), '.')
+    ax3.plot(1e6 * delay_arr, func(delay_arr, *popt_x), '--')
+    ax3.set_ylabel("I [FS]")
+    ax3.set_xlabel("Ramsey delay [us]")
+    ax3.set_title(f"T2 time: {1e6*T2:.0f} +- {1e6*T2_err:.0f} us")
+    fig3.show()
 
-
-# def decay(t, *p):
-#     T1, xe, xg = p
-#     return xg + (xe - xg) * np.exp(-t / T1)
-
-
-# def fit_simple(t, x):
-#     T1 = 0.5 * (t[-1] - t[0])
-#     xe, xg = x[0], x[-1]
-#     p0 = (T1, xe, xg)
-#     popt, pcov = curve_fit(decay, t, x, p0)
-#     perr = np.sqrt(np.diag(pcov))
-#     return popt, perr
+    return fig1, fig2, fig3
 
 
 def func(t, offset, amplitude, T2, frequency, phase):
@@ -158,4 +155,4 @@ def fit_simple(x, y):
 
 
 if __name__ == "__main__":
-    fig1, fig2 = load(load_filename)
+    fig1, fig2, fig3 = load(load_filename)

@@ -24,6 +24,7 @@ from presto.utils import rotate_opt
 rcParams['figure.dpi'] = 108.8
 
 load_filename = "data/t1_20210427_174201.h5"
+load_filename = "data/t1_20210428_105037.h5"
 
 
 def load(load_filename):

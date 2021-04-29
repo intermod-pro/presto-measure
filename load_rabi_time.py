@@ -19,13 +19,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-from presto.utils import untwist_downconversion
+from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-which = "A"  # Which plot to show on its own. Any of A, P, I or Q.
-
-load_filename = "data/rabi_time_20210427_154849.h5"
+load_filename = "data/rabi_time_20210428_134604.h5"
 
 
 def load(load_filename):
@@ -66,13 +64,14 @@ def load(load_filename):
 
     # Analyze Rabi
     resp_arr = np.mean(store_arr[:, 0, idx], axis=-1)
+    data = rotate_opt(resp_arr)
     len_arr = rabi_dt * np.arange(rabi_n)
 
     # Fit data
-    popt_a, perr_a = fit_period(len_arr, np.abs(resp_arr))
-    popt_p, perr_p = fit_period(len_arr, np.angle(resp_arr))
-    popt_x, perr_x = fit_period(len_arr, np.real(resp_arr))
-    popt_y, perr_y = fit_period(len_arr, np.imag(resp_arr))
+    # popt_a, perr_a = fit_period(len_arr, np.abs(data))
+    # popt_p, perr_p = fit_period(len_arr, np.angle(data))
+    popt_x, perr_x = fit_period(len_arr, np.real(data))
+    # popt_y, perr_y = fit_period(len_arr, np.imag(data))
 
     period = popt_x[3]
     period_err = perr_x[3]
@@ -84,14 +83,14 @@ def load(load_filename):
 
     fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
     ax21, ax22, ax23, ax24 = ax2
-    ax21.plot(1e9 * len_arr, np.abs(resp_arr))
-    ax21.plot(1e9 * len_arr, func(len_arr, *popt_a), '--')
-    ax22.plot(1e9 * len_arr, np.angle(resp_arr))
-    ax22.plot(1e9 * len_arr, func(len_arr, *popt_p), '--')
-    ax23.plot(1e9 * len_arr, np.real(resp_arr))
+    ax21.plot(1e9 * len_arr, np.abs(data))
+    # ax21.plot(1e9 * len_arr, func(len_arr, *popt_a), '--')
+    ax22.plot(1e9 * len_arr, np.angle(data))
+    # ax22.plot(1e9 * len_arr, func(len_arr, *popt_p), '--')
+    ax23.plot(1e9 * len_arr, np.real(data))
     ax23.plot(1e9 * len_arr, func(len_arr, *popt_x), '--')
-    ax24.plot(1e9 * len_arr, np.imag(resp_arr))
-    ax24.plot(1e9 * len_arr, func(len_arr, *popt_y), '--')
+    ax24.plot(1e9 * len_arr, np.imag(data))
+    # ax24.plot(1e9 * len_arr, func(len_arr, *popt_y), '--')
 
     ax21.set_ylabel("Amplitude [FS]")
     ax22.set_ylabel("Phase [rad]")
@@ -100,46 +99,11 @@ def load(load_filename):
     ax2[-1].set_xlabel("Pulse length [ns]")
     fig2.show()
 
-    # Plot one of them on its own
-    if which == "A":
-        data = np.abs(resp_arr)
-        data_fit = func(len_arr, *popt_a)
-        quantity = "Amplitude"
-        unit = "FS"
-    elif which == "P":
-        data = np.angle(resp_arr)
-        data_fit = func(len_arr, *popt_p)
-        quantity = "Phase"
-        unit = "rad"
-    elif which == "I":
-        data = np.real(resp_arr)
-        data_fit = func(len_arr, *popt_x)
-        quantity = "I quadrature"
-        unit = "FS"
-    elif which == "Q":
-        data = np.imag(resp_arr)
-        data_fit = func(len_arr, *popt_y)
-        quantity = "Q quadrature"
-        unit = "FS"
-    data_max = np.abs(data).max()
-    if data_max < 1e-6:
-        unit = f"n{unit:s}"
-        data *= 1e9
-        data_fit *= 1e9
-    elif data_max < 1e-3:
-        unit = f"μ{unit:s}"
-        data *= 1e6
-        data_fit *= 1e6
-    elif data_max < 1e0:
-        unit = f"m{unit:s}"
-        data *= 1e3
-        data_fit *= 1e3
-
     fig3, ax3 = plt.subplots(tight_layout=True)
     ax3.plot(1e9 * len_arr, data, '.')
-    ax3.plot(1e9 * len_arr, data_fit, '--')
+    ax3.plot(1e9 * len_arr, func(len_arr, *popt_x), '--')
     ax3.set_xlabel("Pulse length [ns]")
-    ax3.set_ylabel(f"{quantity:s} [{unit:s}]")
+    ax3.set_ylabel("I quadrature [FS]")
     fig3.show()
 
     return fig1, fig2, fig3

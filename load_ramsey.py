@@ -19,17 +19,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-from presto.utils import untwist_downconversion
+from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "/home/riccardo/presto-measure/data/ramsey_20210427_185015.h5"
+load_filename = "data/ramsey_20210428_041929.h5"
+load_filename = "data/ramsey_20210428_160241.h5"
 
 
 def load(load_filename):
     with h5py.File(load_filename, "r") as h5f:
         num_averages = h5f.attrs["num_averages"]
-        control_freq_arr = h5f.attrs["control_freq_arr"]
         control_center_if = h5f.attrs["control_center_if"]
         readout_freq = h5f.attrs["readout_freq"]
         readout_duration = h5f.attrs["readout_duration"]
@@ -43,7 +43,8 @@ def load(load_filename):
         readout_sample_delay = h5f.attrs["readout_sample_delay"]
         t_arr = h5f["t_arr"][()]
         store_arr = h5f["store_arr"][()]
-        source_code = h5f["source_code"][()]
+        control_freq_arr = h5f["control_freq_arr"][()]
+        # source_code = h5f["source_code"][()]
 
     t_low = 1500 * 1e-9
     t_high = 2000 * 1e-9
@@ -68,63 +69,112 @@ def load(load_filename):
     nr_freqs = len(control_freq_arr)
     resp_arr.shape = (nr_freqs, nr_delays)
     delay_arr = dt_delays * np.arange(nr_delays)
+    data = rotate_opt(resp_arr)
+    plot_data = data.real
 
-    # # Fit data
-    # popt_a, perr_a = fit_simple(delay_arr, np.abs(resp_arr))
-    # popt_p, perr_p = fit_simple(delay_arr, np.unwrap(np.angle(resp_arr)))
-    # popt_x, perr_x = fit_simple(delay_arr, np.real(resp_arr))
-    # popt_y, perr_y = fit_simple(delay_arr, np.imag(resp_arr))
+    # choose limits for colorbar
+    cutoff = 0.0  # %
+    lowlim = np.percentile(plot_data, cutoff)
+    highlim = np.percentile(plot_data, 100. - cutoff)
 
-    # T1 = popt_a[0]
-    # T1_err = perr_a[0]
-    # print("T1 time A: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
-    # T1 = popt_p[0]
-    # T1_err = perr_p[0]
-    # print("T1 time P: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
-    # T1 = popt_x[0]
-    # T1_err = perr_x[0]
-    # print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
-    # T1 = popt_y[0]
-    # T1_err = perr_y[0]
-    # print("T1 time Q: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+    # extent
+    x_min = 1e+6 * delay_arr[0]
+    x_max = 1e+6 * delay_arr[-1]
+    dx = 1e+6 * (delay_arr[1] - delay_arr[0])
+    y_min = 1e-9 * control_freq_arr[0]
+    y_max = 1e-9 * control_freq_arr[-1]
+    dy = 1e-9 * (control_freq_arr[1] - control_freq_arr[0])
 
-    # fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-    # ax21, ax22, ax23, ax24 = ax2
-    # ax21.plot(1e9 * delay_arr, np.abs(resp_arr))
-    # # ax21.plot(1e9 * delay_arr, decay(delay_arr, *popt_a), '--')
-    # ax22.plot(1e9 * delay_arr, np.unwrap(np.angle(resp_arr)))
-    # # ax22.plot(1e9 * delay_arr, decay(delay_arr, *popt_p), '--')
-    # ax23.plot(1e9 * delay_arr, np.real(resp_arr))
-    # # ax23.plot(1e9 * delay_arr, decay(delay_arr, *popt_x), '--')
-    # ax24.plot(1e9 * delay_arr, np.imag(resp_arr))
-    # # ax24.plot(1e9 * delay_arr, decay(delay_arr, *popt_y), '--')
-
-    # ax21.set_ylabel("Amplitude [FS]")
-    # ax22.set_ylabel("Phase [rad]")
-    # ax23.set_ylabel("I [FS]")
-    # ax24.set_ylabel("Q [FS]")
-    # ax2[-1].set_xlabel("Ramsey delay [ns]")
-    # fig2.show()
     fig2, ax2 = plt.subplots()
-    ax2.imshow(np.abs(resp_arr))
+    im = ax2.imshow(
+        plot_data,
+        origin='lower',
+        aspect='auto',
+        interpolation='none',
+        extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+        vmin=lowlim,
+        vmax=highlim,
+    )
+    ax2.set_xlabel("Ramsey delay [us]")
+    ax2.set_ylabel("Control frequency [GHz]")
+    cb = fig2.colorbar(im)
+    cb.set_label("Response amplitude [FS]")
     fig2.show()
+
+    fit_freq = np.zeros(nr_freqs)
+    for jj in range(nr_freqs):
+        try:
+            res = fit_simple(delay_arr, plot_data[jj])
+            fit_freq[jj] = np.abs(res[3])
+        except Exception:
+            fit_freq[jj] = np.nan
+
+    n_fit = nr_freqs // 4
+    pfit1 = np.polyfit(control_freq_arr[:n_fit], fit_freq[:n_fit], 1)
+    pfit2 = np.polyfit(control_freq_arr[-n_fit:], fit_freq[-n_fit:], 1)
+    x0 = np.roots(pfit1 - pfit2)[0]
+    # x0 = np.roots(pfit1)[0]
+
+    fig3, ax3 = plt.subplots(tight_layout=True)
+    ax3.plot(control_freq_arr, fit_freq, '.')
+    ax3.set_ylabel("Fitted detuning [Hz]")
+    ax3.set_xlabel("Control frequency [Hz]$]")
+    fig3.show()
+    _lims = ax3.axis()
+    ax3.plot(
+        control_freq_arr,
+        np.polyval(pfit1, control_freq_arr),
+        '--',
+        c='tab:orange',
+    )
+    ax3.plot(
+        control_freq_arr,
+        np.polyval(pfit2, control_freq_arr),
+        '--',
+        c='tab:green',
+    )
+    ax3.axhline(0.0, ls='--', c='tab:gray')
+    ax3.axvline(x0, ls='--', c='tab:gray')
+    ax3.axis(_lims)
+    fig3.canvas.draw()
+    print(f"Fitted qubit frequency: {x0} Hz")
 
     return fig1, fig2
 
 
-def decay(t, *p):
-    T1, xe, xg = p
-    return xg + (xe - xg) * np.exp(-t / T1)
+def func(t, offset, amplitude, T2, frequency, phase):
+    return offset + amplitude * np.exp(-t / T2) * np.cos(2. * np.pi * frequency * t + phase)
 
 
-def fit_simple(t, x):
-    T1 = 0.5 * (t[-1] - t[0])
-    xe, xg = x[0], x[-1]
-    p0 = (T1, xe, xg)
-    print(p0)
-    popt, pcov = curve_fit(decay, t, x, p0)
-    perr = np.sqrt(np.diag(pcov))
-    return popt, perr
+def fit_simple(x, y):
+    pkpk = np.max(y) - np.min(y)
+    offset = np.min(y) + pkpk / 2
+    amplitude = 0.5 * pkpk
+    T2 = 0.5 * (np.max(x) - np.min(x))
+    freqs = np.fft.rfftfreq(len(x), x[1] - x[0])
+    fft = np.fft.rfft(y)
+    frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
+    first = (y[0] - offset) / amplitude
+    if first > 1.:
+        first = 1.
+    elif first < -1.:
+        first = -1.
+    phase = np.arccos(first)
+    p0 = (
+        offset,
+        amplitude,
+        T2,
+        frequency,
+        phase,
+    )
+    popt, cov = curve_fit(
+        func,
+        x,
+        y,
+        p0=p0,
+    )
+    offset, amplitude, T2, frequency, phase = popt
+    return popt
 
 
 if __name__ == "__main__":

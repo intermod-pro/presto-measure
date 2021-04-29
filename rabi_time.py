@@ -28,22 +28,25 @@ ADDRESS = "192.0.2.53"
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
 # cavity drive: readout
-readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout
+# readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout, resonator 1
+readout_freq = 6.376650 * 1e9  # Hz, frequency for resonator readout, resonator 2
 readout_amp = 10**(-10.0 / 20)  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-control_freq = 4.141 * 1e9  # Hz
+# control_freq = 4.141 * 1e9  # Hz, qubit 1
+control_freq = 4.774 * 1e9  # Hz, qubit 2
 control_amp = 0.1  # FS
-control_port = 5
+# control_port = 5  # qubit 1
+control_port = 7  # qubit 2
 
 # cavity readout: sample
 sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
 
 # Rabi experiment
-num_averages = 10_000
+num_averages = 1_000
 rabi_n = 128  # number of steps when changing duration of control pulse
 rabi_dt = 2e-9  # s, step size when changing duration of control pulse
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay

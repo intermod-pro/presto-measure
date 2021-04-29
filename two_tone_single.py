@@ -28,17 +28,21 @@ import load_two_tone_single
 ADDRESS = "192.0.2.53"
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
-center_freq = 4.141e9  # Hz, center frequency for qubit sweep
+# center_freq = 4.141 * 1e9  # Hz, center frequency for qubit sweep, qubit 1
+center_freq = 4.773 * 1e9  # Hz, center frequency for qubit sweep, qubit 2
 span = 50e6  # Hz, span for qubit frequency sweep
 df = 1e5  # Hz, measurement bandwidth for each point in sweep
 
-cavity_freq = 6.213095 * 1e9  # Hz, frequency for cavity
+# cavity_freq = 6.213095 * 1e9  # Hz, frequency for cavity, resonator 1
+cavity_freq = 6.376650 * 1e9  # Hz, frequency for cavity, resonator 2
 cavity_amp = 10**(-20.0 / 20)  # FS
 
-qubit_amp = 10**(-40.0 / 20)  # FS
+# qubit_amp = 10**(-40.0 / 20)  # FS, qubit 1
+qubit_amp = 10**(-35.0 / 20)  # FS, qubit 2
 
 cavity_port = 1
-qubit_port = 5
+# qubit_port = 5  # qubit 1
+qubit_port = 7  # qubit 2
 input_port = 1
 dither = False
 extra = 500

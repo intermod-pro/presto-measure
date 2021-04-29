@@ -29,15 +29,18 @@ ADDRESS = "192.0.2.53"
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
 # cavity drive: readout
-readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout
+# readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout, resonator 1
+readout_freq = 6.376650 * 1e9  # Hz, frequency for resonator readout, resonator 2
 readout_amp = 10**(-10.0 / 20)  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-control_freq = 4.141 * 1e9  # Hz
+# control_freq = 4.146391 * 1e9  # Hz <-- from data/ramsey_20210428_041929.h5, quit 1
+control_freq = 4.776805 * 1e9  # Hz <-- from data/ramsey_20210428_160241.h5, quit 2
 control_duration = 100e-9  # s, duration of the control pulse
-control_port = 5
+# control_port = 5  # qubit 1
+control_port = 7  # qubit 2
 
 # cavity readout: sample
 sample_duration = 4 * 1e-6  # s, duration of the sampling window
