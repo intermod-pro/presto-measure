@@ -364,7 +364,7 @@ def t1_fit_simple(t, x):
     T1 = 0.5 * (t[-1] - t[0])
     xe, xg = x[0], x[-1]
     p0 = (T1, xe, xg)
-    popt, pcov = curve_fit(t1_decay, t, x, p0)
+    popt, pcov = curve_fit(t1_decay, t, x, p0, maxfev=12_000)
     perr = np.sqrt(np.diag(pcov))
     return popt, perr
 
@@ -399,6 +399,7 @@ def t2_fit_simple(x, y):
         x,
         y,
         p0=p0,
+        maxfev=12_000,
     )
     perr = np.sqrt(np.diag(pcov))
     return popt, perr
@@ -468,7 +469,10 @@ if __name__ == "__main__":
         for which_qubit in range(1, 3):
             print("\n")
             print(f"------- measure T1 on qubit {which_qubit:d} -------")
-            t1, t1_err = measure_t1(which_qubit)
+            try:
+                t1, _ = measure_t1(which_qubit)
+            except:
+                t1 = np.nan
             if which_qubit == 1:
                 t1_arr_q1 = np.r_[t1_arr_q1, t1]
                 line_t1_q1.set_data(rel_time_arr, 1e6 * t1_arr_q1)
@@ -481,7 +485,10 @@ if __name__ == "__main__":
 
             print("\n")
             print(f"------- measure T2 on qubit {which_qubit:d} -------")
-            t2, t2_err = measure_t2(which_qubit)
+            try:
+                t2, _ = measure_t2(which_qubit)
+            except:
+                t2 = np.nan
             if which_qubit == 1:
                 t2_arr_q1 = np.r_[t2_arr_q1, t2]
                 line_t2_q1.set_data(rel_time_arr, 1e6 * t2_arr_q1)

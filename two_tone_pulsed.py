@@ -25,34 +25,32 @@ from presto.utils import get_sourcecode
 
 # Presto's IP address or hostname
 ADDRESS = "192.0.2.53"
-PORT = None
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
 # Readout
-readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout
+readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout, resonator 1
 readout_if = 0.0  # Hz, intermediate frequency for digital mixer
 readout_amp = 10**(-10.0 / 20)  # FS
 readout_duration = 2e-6  # s
 readout_port = 1
 
 # Control
-control_amp = 10**(-0.0 / 20)  # FS
-control_amp = 0.0
-control_port = 5
-control_center_freq = 4.142e9  # Hz, center frequency for control-pulse frequency sweep
+control_amp = 10**(-40.0 / 20)  # FS, qubit 1
+control_port = 5  # qubit 1
+control_center_freq = 4.141 * 1e9  # Hz, center frequency for control-pulse, qubit 1
 control_center_freq_if = 400e6  # Hz, intermediate frequency for digital mixer
 control_freq_nco = control_center_freq - control_center_freq_if  # Hz, using upper sideband
 control_span = 50e6  # Hz, span of sweep
-nr_freqs = 500
+nr_freqs = 128
 
 # Sample
 sample_delay = 300e-9  # s, delay between readout pulse and sample window to account for latency
 sample_duration = 4e-6  # s, duration of the sampling window
 sample_port = 1
-nr_averages = 2_000
+nr_averages = 1_000
 
 # other
-wait_for_decay = 100e-6  # s
+wait_for_decay = 500e-6  # s
 
 df = control_span / nr_freqs
 control_duration = round(1 / df / 2e-9) * 2e-9  # s, multiple of 2 ns
@@ -64,7 +62,6 @@ control_freq_arr = control_freq_nco + control_freq_if_arr
 
 with pulsed.Pulsed(
         address=ADDRESS,
-        port=PORT,
         ext_ref_clk=EXT_REF_CLK,
         adc_mode=cmd.AdcMixed,
         adc_fsample=cmd.AdcG2,
