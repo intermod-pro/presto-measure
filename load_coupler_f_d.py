@@ -17,7 +17,6 @@ import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.optimize import curve_fit
 
 from presto.utils import rotate_opt
 
@@ -52,6 +51,18 @@ def load(load_filename):
         coupler_ac_freq_arr = h5f["coupler_ac_freq_arr"][()]
         coupler_ac_duration_arr = h5f["coupler_ac_duration_arr"][()]
 
+        # these were added later
+        try:
+            # multiplexed readout
+            readout_if_1 = h5f.attrs["readout_if_1"]
+            readout_if_2 = h5f.attrs["readout_if_2"]
+            readout_nco = h5f.attrs["readout_nco"]
+        except KeyError:
+            # only readout resonator 1
+            readout_if_1 = 0.0
+            readout_if_2 = None
+            readout_nco = readout_freq_1
+
     t_low = 1500 * 1e-9
     t_high = 2000 * 1e-9
     idx_low = np.argmin(np.abs(t_arr - t_low))
@@ -68,39 +79,103 @@ def load(load_filename):
     ax12.set_xlabel("Time [ns]")
     fig1.show()
 
-    resp_arr = np.mean(store_arr[:, 0, idx], axis=-1)
-    data = rotate_opt(resp_arr)
-    data.shape = (nr_freqs, nr_steps)
-    plot_data = data.real
+    if readout_if_2 is None:
+        # only readout resonator 1
+        resp_arr = np.mean(store_arr[:, 0, idx], axis=-1)
+        data = rotate_opt(resp_arr)
+        data.shape = (nr_freqs, nr_steps)
+        plot_data = data.real
 
-    # choose limits for colorbar
-    cutoff = 0.0  # %
-    lowlim = np.percentile(plot_data, cutoff)
-    highlim = np.percentile(plot_data, 100. - cutoff)
+        # choose limits for colorbar
+        cutoff = 0.0  # %
+        lowlim = np.percentile(plot_data, cutoff)
+        highlim = np.percentile(plot_data, 100. - cutoff)
 
-    # extent
-    x_min = 1e9 * coupler_ac_duration_arr[0]
-    x_max = 1e9 * coupler_ac_duration_arr[-1]
-    dx = 1e9 * (coupler_ac_duration_arr[1] - coupler_ac_duration_arr[0])
-    y_min = 1e-6 * coupler_ac_freq_arr[0]
-    y_max = 1e-6 * coupler_ac_freq_arr[-1]
-    dy = 1e-6 * (coupler_ac_freq_arr[1] - coupler_ac_freq_arr[0])
+        # extent
+        x_min = 1e9 * coupler_ac_duration_arr[0]
+        x_max = 1e9 * coupler_ac_duration_arr[-1]
+        dx = 1e9 * (coupler_ac_duration_arr[1] - coupler_ac_duration_arr[0])
+        y_min = 1e-6 * coupler_ac_freq_arr[0]
+        y_max = 1e-6 * coupler_ac_freq_arr[-1]
+        dy = 1e-6 * (coupler_ac_freq_arr[1] - coupler_ac_freq_arr[0])
 
-    fig2, ax2 = plt.subplots(tight_layout=True)
-    im = ax2.imshow(
-        plot_data,
-        origin='lower',
-        aspect='auto',
-        interpolation='none',
-        extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-        vmin=lowlim,
-        vmax=highlim,
-    )
-    ax2.set_xlabel("Coupler duration [ns]")
-    ax2.set_ylabel("Coupler frequency [MHz]")
-    cb = fig2.colorbar(im)
-    cb.set_label("Response amplitude [FS]")
-    fig2.show()
+        fig2, ax2 = plt.subplots(tight_layout=True)
+        im = ax2.imshow(
+            plot_data,
+            origin='lower',
+            aspect='auto',
+            interpolation='none',
+            extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+            vmin=lowlim,
+            vmax=highlim,
+        )
+        ax2.set_xlabel("Coupler duration [ns]")
+        ax2.set_ylabel("Coupler frequency [MHz]")
+        cb = fig2.colorbar(im)
+        cb.set_label("Response I quadrature [FS]")
+        fig2.show()
+    else:
+        # multiplexed readout
+        dt = t_arr[1] - t_arr[0]
+        nr_samples = len(idx)
+        freq_arr = np.fft.fftfreq(nr_samples, dt)
+        # complex FFT should take care of upper/lower sideband
+        resp_fft = np.fft.fft(store_arr[:, 0, idx], axis=-1) / len(idx)
+        idx_1 = np.argmin(np.abs(freq_arr - readout_if_1))
+        idx_2 = np.argmin(np.abs(freq_arr - readout_if_2))
+        resp_arr_1 = 2 * resp_fft[:, idx_1]
+        resp_arr_2 = 2 * resp_fft[:, idx_2]
+        data_1 = rotate_opt(resp_arr_1)
+        data_2 = rotate_opt(resp_arr_2)
+        data_1.shape = (nr_freqs, nr_steps)
+        data_2.shape = (nr_freqs, nr_steps)
+        plot_data_1 = data_1.real
+        plot_data_2 = data_2.real
+
+        # choose limits for colorbar
+        cutoff = 0.0  # %
+        lowlim_1 = np.percentile(plot_data_1, cutoff)
+        highlim_1 = np.percentile(plot_data_1, 100. - cutoff)
+        lowlim_2 = np.percentile(plot_data_2, cutoff)
+        highlim_2 = np.percentile(plot_data_2, 100. - cutoff)
+
+        # extent
+        x_min = 1e9 * coupler_ac_duration_arr[0]
+        x_max = 1e9 * coupler_ac_duration_arr[-1]
+        dx = 1e9 * (coupler_ac_duration_arr[1] - coupler_ac_duration_arr[0])
+        y_min = 1e-6 * coupler_ac_freq_arr[0]
+        y_max = 1e-6 * coupler_ac_freq_arr[-1]
+        dy = 1e-6 * (coupler_ac_freq_arr[1] - coupler_ac_freq_arr[0])
+
+        fig2, ax2 = plt.subplots(1, 2, figsize=(9.6, 4.8), tight_layout=True)
+        ax21, ax22 = ax2
+        im1 = ax21.imshow(
+            plot_data_1,
+            origin='lower',
+            aspect='auto',
+            interpolation='none',
+            extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+            vmin=lowlim_1,
+            vmax=highlim_1,
+        )
+        im2 = ax22.imshow(
+            plot_data_2,
+            origin='lower',
+            aspect='auto',
+            interpolation='none',
+            extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+            vmin=lowlim_2,
+            vmax=highlim_2,
+        )
+        ax21.set_title("Readout 1: I quadrature")
+        ax22.set_title("Readout 2: I quadrature")
+        ax21.set_xlabel("Coupler duration [ns]")
+        ax22.set_xlabel("Coupler duration [ns]")
+        ax21.set_ylabel("Coupler frequency [MHz]")
+        ax22.set_ylabel("Coupler frequency [MHz]")
+        ax22.yaxis.set_label_position("right")
+        ax22.yaxis.tick_right()
+        fig2.show()
 
     return fig1, fig2
 

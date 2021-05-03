@@ -76,6 +76,15 @@ num_averages = 1_000
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
 readout_sample_delay = 300 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 
+# up/down conversion for multiplexed readout using upper sideband
+readout_nco = 0.5 * (readout_freq_1 + readout_freq_2) - 250e6  # equally spaced around middle of Nyquist band
+readout_if_1 = readout_freq_1 - readout_nco
+readout_if_2 = readout_freq_2 - readout_nco
+# NOTE!
+# Intermediate frequencies are not tuned, so in theory there will be some crosstalk when we FFT the stored data.
+# However, for these readout frequencies and choice of NCO, the crosstalk is at about -62 dBc.
+# So we can ignore the issue for now, at least until we use a JPA/TWPA.
+
 # Instantiate interface class
 with pulsed.Pulsed(
         address=ADDRESS,
@@ -97,7 +106,7 @@ with pulsed.Pulsed(
     pls.hardware.set_inv_sinc(coupler_ac_port, 0)
     pls.hardware.set_inv_sinc(coupler_dc_port, 0)
     pls.hardware.configure_mixer(
-        freq=readout_freq_1,  # readout only first reasonator TODO: read both!
+        freq=readout_nco,  # for both resonators
         in_ports=sample_port,
         out_ports=readout_port,
         sync=False,  # sync in last call
@@ -131,10 +140,17 @@ with pulsed.Pulsed(
     # we only need to use carrier 1
     pls.setup_freq_lut(
         output_ports=readout_port,
-        group=0,
-        frequencies=0.0,  # TODO: use a nonzero intermediate frequency to read out both resonators
+        group=0,  # use group 0 for resonator 1
+        frequencies=readout_if_1,
         phases=0.0,
-        phases_q=0.0,
+        phases_q=-np.pi / 2,  # upper sideband
+    )
+    pls.setup_freq_lut(
+        output_ports=readout_port,
+        group=1,  # use group 1 for resonator 2
+        frequencies=readout_if_2,
+        phases=0.0,
+        phases_q=-np.pi / 2,  # upper sideband
     )
     pls.setup_freq_lut(
         output_ports=control_port_1,
@@ -168,7 +184,12 @@ with pulsed.Pulsed(
     # Setup lookup tables for amplitudes
     pls.setup_scale_lut(
         output_ports=readout_port,
-        group=0,
+        group=0,  # resonator 1
+        scales=readout_amp,
+    )
+    pls.setup_scale_lut(
+        output_ports=readout_port,
+        group=1,  # resonator 2
         scales=readout_amp,
     )
     pls.setup_scale_lut(
@@ -196,9 +217,18 @@ with pulsed.Pulsed(
     # use setup_long_drive to create a pulse with square envelope
     # setup_long_drive supports smooth rise and fall transitions for the pulse,
     # but we keep it simple here
-    readout_pulse = pls.setup_long_drive(
+    readout_pulse_1 = pls.setup_long_drive(
         output_port=readout_port,
         group=0,
+        duration=readout_duration,
+        amplitude=1.0,
+        amplitude_q=1.0,
+        rise_time=0e-9,
+        fall_time=0e-9,
+    )
+    readout_pulse_2 = pls.setup_long_drive(
+        output_port=readout_port,
+        group=1,
         duration=readout_duration,
         amplitude=1.0,
         amplitude_q=1.0,
@@ -258,7 +288,7 @@ with pulsed.Pulsed(
         # readout right after coupler pulse
         T += ii * dt_steps
         pls.reset_phase(T, readout_port)
-        pls.output_pulse(T, readout_pulse)
+        pls.output_pulse(T, [readout_pulse_1, readout_pulse_2])
         # sample the readout pulse, taking latency into account
         pls.store(T + readout_sample_delay)
         # Move to next iteration
@@ -310,6 +340,9 @@ with h5py.File(save_path, "w") as h5f:
     h5f.attrs["control_if"] = control_if
     h5f.attrs["readout_freq_1"] = readout_freq_1
     h5f.attrs["readout_freq_2"] = readout_freq_2
+    h5f.attrs["readout_if_1"] = readout_if_1
+    h5f.attrs["readout_if_2"] = readout_if_2
+    h5f.attrs["readout_nco"] = readout_nco
     h5f.attrs["readout_duration"] = readout_duration
     h5f.attrs["control_duration"] = control_duration
     h5f.attrs["readout_amp"] = readout_amp
