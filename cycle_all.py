@@ -1,3 +1,17 @@
+# -*- coding: utf-8 -*-
+"""
+Copyright (C) 2021  Intermodulation Products AB.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see
+<https://www.gnu.org/licenses/>.
+"""
 import os
 # https://github.com/ContinuumIO/anaconda-issues/issues/905#issuecomment-232498034
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
@@ -10,7 +24,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-from presto import commands as cmd
+from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import get_sourcecode, rotate_opt, sin2
 
@@ -66,10 +80,10 @@ def measure_t1(which_qubit):
     with pulsed.Pulsed(
             address=ADDRESS,
             ext_ref_clk=EXT_REF_CLK,
-            adc_mode=cmd.AdcMixed,
-            adc_fsample=cmd.AdcG2,
-            dac_mode=[cmd.DacMixed42, cmd.DacMixed02, cmd.DacMixed02, cmd.DacMixed02],
-            dac_fsample=[cmd.DacG10, cmd.DacG6, cmd.DacG6, cmd.DacG6],
+            adc_mode=AdcMode.Mixed,
+            adc_fsample=AdcFSample.G2,
+            dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+            dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
     ) as pls:
         pls.hardware.set_adc_attenuation(sample_port, 0.0)
         pls.hardware.set_dac_current(readout_port, 32_000)
@@ -218,10 +232,10 @@ def measure_t2(which_qubit):
     with pulsed.Pulsed(
             address=ADDRESS,
             ext_ref_clk=EXT_REF_CLK,
-            adc_mode=cmd.AdcMixed,
-            adc_fsample=cmd.AdcG2,
-            dac_mode=[cmd.DacMixed42, cmd.DacMixed02, cmd.DacMixed02, cmd.DacMixed02],
-            dac_fsample=[cmd.DacG10, cmd.DacG6, cmd.DacG6, cmd.DacG6],
+            adc_mode=AdcMode.Mixed,
+            adc_fsample=AdcFSample.G2,
+            dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+            dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
     ) as pls:
         pls.hardware.set_adc_attenuation(sample_port, 0.0)
         pls.hardware.set_dac_current(readout_port, 32_000)

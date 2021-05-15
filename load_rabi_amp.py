@@ -13,6 +13,9 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -23,7 +26,11 @@ from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "data/rabi_amp_20210428_101944.h5"
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 
 def load(load_filename):
@@ -97,14 +104,27 @@ def load(load_filename):
     ax2[-1].set_xlabel("Pulse amplitude [FS]")
     fig2.show()
 
+    data_max = np.abs(data).max()
+    unit = ""
+    mult = 1.0
+    if data_max < 1e-6:
+        unit = "n"
+        mult = 1e9
+    elif data_max < 1e-3:
+        unit = "μ"
+        mult = 1e6
+    elif data_max < 1e0:
+        unit = "m"
+        mult = 1e3
+
     fig3, ax3 = plt.subplots(tight_layout=True)
-    ax3.plot(control_amp_arr, np.real(data))
-    ax3.plot(control_amp_arr, func(control_amp_arr, *popt_x), '--')
-    ax3.set_ylabel("I [FS]")
+    ax3.plot(control_amp_arr, mult * np.real(data), '.')
+    ax3.plot(control_amp_arr, mult * func(control_amp_arr, *popt_x), '--')
+    ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
     ax3.set_xlabel("Pulse amplitude [FS]")
     fig3.show()
 
-    return fig1, fig2
+    return fig1, fig2, fig3
 
 
 def func(t, offset, amplitude, T2, period, phase):
@@ -141,4 +161,4 @@ def fit_period(x, y):
 
 
 if __name__ == "__main__":
-    fig1, fig2 = load(load_filename)
+    fig1, fig2, fig3 = load(load_filename)

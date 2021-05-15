@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Measure the energy-relaxation time T1.
 Copyright (C) 2021  Intermodulation Products AB.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -19,7 +18,7 @@ import time
 import h5py
 import numpy as np
 
-from presto import commands as cmd
+from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
 
@@ -53,14 +52,14 @@ coupler_ac_port = 9
 coupler_dc_port = 13
 coupler_dc_bias = 0.4  # FS, ~ 500 mV into 50 ohm, ~ 0.3 phi_0
 coupler_ac_amp = 0.35  # FS
-nr_steps = 256
+nr_steps = 64
 dt_steps = 8 * 1e-9  # s
 coupler_ac_duration_arr = dt_steps * np.arange(nr_steps)  # s
 # coupler_ac_freq_center = abs(control_freq_2 - control_freq_1)  # Hz
 coupler_ac_freq_center = 629.7 * 1e6  # Hz
 coupler_ac_freq_span = 10 * 1e6  # Hz
 coupler_ac_if = 100 * 1e6  # Hz
-nr_freqs = 256
+nr_freqs = 64
 _fstart = coupler_ac_freq_center - coupler_ac_freq_span / 2
 _fstop = coupler_ac_freq_center + coupler_ac_freq_span / 2
 coupler_ac_freq_arr = np.linspace(_fstart, _fstop, nr_freqs)
@@ -89,10 +88,10 @@ readout_if_2 = readout_freq_2 - readout_nco
 with pulsed.Pulsed(
         address=ADDRESS,
         ext_ref_clk=EXT_REF_CLK,
-        adc_mode=cmd.AdcMixed,
-        adc_fsample=cmd.AdcG2,
-        dac_mode=[cmd.DacMixed42, cmd.DacMixed02, cmd.DacMixed02, cmd.DacMixed02],
-        dac_fsample=[cmd.DacG10, cmd.DacG6, cmd.DacG6, cmd.DacG6],
+        adc_mode=AdcMode.Mixed,
+        adc_fsample=AdcFSample.G2,
+        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
 ) as pls:
     pls.hardware.set_adc_attenuation(sample_port, 0.0)
     pls.hardware.set_dac_current(readout_port, 32_000)

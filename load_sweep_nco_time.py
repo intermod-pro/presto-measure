@@ -13,6 +13,9 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -20,14 +23,13 @@ import matplotlib.widgets as mwidgets
 import numpy as np
 from resonator_tools import circuit
 
-rcParams['figure.dpi'] = 331.3
+rcParams['figure.dpi'] = 108.8
 
-load_filename = "sweep_nco_time_20210205_081214.h5"
-load_filename = "sweep_nco_time_20210205_093012.h5"
-load_filename = "sweep_nco_time_20210205_134801.h5"
-load_filename = "sweep_nco_time_20210205_162123.h5"
-load_filename = "sweep_nco_time_20210205_185837.h5"
-load_filename = "sweep_nco_time_20210205_194103.h5"
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 
 def load(load_filename):
@@ -60,14 +62,13 @@ def load(load_filename):
         port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
         line_fit_a.set_data(1e-9 * port.f_data, 20 * np.log10(np.abs(port.z_data_sim)))
         line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))
-        print(port.fitresults)
-        fr = port.fitresults['fr']
-        Qi = port.fitresults['Qi_dia_corr']
-        Qc = port.fitresults['Qc_dia_corr']
-        Ql = port.fitresults['Ql']
-        kappa = fr / Qc
-        ax11.set_title(
-            f"fr = {1e-6*fr:.0f} MHz, Ql = {Ql:.0f}, Qi = {Qi:.0f}, Qc = {Qc:.0f}, kappa = {1e-3*kappa:.0f} kHz")
+        print("----------------")
+        print(f"fr = {port.fitresults['fr']}")
+        print(f"Qi = {port.fitresults['Qi_dia_corr']}")
+        print(f"Qc = {port.fitresults['Qc_dia_corr']}")
+        print(f"Ql = {port.fitresults['Ql']}")
+        print(f"kappa = {port.fitresults['fr'] / port.fitresults['Qc_dia_corr']}")
+        print("----------------")
         fig1.canvas.draw()
 
     rectprops = dict(facecolor='tab:gray', alpha=0.5)

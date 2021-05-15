@@ -18,7 +18,8 @@ import time
 
 import h5py
 import numpy as np
-from presto import commands as cmd
+
+from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import test
 from presto.utils import format_sec, get_sourcecode
 
@@ -52,10 +53,10 @@ with test.Test(
         address=ADDRESS,
         ext_ref_clk=EXT_REF_CLK,
         reset=True,
-        adc_mode=cmd.AdcMixed,
-        adc_fsample=cmd.AdcG2,
-        dac_mode=[cmd.DacMixed42, cmd.DacMixed02, cmd.DacMixed02, cmd.DacMixed02],
-        dac_fsample=[cmd.DacG10, cmd.DacG6, cmd.DacG6, cmd.DacG6],
+        adc_mode=AdcMode.Mixed,
+        adc_fsample=AdcFSample.G2,
+        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
 ) as lck:
     lck.hardware.set_adc_attenuation(input_port, 0.0)
     lck.hardware.set_dac_current(cavity_port, 32_000)

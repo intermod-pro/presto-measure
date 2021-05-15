@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Loader for files saved by t1.py
 Copyright (C) 2021  Intermodulation Products AB.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -13,6 +12,9 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -23,8 +25,11 @@ from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "data/ramsey_20210428_041929.h5"
-load_filename = "data/ramsey_20210428_160241.h5"
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 
 def load(load_filename):
@@ -72,6 +77,20 @@ def load(load_filename):
     data = rotate_opt(resp_arr)
     plot_data = data.real
 
+    data_max = np.abs(plot_data).max()
+    unit = ""
+    mult = 1.0
+    if data_max < 1e-6:
+        unit = "n"
+        mult = 1e9
+    elif data_max < 1e-3:
+        unit = "μ"
+        mult = 1e6
+    elif data_max < 1e0:
+        unit = "m"
+        mult = 1e3
+    plot_data *= mult
+
     # choose limits for colorbar
     cutoff = 0.0  # %
     lowlim = np.percentile(plot_data, cutoff)
@@ -85,7 +104,7 @@ def load(load_filename):
     y_max = 1e-9 * control_freq_arr[-1]
     dy = 1e-9 * (control_freq_arr[1] - control_freq_arr[0])
 
-    fig2, ax2 = plt.subplots()
+    fig2, ax2 = plt.subplots(tight_layout=True)
     im = ax2.imshow(
         plot_data,
         origin='lower',
@@ -95,10 +114,10 @@ def load(load_filename):
         vmin=lowlim,
         vmax=highlim,
     )
-    ax2.set_xlabel("Ramsey delay [us]")
+    ax2.set_xlabel("Ramsey delay [μs]")
     ax2.set_ylabel("Control frequency [GHz]")
     cb = fig2.colorbar(im)
-    cb.set_label("Response amplitude [FS]")
+    cb.set_label(f"Response I quadrature [{unit:s}FS]")
     fig2.show()
 
     fit_freq = np.zeros(nr_freqs)
@@ -139,7 +158,7 @@ def load(load_filename):
     fig3.canvas.draw()
     print(f"Fitted qubit frequency: {x0} Hz")
 
-    return fig1, fig2
+    return fig1, fig2, fig3
 
 
 def func(t, offset, amplitude, T2, frequency, phase):
@@ -178,4 +197,4 @@ def fit_simple(x, y):
 
 
 if __name__ == "__main__":
-    fig1, fig2 = load(load_filename)
+    fig1, fig2, fig3 = load(load_filename)

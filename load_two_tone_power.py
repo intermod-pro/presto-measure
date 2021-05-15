@@ -13,18 +13,26 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
+
 rcParams['figure.dpi'] = 108.8
+
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 LOGSCALE = False  # Plot response in logarithmic scale (dBFS), both in colormap and line cut.
 LINECUT = False  # Plot an horizontal line cut of the 2D sweep. Interactive.
 BLIT = True  # Use blitting when plotting. Faster if it works.
 AMP_IDX = 0  # internal use
-
-load_filename = "data/two_tone_power_20210427_145458.h5"
 
 
 def load(load_filename):

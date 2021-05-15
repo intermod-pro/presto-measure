@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Loader for files saved by t1.py
 Copyright (C) 2021  Intermodulation Products AB.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -13,6 +12,9 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -23,7 +25,11 @@ from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "data/ramsey_single_20210428_105814.h5"
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 
 def load(load_filename):
@@ -44,6 +50,8 @@ def load(load_filename):
         t_arr = h5f["t_arr"][()]
         store_arr = h5f["store_arr"][()]
         source_code = h5f["source_code"][()]
+
+        print(f"Control frequency: {control_freq / 1e9:.2f} GHz")
 
     t_low = 1500 * 1e-9
     t_high = 2000 * 1e-9
@@ -68,38 +76,29 @@ def load(load_filename):
     data = rotate_opt(resp_arr)
     delay_arr = dt_delays * np.arange(nr_delays)
 
-    # Fit data
-    popt_a, perr_a = fit_simple(delay_arr, np.abs(data))
-    popt_p, perr_p = fit_simple(delay_arr, np.unwrap(np.angle(data)))
-    popt_x, perr_x = fit_simple(delay_arr, np.real(data))
-    popt_y, perr_y = fit_simple(delay_arr, np.imag(data))
+    # Fit data to I quadrature
+    popt, perr = fit_simple(delay_arr, np.real(data))
 
-    # T2 = popt_a[2]
-    # T2_err = perr_a[2]
-    # print("T2 time A: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
-    # T2 = popt_p[2]
-    # T2_err = perr_p[2]
-    # print("T2 time P: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
-    T2 = popt_x[2]
-    T2_err = perr_x[2]
+    T2 = popt[2]
+    T2_err = perr[2]
     print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
-    det = popt_x[3]
-    det_err = perr_x[3]
+    det = popt[3]
+    det_err = perr[3]
     print("detuning: {} +- {} Hz".format(det, det_err))
-    # T2 = popt_y[2]
-    # T2_err = perr_y[2]
-    # print("T2 time Q: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+    sign = 1.0 if np.abs(popt[4]) < np.pi / 2 else -1.0
+    print(f"sign: {sign}")
+    i_at_e = popt[0] + sign * popt[1]
+    i_at_g = popt[0] - sign * popt[1]
+    print(f"|e>: {i_at_e} rad")
+    print(f"|g>: {i_at_g} rad")
 
     fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
     ax21, ax22, ax23, ax24 = ax2
     ax21.plot(1e6 * delay_arr, np.abs(data))
-    # ax21.plot(1e6 * delay_arr, func(delay_arr, *popt_a), '--')
     ax22.plot(1e6 * delay_arr, np.unwrap(np.angle(data)))
-    # ax22.plot(1e6 * delay_arr, func(delay_arr, *popt_p), '--')
     ax23.plot(1e6 * delay_arr, np.real(data))
-    ax23.plot(1e6 * delay_arr, func(delay_arr, *popt_x), '--')
+    ax23.plot(1e6 * delay_arr, func(delay_arr, *popt), '--')
     ax24.plot(1e6 * delay_arr, np.imag(data))
-    # ax24.plot(1e6 * delay_arr, func(delay_arr, *popt_y), '--')
 
     ax21.set_ylabel("Amplitude [FS]")
     ax22.set_ylabel("Phase [rad]")
@@ -108,12 +107,25 @@ def load(load_filename):
     ax2[-1].set_xlabel("Ramsey delay [us]")
     fig2.show()
 
+    data_max = np.abs(data.real).max()
+    unit = ""
+    mult = 1.0
+    if data_max < 1e-6:
+        unit = "n"
+        mult = 1e9
+    elif data_max < 1e-3:
+        unit = "μ"
+        mult = 1e6
+    elif data_max < 1e0:
+        unit = "m"
+        mult = 1e3
+
     fig3, ax3 = plt.subplots(tight_layout=True)
-    ax3.plot(1e6 * delay_arr, np.real(data), '.')
-    ax3.plot(1e6 * delay_arr, func(delay_arr, *popt_x), '--')
-    ax3.set_ylabel("I [FS]")
-    ax3.set_xlabel("Ramsey delay [us]")
-    ax3.set_title(f"T2 time: {1e6*T2:.0f} +- {1e6*T2_err:.0f} us")
+    ax3.plot(1e6 * delay_arr, mult * np.real(data), '.')
+    ax3.plot(1e6 * delay_arr, mult * func(delay_arr, *popt), '--')
+    ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
+    ax3.set_xlabel("Ramsey delay [μs]")
+    ax3.set_title(f"T2* = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")
     fig3.show()
 
     return fig1, fig2, fig3

@@ -13,6 +13,9 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -23,8 +26,11 @@ from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "data/t1_20210427_174201.h5"
-load_filename = "data/t1_20210428_105037.h5"
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 
 def load(load_filename):
@@ -69,34 +75,19 @@ def load(load_filename):
     delay_arr = dt_delays * np.arange(nr_delays)
 
     # Fit data
-    # popt_a, perr_a = fit_simple(delay_arr, np.abs(resp_arr))
-    # popt_p, perr_p = fit_simple(delay_arr, np.unwrap(np.angle(resp_arr)))
-    popt_x, perr_x = fit_simple(delay_arr, np.real(resp_arr))
-    # popt_y, perr_y = fit_simple(delay_arr, np.imag(resp_arr))
+    popt, perr = fit_simple(delay_arr, np.real(resp_arr))
 
-    # T1 = popt_a[0]
-    # T1_err = perr_a[0]
-    # print("T1 time A: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
-    # T1 = popt_p[0]
-    # T1_err = perr_p[0]
-    # print("T1 time P: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
-    T1 = popt_x[0]
-    T1_err = perr_x[0]
+    T1 = popt[0]
+    T1_err = perr[0]
     print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
-    # T1 = popt_y[0]
-    # T1_err = perr_y[0]
-    # print("T1 time Q: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
 
     fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
     ax21, ax22, ax23, ax24 = ax2
     ax21.plot(1e6 * delay_arr, np.abs(resp_arr))
-    # ax21.plot(1e6 * delay_arr, decay(delay_arr, *popt_a), '--')
     ax22.plot(1e6 * delay_arr, np.unwrap(np.angle(resp_arr)))
-    # ax22.plot(1e6 * delay_arr, decay(delay_arr, *popt_p), '--')
     ax23.plot(1e6 * delay_arr, np.real(resp_arr))
-    ax23.plot(1e6 * delay_arr, decay(delay_arr, *popt_x), '--')
+    ax23.plot(1e6 * delay_arr, decay(delay_arr, *popt), '--')
     ax24.plot(1e6 * delay_arr, np.imag(resp_arr))
-    # ax24.plot(1e6 * delay_arr, decay(delay_arr, *popt_y), '--')
 
     ax21.set_ylabel("Amplitude [FS]")
     ax22.set_ylabel("Phase [rad]")
@@ -106,11 +97,24 @@ def load(load_filename):
     fig2.show()
 
     # bigger plot just for I quadrature
+    data_max = np.abs(resp_arr.real).max()
+    unit = ""
+    mult = 1.0
+    if data_max < 1e-6:
+        unit = "n"
+        mult = 1e9
+    elif data_max < 1e-3:
+        unit = "μ"
+        mult = 1e6
+    elif data_max < 1e0:
+        unit = "m"
+        mult = 1e3
+
     fig3, ax3 = plt.subplots(tight_layout=True)
-    ax3.plot(1e6 * delay_arr, np.real(resp_arr), '.')
-    ax3.plot(1e6 * delay_arr, decay(delay_arr, *popt_x), '--')
-    ax3.set_ylabel("I [FS]")
-    ax3.set_xlabel("Control-readout delay [us]")
+    ax3.plot(1e6 * delay_arr, mult * np.real(resp_arr), '.')
+    ax3.plot(1e6 * delay_arr, mult * decay(delay_arr, *popt), '--')
+    ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
+    ax3.set_xlabel(r"Control-readout delay [$\mathrm{\mu}$s]")
     ax3.set_title("T1 = {:.0f} +- {:.0f} us".format(1e6 * T1, 1e6 * T1_err))
     fig3.show()
 

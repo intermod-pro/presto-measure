@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Loader for files saved by t1.py
 Copyright (C) 2021  Intermodulation Products AB.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -23,6 +22,7 @@ from presto.utils import rotate_opt
 rcParams['figure.dpi'] = 108.8
 
 load_filename = "data/coupler_f_d_20210430_072720.h5"
+load_filename = "data/coupler_f_d_20210504_105306.h5"
 
 
 def load(load_filename):
@@ -129,15 +129,28 @@ def load(load_filename):
         data_2 = rotate_opt(resp_arr_2)
         data_1.shape = (nr_freqs, nr_steps)
         data_2.shape = (nr_freqs, nr_steps)
-        plot_data_1 = data_1.real
-        plot_data_2 = data_2.real
+        # plot_data_1 = data_1.real
+        # plot_data_2 = data_2.real
+
+        # convert to population
+        g_state = -0.000199191400873993
+        e_state = -0.001772512103413742
+        plot_data_1 = (data_1.real - g_state) / (e_state - g_state)
+        g_state = -0.0005096104775241157
+        e_state = 0.0010518469556880861
+        plot_data_2 = (data_2.real - g_state) / (e_state - g_state)
 
         # choose limits for colorbar
-        cutoff = 0.0  # %
-        lowlim_1 = np.percentile(plot_data_1, cutoff)
-        highlim_1 = np.percentile(plot_data_1, 100. - cutoff)
-        lowlim_2 = np.percentile(plot_data_2, cutoff)
-        highlim_2 = np.percentile(plot_data_2, 100. - cutoff)
+        cutoff = 1.0  # %
+        # lowlim_1 = np.percentile(plot_data_1, cutoff)
+        # highlim_1 = np.percentile(plot_data_1, 100. - cutoff)
+        # lowlim_2 = np.percentile(plot_data_2, cutoff)
+        # highlim_2 = np.percentile(plot_data_2, 100. - cutoff)
+        alldata = (np.r_[plot_data_1, plot_data_2]).ravel()
+        lowlim = np.percentile(alldata, cutoff)
+        highlim = np.percentile(alldata, 100. - cutoff)
+        lowlim_1, highlim_1 = lowlim, highlim
+        lowlim_2, highlim_2 = lowlim, highlim
 
         # extent
         x_min = 1e9 * coupler_ac_duration_arr[0]
@@ -167,18 +180,33 @@ def load(load_filename):
             vmin=lowlim_2,
             vmax=highlim_2,
         )
-        ax21.set_title("Readout 1: I quadrature")
-        ax22.set_title("Readout 2: I quadrature")
+        ax21.set_title("Population on qubit 1")
+        ax22.set_title("Population on qubit 2")
         ax21.set_xlabel("Coupler duration [ns]")
         ax22.set_xlabel("Coupler duration [ns]")
         ax21.set_ylabel("Coupler frequency [MHz]")
-        ax22.set_ylabel("Coupler frequency [MHz]")
-        ax22.yaxis.set_label_position("right")
-        ax22.yaxis.tick_right()
+        # ax22.set_ylabel("Coupler frequency [MHz]")
+        # ax22.yaxis.set_label_position("right")
+        # ax22.yaxis.tick_right()
+        for tick in ax22.get_yticklabels():
+            tick.set_visible(False)
+        # cb1 = fig2.colorbar(im1, ax=ax21)
+        # cb1.set_ticks([0, 1])
+        # cb2 = fig2.colorbar(im2, ax=ax22)
+        # cb2.set_ticks([0, 1])
+        # cb = fig2.colorbar(im1, ax=[ax21, ax22], use_gridspec=False)
         fig2.show()
 
-    return fig1, fig2
+        # Line cut at the center frequency
+        fig3, ax3 = plt.subplots(tight_layout=True)
+        ax3.plot(1e9 * coupler_ac_duration_arr, plot_data_1[nr_freqs // 2, :], label="qubit 1")
+        ax3.plot(1e9 * coupler_ac_duration_arr, plot_data_2[nr_freqs // 2, :], label="qubit 2")
+        ax3.set_xlabel("Coupler duration [ns]")
+        ax3.set_ylabel("Population")
+        fig3.show()
+
+    return fig1, fig2, fig3
 
 
 if __name__ == "__main__":
-    fig1, fig2 = load(load_filename)
+    fig1, fig2, fig3 = load(load_filename)

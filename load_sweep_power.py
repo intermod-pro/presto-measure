@@ -13,6 +13,9 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -20,31 +23,18 @@ import matplotlib.widgets as mwidgets
 import numpy as np
 from resonator_tools import circuit
 
-rcParams['figure.dpi'] = 331.3
+rcParams['figure.dpi'] = 108.8
+
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 NORM = True  # normalize response amplitude by drive amplitude
-PORTRAIT = False  # Arrange plots vertically
+PORTRAIT = True  # Arrange plots vertically
 BLIT = False  # Use blitting when plotting. Faster but doesn't work well with fitting
 AMP_IDX = 0  # internal use
-
-# load_filename = "data/sweep_power_20210205_083929.h5"
-
-# load_filename = "data/sweep_power_20210206_221320.h5"  # 6.025 GHz
-# load_filename = "data/sweep_power_20210207_012855.h5"  # 6.025 GHz, 6425 uA, dither False
-# load_filename = "data/sweep_power_20210207_104941.h5"  # 6.025 GHz, 6425 uA, dither False, with JPA
-
-# load_filename = "data/sweep_power_20210206_110947.h5"  # 6.164 GHz
-# load_filename = "data/sweep_power_20210206_133635.h5"  # 6.306 GHz
-# load_filename = "data/sweep_power_20210206_165933.h5"  # 6.607 GHz
-# load_filename = "data/sweep_power_20210206_194753.h5"  # 6.770 GHz
-
-load_filename = "data/sweep_power_20210226_000906.h5"  # 32_000 uA
-# load_filename = "data/sweep_power_20210226_191421.h5"  # 6_425 uA, jumps
-# load_filename = "data/sweep_power_20210227_094842.h5"  # 6_425 uA, jumps
-# load_filename = "data/sweep_power_20210227_130531.h5"  # 20_000 uA, jumps
-# load_filename = "data/sweep_power_20210227_154445.h5"  # 32_000 uA, few jumps
-# load_filename = "data/sweep_power_20210227_195737.h5"  # 32_000 uA, no jumps?
-# load_filename = "data/sweep_power_20210228_001222.h5"  # 32_000 uA, no jumps?
 
 
 def load(load_filename):
@@ -87,8 +77,10 @@ def load(load_filename):
     dy = amp_dBFS[1] - amp_dBFS[0]
 
     if PORTRAIT:
-        fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
-        ax1 = fig1.add_subplot(2, 1, 1)
+        # fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
+        # ax1 = fig1.add_subplot(2, 1, 1)
+        fig1 = plt.figure(tight_layout=True)
+        ax1 = fig1.add_subplot(1, 1, 1)
     else:
         fig1 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
         ax1 = fig1.add_subplot(1, 2, 1)
@@ -101,7 +93,7 @@ def load(load_filename):
         vmin=lowlim,
         vmax=highlim,
     )
-    line_sel = ax1.axhline(amp_dBFS[AMP_IDX], ls="--", c="k", lw=3, animated=BLIT)
+    # line_sel = ax1.axhline(amp_dBFS[AMP_IDX], ls="--", c="k", lw=3, animated=BLIT)
     # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
     ax1.set_xlabel("Frequency [GHz]")
     ax1.set_ylabel("Drive amplitude [dBFS]")
@@ -110,6 +102,8 @@ def load(load_filename):
         cb.set_label("Response amplitude [dB]")
     else:
         ax1.set_title("Response amplitude [dB]")
+    fig1.show()
+    return fig1
 
     if PORTRAIT:
         ax2 = fig1.add_subplot(4, 1, 3)
