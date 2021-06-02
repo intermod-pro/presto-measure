@@ -26,19 +26,20 @@ from presto.utils import format_sec, get_sourcecode
 import load_sweep_nco_time
 
 # Presto's IP address or hostname
-ADDRESS = "192.0.2.53"
+ADDRESS = "130.237.35.90"
+PORT = 42874
 EXT_CLK_REF = False
 
 output_port = 1
 input_port = 1
 
-amp = 10**(-10.0 / 20)  # FS
+amp = 10**(-20.0 / 20)  # FS
 phase = 0.0
 dither = True
 
 extra = 500
-# f_center = 6.213 * 1e9  # resonator 1
-f_center = 6.3767 * 1e9  # resonator 2
+# f_center = 6.0284 * 1e9  # resonator 1
+f_center = 6.1666 * 1e9  # resonator 2
 f_span = 5 * 1e6
 f_start = f_center - f_span / 2
 f_stop = f_center + f_span / 2
@@ -47,6 +48,7 @@ Navg = 100
 
 with test.Test(
         address=ADDRESS,
+        port=PORT,
         ext_ref_clk=EXT_CLK_REF,
         adc_mode=AdcMode.Mixed,
         adc_fsample=AdcFSample.G2,

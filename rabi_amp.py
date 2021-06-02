@@ -19,44 +19,62 @@ import time
 import h5py
 import numpy as np
 
+from mla_server import set_dc_bias
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
 
 import load_rabi_amp
 
+WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
+USE_JPA = True
+
 # Presto's IP address or hostname
-ADDRESS = "192.0.2.53"
+ADDRESS = "130.237.35.90"
+PORT = 42874
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
+jpa_bias_port = 1
+
+if WHICH_QUBIT == 1:
+    readout_freq = 6.166_600 * 1e9  # Hz, frequency for resonator readout
+    control_freq = 3.557_866 * 1e9  # Hz
+    control_port = 3
+    jpa_pump_freq = 2 * 6.169e9  # Hz
+    jpa_pump_pwr = 11  # lmx units
+    jpa_bias = +0.437  # V
+elif WHICH_QUBIT == 2:
+    readout_freq = 6.028_448 * 1e9  # Hz, frequency for resonator readout
+    control_freq = 4.091_777 * 1e9  # Hz
+    control_port = 4
+    jpa_pump_freq = 2 * 6.031e9  # Hz
+    jpa_pump_pwr = 9  # lmx units
+    jpa_bias = +0.449  # V
+else:
+    raise ValueError
 
 # cavity drive: readout
-# readout_freq = 6.213095 * 1e9  # Hz, frequency for resonator readout, resonator 1
-readout_freq = 6.376650 * 1e9  # Hz, frequency for resonator readout, resonator 2
-readout_amp = 10**(-10.0 / 20)  # FS
+readout_amp = 0.1  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-# control_freq = 4.146391 * 1e9  # Hz <-- from data/ramsey_20210428_041929.h5, quit 1
-control_freq = 4.776805 * 1e9  # Hz <-- from data/ramsey_20210428_160241.h5, quit 2
 control_duration = 100e-9  # s, duration of the control pulse
-# control_port = 5  # qubit 1
-control_port = 7  # qubit 2
 
 # cavity readout: sample
 sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
 
 # Rabi experiment
-num_averages = 10_000
+num_averages = 1_000
 rabi_n = 128  # number of steps when changing duration of control pulse
 control_amp_arr = np.linspace(0.0, 0.707, rabi_n)  # FS, amplitudes for control pulse
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 300 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 
 # Instantiate interface class
 with pulsed.Pulsed(
         address=ADDRESS,
+        port=PORT,
         ext_ref_clk=EXT_REF_CLK,
         adc_mode=AdcMode.Mixed,
         adc_fsample=AdcFSample.G2,
@@ -79,6 +97,10 @@ with pulsed.Pulsed(
         out_ports=control_port,
         sync=True,  # sync here
     )
+    if USE_JPA:
+        pls.hardware.set_lmx(jpa_pump_freq, jpa_pump_pwr)
+        set_dc_bias(jpa_bias_port, jpa_bias)
+        time.sleep(1.0)
 
     # ************************************
     # *** Setup measurement parameters ***
@@ -172,6 +194,9 @@ with pulsed.Pulsed(
         print_time=True,
     )
     t_arr, (data_I, data_Q) = pls.get_store_data()
+    if USE_JPA:
+        pls.hardware.set_lmx(0.0, 0.0)
+        set_dc_bias(jpa_bias_port, 0.0)
 
 store_arr = data_I + 1j * data_Q
 
@@ -208,4 +233,4 @@ print(f"Data saved to: {save_path}")
 # *****************
 # *** Plot data ***
 # *****************
-fig1, fig2 = load_rabi_amp.load(os.path.join(save_path))
+fig1, fig2, fig3 = load_rabi_amp.load(os.path.join(save_path))

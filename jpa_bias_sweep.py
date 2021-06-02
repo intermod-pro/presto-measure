@@ -20,9 +20,12 @@ import time
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from presto import commands as cmd
+
+from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import test
 from presto.utils import format_sec, get_sourcecode
+
+# import load_jpa_bias_sweep
 
 if '/home/riccardo/IntermodulatorSuite' not in sys.path:
     sys.path.append('/home/riccardo/IntermodulatorSuite')
@@ -33,13 +36,13 @@ mla = mla_api.MLA(settings)
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
-PORT = 42878
+PORT = 42874
 EXT_CLK_REF = False
 
 f_start = 5.6e9
 f_stop = 7.0e9
 df = 1e6
-Navg = 100
+Navg = 1_000
 
 bias_min = -1.25
 bias_max = +1.25
@@ -48,23 +51,27 @@ bias_arr = np.linspace(bias_min, bias_max, nr_bias)
 
 input_port = 1
 bias_port = 1
-output_port = [1, 9]
+output_port = 1
 
 amp = 0.1
 dither = True
 extra = 2_000
+current = 32_000  # uA
 
 mla.connect()
 with test.Test(
         address=ADDRESS,
         port=PORT,
         ext_ref_clk=EXT_CLK_REF,
-        adc_mode=cmd.AdcMixed,
-        adc_fsample=cmd.AdcG2,
-        dac_mode=cmd.DacMixed42,
-        dac_fsample=cmd.DacG10,
+        adc_mode=AdcMode.Mixed,
+        adc_fsample=AdcFSample.G2,
+        dac_mode=DacMode.Mixed42,
+        dac_fsample=DacFSample.G10,
 ) as lck:
     lck.hardware.mts()
+    lck.hardware.set_adc_attenuation(input_port, 0.0)
+    lck.hardware.set_dac_current(output_port, current)
+    lck.hardware.set_inv_sinc(output_port, 0)
 
     fs = lck.get_fs()
     nr_samples = int(round(fs / df))
@@ -115,8 +122,8 @@ with test.Test(
             lck.stop_dma()
 
             _data = lck.get_dma_data(Navg * nr_samples + extra)
-            data_i = _data[0::2][-Navg * nr_samples:]
-            data_q = _data[1::2][-Navg * nr_samples:]
+            data_i = _data[0::2][-Navg * nr_samples:] / 32767
+            data_q = _data[1::2][-Navg * nr_samples:] / 32767
 
             data_i.shape = (Navg, nr_samples)
             data_q.shape = (Navg, nr_samples)
@@ -178,28 +185,7 @@ with h5py.File(save_path, "w") as h5f:
     h5f.create_dataset("resp_arr", data=resp_arr)
 print(f"Data saved to: {save_path}")
 
-# *****************
-# *** Plot data ***
-# *****************
-resp_db = 20 * np.log10(np.abs(resp_arr))
-resp_phase = np.unwrap(np.angle(resp_arr), axis=0)
-dw = 2 * np.pi * df
-resp_grpdly = np.diff(resp_phase, axis=0) / dw
-data_plot = resp_grpdly * 1e9
-
-vmin = np.percentile(data_plot, 5)
-vmax = np.percentile(data_plot, 95)
-
-fig, ax = plt.subplots(tight_layout=True)
-im = ax.imshow(
-    data_plot,
-    origin='lower',
-    aspect='auto',
-    extent=(1e-9 * freq_arr[0], 1e-9 * freq_arr[-1], bias_arr[0], bias_arr[-1]),
-    vmin=vmin,
-    vmax=vmax,
-)
-ax.set_xlabel('Frequency [GHz]')
-ax.set_ylabel('Bias [FS]')
-fig.colorbar(im)
-fig.show()
+# ********************
+# *** Plot results ***
+# ********************
+# fig1 = load_jpa_bias_sweep.load(save_path)

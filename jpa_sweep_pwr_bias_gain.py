@@ -18,11 +18,13 @@ import sys
 import time
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
-from presto import commands as cmd
+
+from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import test
 from presto.utils import format_sec, get_sourcecode
+
+# import load_jpa_sweep_pwr_bias_gain
 
 if '/home/riccardo/IntermodulatorSuite' not in sys.path:
     sys.path.append('/home/riccardo/IntermodulatorSuite')
@@ -33,10 +35,11 @@ mla = mla_api.MLA(settings)
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
-PORT = 42878
+PORT = 42874
 EXT_CLK_REF = False
 
-f_center = 6.031e9
+# f_center = 6.031 * 1e9  # 2.5 MHz away from resonator 2
+f_center = 6.169 * 1e9  # 2.5 MHz away from resonator 1
 f_span = 100e6
 f_start = f_center - f_span / 2
 f_stop = f_center + f_span / 2
@@ -56,25 +59,26 @@ bias_arr = np.linspace(bias_min, bias_max, nr_bias)
 
 input_port = 1
 bias_port = 1
-output_port = [1, 9]
+output_port = 1
 
-amp = 0.01
+amp = 0.1
 dither = True
 extra = 2_000
+current = 32_000  # uA
 
 mla.connect()
 with test.Test(
         address=ADDRESS,
         port=PORT,
         ext_ref_clk=EXT_CLK_REF,
-        adc_mode=cmd.AdcMixed,
-        adc_fsample=cmd.AdcG2,
-        dac_mode=cmd.DacMixed42,
-        dac_fsample=cmd.DacG10,
+        adc_mode=AdcMode.Mixed,
+        adc_fsample=AdcFSample.G2,
+        dac_mode=DacMode.Mixed42,
+        dac_fsample=DacFSample.G10,
 ) as lck:
     lck.hardware.set_adc_attenuation(input_port, 0.0)
+    lck.hardware.set_dac_current(output_port, current)
     lck.hardware.set_inv_sinc(output_port, 0)
-    lck.hardware.set_dac_current(output_port, 6_425)
 
     fs = lck.get_fs()
     nr_samples = int(round(fs / df))
@@ -105,7 +109,6 @@ with test.Test(
 
     t_start = time.time()
     prev_print_len = 0
-    count = 0
     print()
     for kk, pump_pwr in enumerate(pump_pwr_arr):
         if pump_pwr == -100:
@@ -143,23 +146,20 @@ with test.Test(
                 avg_q = np.mean(data_q)
                 resp_arr[kk, jj, ii] = avg_i + 1j * avg_q
 
-                count += 1
-                if count % 10 == 0:
-                    # print estimated time left
-                    t_now = time.time()
-                    t_sofar = t_now - t_start
-                    nr_sofar = kk * nr_bias * nr_freq + jj * nr_freq + ii + 1
-                    nr_left = (nr_pump_pwr - kk - 1) * nr_bias * nr_freq + (nr_bias - jj - 1) * nr_freq + (nr_freq -
-                                                                                                           ii - 1)
-                    t_avg = t_sofar / nr_sofar
-                    t_left = t_avg * nr_left
-                    str_left = format_sec(t_left)
-                    msg = "Time remaining: {:s}".format(str_left)
-                    print_len = len(msg)
-                    if print_len < prev_print_len:
-                        msg += " " * (prev_print_len - print_len)
-                    print(msg, end="\r", flush=True)
-                    prev_print_len = print_len
+            # print estimated time left
+            t_now = time.time()
+            t_sofar = t_now - t_start
+            nr_sofar = kk * nr_bias + jj + 1
+            nr_left = (nr_pump_pwr - kk - 1) * nr_bias + (nr_bias - jj - 1)
+            t_avg = t_sofar / nr_sofar
+            t_left = t_avg * nr_left
+            str_left = format_sec(t_left)
+            msg = "Time remaining: {:s}".format(str_left)
+            print_len = len(msg)
+            if print_len < prev_print_len:
+                msg += " " * (prev_print_len - print_len)
+            print(msg, end="\r", flush=True)
+            prev_print_len = print_len
 
     print(f"Measurement completed in: {format_sec(time.time()-t_start):s}")
     # Mute outputs at the end of the sweep
@@ -200,29 +200,31 @@ print(f"Data saved to: {save_path}")
 # *****************
 # *** Plot data ***
 # *****************
-ref_db = 20 * np.log10(np.abs(resp_arr[0, :, :]))
-# ref_grpdly = np.diff(np.unwrap(np.angle(ref_plot)))
-data_db = 20 * np.log10(np.abs(resp_arr[1:, :, :]))
-# data_grpdly = np.diff(np.unwrap(np.angle(data_plot)))
+# ref_db = 20 * np.log10(np.abs(resp_arr[0, :, :]))
+# # ref_grpdly = np.diff(np.unwrap(np.angle(ref_plot)))
+# data_db = 20 * np.log10(np.abs(resp_arr[1:, :, :]))
+# # data_grpdly = np.diff(np.unwrap(np.angle(data_plot)))
 
-gain_db = np.zeros_like(data_db)
-for pp in range(1, nr_pump_pwr):
-    for bb in range(nr_bias):
-        gain_db[pp - 1, bb, :] = data_db[pp - 1, bb, :] - ref_db[bb, :]
+# gain_db = np.zeros_like(data_db)
+# for pp in range(1, nr_pump_pwr):
+#     for bb in range(nr_bias):
+#         gain_db[pp - 1, bb, :] = data_db[pp - 1, bb, :] - ref_db[bb, :]
 
-low = np.percentile(gain_db, 0.5)
-high = np.percentile(gain_db, 99.5)
-lim = max(abs(low), abs(high))
+# low = np.percentile(gain_db, 0.5)
+# high = np.percentile(gain_db, 99.5)
+# lim = max(abs(low), abs(high))
 
-fig, ax = plt.subplots(3, 4, sharex=True, sharey=True, tight_layout=True)
-for ii in range(nr_pump_pwr - 1):
-    _ax = ax[ii // 4][ii % 4]
-    im = _ax.imshow(gain_db[ii, :, :],
-                    origin='lower',
-                    aspect='auto',
-                    extent=(1e-9 * freq_arr[0], 1e-9 * freq_arr[-1], bias_min, bias_max),
-                    vmin=-lim,
-                    vmax=lim,
-                    cmap="RdBu_r")
-    _ax.set_title(str(pump_pwr_arr[ii + 1]))
-fig.show()
+# fig, ax = plt.subplots(3, 4, sharex=True, sharey=True, tight_layout=True)
+# for ii in range(nr_pump_pwr - 1):
+#     _ax = ax[ii // 4][ii % 4]
+#     im = _ax.imshow(gain_db[ii, :, :],
+#                     origin='lower',
+#                     aspect='auto',
+#                     extent=(1e-9 * freq_arr[0], 1e-9 * freq_arr[-1], bias_min, bias_max),
+#                     vmin=-lim,
+#                     vmax=lim,
+#                     cmap="RdBu_r")
+#     _ax.set_title(str(pump_pwr_arr[ii + 1]))
+# fig.show()
+
+# load_jpa_sweep_pwr_bias_gain.load(save_path)

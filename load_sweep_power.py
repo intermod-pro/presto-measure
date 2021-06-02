@@ -77,10 +77,10 @@ def load(load_filename):
     dy = amp_dBFS[1] - amp_dBFS[0]
 
     if PORTRAIT:
-        # fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
-        # ax1 = fig1.add_subplot(2, 1, 1)
-        fig1 = plt.figure(tight_layout=True)
-        ax1 = fig1.add_subplot(1, 1, 1)
+        fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
+        ax1 = fig1.add_subplot(2, 1, 1)
+        # fig1 = plt.figure(tight_layout=True)
+        # ax1 = fig1.add_subplot(1, 1, 1)
     else:
         fig1 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
         ax1 = fig1.add_subplot(1, 2, 1)
@@ -93,7 +93,7 @@ def load(load_filename):
         vmin=lowlim,
         vmax=highlim,
     )
-    # line_sel = ax1.axhline(amp_dBFS[AMP_IDX], ls="--", c="k", lw=3, animated=BLIT)
+    line_sel = ax1.axhline(amp_dBFS[AMP_IDX], ls="--", c="k", lw=3, animated=BLIT)
     # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
     ax1.set_xlabel("Frequency [GHz]")
     ax1.set_ylabel("Drive amplitude [dBFS]")
@@ -103,7 +103,7 @@ def load(load_filename):
     else:
         ax1.set_title("Response amplitude [dB]")
     fig1.show()
-    return fig1
+    # return fig1
 
     if PORTRAIT:
         ax2 = fig1.add_subplot(4, 1, 3)

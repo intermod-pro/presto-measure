@@ -23,46 +23,86 @@ from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import test
 from presto.utils import format_sec, get_sourcecode
 
-import load_two_tone_power
+# import load_two_tone_power
+
+WHICH_QUBIT = 1  # 1 or 2
 
 # Presto's IP address or hostname
-ADDRESS = "192.0.2.53"
+ADDRESS = "130.237.35.90"
+PORT = 42874
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
+USE_JPA = True
 
-# center_freq = 4.0 * 1e9  # Hz, center frequency for qubit sweep, qubit 1
-center_freq = 4.6 * 1e9  # Hz, center frequency for qubit sweep, qubit 2
-span = 500e6  # Hz, span for qubit frequency sweep
+if WHICH_QUBIT == 1:
+    center_freq = 3.437 * 1e9  # Hz, center frequency for qubit sweep, qubit 1
+    cavity_freq = 6.166_600 * 1e9  # Hz, frequency for cavity, resonator 1
+    qubit_port = 3  # qubit 1
+elif WHICH_QUBIT == 2:
+    center_freq = 3.975 * 1e9  # Hz, center frequency for qubit sweep, qubit 2
+    cavity_freq = 6.028_448 * 1e9  # Hz, frequency for cavity, resonator 2
+    qubit_port = 4  # qubit 2
+else:
+    raise ValueError
+
+span = 350 * 1e6  # Hz, span for qubit frequency sweep
 df = 1e6  # Hz, measurement bandwidth for each point in sweep
 
-# cavity_freq = 6.213095 * 1e9  # Hz, frequency for cavity, resonator 1
-cavity_freq = 6.376650 * 1e9  # Hz, frequency for cavity, resonator 2
 cavity_amp = 10**(-20.0 / 20)  # FS
 
 nr_amps = 61
 qubit_amp_arr = np.logspace(-3, 0, nr_amps)
 
 cavity_port = 1
-# qubit_port = 5  # qubit 1
-qubit_port = 7  # qubit 2
 input_port = 1
 dither = True
 extra = 500
-Navg = 100
+Navg = 1_000
+
+if USE_JPA:
+    jpa_bias_port = 1
+    if WHICH_QUBIT == 1:
+        jpa_bias = +0.437  # V
+        jpa_pump_pwr = 11
+        jpa_pump_freq = 2 * 6.169 * 1e9  # 2.5 MHz away from resonator 1
+    elif WHICH_QUBIT == 2:
+        jpa_bias = +0.449  # V
+        jpa_pump_pwr = 9
+        jpa_pump_freq = 2 * 6.031 * 1e9  # 2.5 MHz away from resonator 2
+    else:
+        raise ValueError
+
+    import sys
+    if '/home/riccardo/IntermodulatorSuite' not in sys.path:
+        sys.path.append('/home/riccardo/IntermodulatorSuite')
+    from mlaapi import mla_api, mla_globals
+
+    settings = mla_globals.read_config()
+    mla = mla_api.MLA(settings)
+    mla.connect()
+    mla.lockin.set_dc_offset(jpa_bias_port, jpa_bias)
+    time.sleep(1.0)
 
 with test.Test(
         address=ADDRESS,
+        port=PORT,
         ext_ref_clk=EXT_REF_CLK,
         reset=True,
         adc_mode=AdcMode.Mixed,
         adc_fsample=AdcFSample.G2,
-        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+        dac_mode=[
+            DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02
+        ],
+        dac_fsample=[
+            DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6
+        ],
 ) as lck:
     lck.hardware.set_adc_attenuation(input_port, 0.0)
     lck.hardware.set_dac_current(cavity_port, 32_000)
     lck.hardware.set_dac_current(qubit_port, 32_000)
     lck.hardware.set_inv_sinc(cavity_port, 0)
     lck.hardware.set_inv_sinc(qubit_port, 0)
+    if USE_JPA:
+        lck.hardware.set_lmx(jpa_pump_freq, jpa_pump_pwr)
 
     fs = lck.get_fs()
     nr_samples = int(round(fs / df))
@@ -150,17 +190,27 @@ with test.Test(
     lck.hardware.set_run(False)
     lck.set_scale(cavity_port, 0.0, 0.0)
     lck.set_scale(qubit_port, 0.0, 0.0)
+    if USE_JPA:
+        lck.hardware.set_lmx(0.0, 0)
+
+if USE_JPA:
+    mla.lockin.set_dc_offset(jpa_bias_port, 0.0)
+    mla.disconnect()
 
 # *************************
 # *** Save data to HDF5 ***
 # *************************
 script_path = os.path.realpath(__file__)  # full path of current script
 current_dir, script_basename = os.path.split(script_path)
-script_filename = os.path.splitext(script_basename)[0]  # name of current script
-timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
+script_filename = os.path.splitext(script_basename)[
+    0]  # name of current script
+timestamp = time.strftime("%Y%m%d_%H%M%S",
+                          time.localtime())  # current date and time
 save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
-save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
+save_path = os.path.join(current_dir, "data",
+                         save_basename)  # full path of save file
+source_code = get_sourcecode(
+    script_path)  # save also the sourcecode of the script for future reference
 with h5py.File(save_path, "w") as h5f:
     dt = h5py.string_dtype(encoding='utf-8')
     ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
@@ -181,4 +231,4 @@ print(f"Data saved to: {save_path}")
 # ********************
 # *** Plot results ***
 # ********************
-fig1 = load_two_tone_power.load(save_path)
+# fig1 = load_two_tone_power.load(save_path)

@@ -26,15 +26,16 @@ from presto.utils import format_sec, get_sourcecode
 import load_sweep_power
 
 # Presto's IP address or hostname
-ADDRESS = "192.0.2.53"
+ADDRESS = "130.237.35.90"
+PORT = 42874
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
-# center_freq = 6.213 * 1e9  # Hz, center frequency for sweep, resonator 1
-center_freq = 6.376 * 1e9  # Hz, center frequency for sweep, resonator 2
+center_freq = 6.028 * 1e9  # Hz, center frequency for sweep, resonator 1
+# center_freq = 6.166 * 1e9  # Hz, center frequency for sweep, resonator 2
 
-span = 20e6  # Hz, span for frequency sweep
+span = 5e6  # Hz, span for frequency sweep
 df = 1e4  # Hz, measurement bandwidth for each point in sweep
-Navg = 3
+Navg = 1
 
 output_port = 1
 input_port = 1
@@ -49,6 +50,7 @@ nr_amps = len(amp_arr)
 
 with test.Test(
         address=ADDRESS,
+        port=PORT,
         ext_ref_clk=EXT_REF_CLK,
         adc_mode=AdcMode.Mixed,
         adc_fsample=AdcFSample.G2,

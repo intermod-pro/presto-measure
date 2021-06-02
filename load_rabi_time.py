@@ -100,7 +100,7 @@ def load(load_filename):
     fig2.show()
 
     fig3, ax3 = plt.subplots(tight_layout=True)
-    ax3.plot(1e9 * len_arr, data, '.')
+    ax3.plot(1e9 * len_arr, np.real(data), '.')
     ax3.plot(1e9 * len_arr, func(len_arr, *popt_x), '--')
     ax3.set_xlabel("Pulse length [ns]")
     ax3.set_ylabel("I quadrature [FS]")
