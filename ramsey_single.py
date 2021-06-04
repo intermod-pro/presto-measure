@@ -36,16 +36,16 @@ jpa_bias_port = 1
 
 if WHICH_QUBIT == 1:
     readout_freq = 6.166_600 * 1e9  # Hz, frequency for resonator readout
-    control_freq = 3.557 * 1e9  # Hz
-    control_amp = 0.05136  # FS <-- pi/2 pulse
+    control_freq = 3.557_866 * 1e9  # Hz
+    control_amp = 0.05129  # FS <-- pi/2 pulse
     control_port = 3
     jpa_pump_freq = 2 * 6.169e9  # Hz
     jpa_pump_pwr = 11  # lmx units
     jpa_bias = +0.437  # V
 elif WHICH_QUBIT == 2:
     readout_freq = 6.028_448 * 1e9  # Hz, frequency for resonator readout
-    control_freq = 4.090 * 1e9  # Hz
-    control_amp = 0.07584  # FS <-- pi/2 pulse
+    control_freq = 4.091_777 * 1e9  # Hz
+    control_amp = 0.07683  # FS <-- pi/2 pulse
     control_port = 4
     jpa_pump_freq = 2 * 6.031e9  # Hz
     jpa_pump_pwr = 9  # lmx units
@@ -70,7 +70,7 @@ sample_port = 1
 # Ramsey experiment
 num_averages = 1_000
 nr_delays = 128  # number of steps when changing delay between control and readout pulses
-dt_delays = 0.1 * 1e-6  # s, step size when changing delay between control and readout pulses
+dt_delays = 1 * 1e-6  # s, step size when changing delay between control and readout pulses
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
 readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 
