@@ -27,7 +27,7 @@ from presto.utils import get_sourcecode, sin2
 import load_rabi_amp
 
 WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
-USE_JPA = True
+USE_JPA = False
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
