@@ -1,17 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Measure Rabi oscillation by changing the amplitude of the control pulse.
-Copyright (C) 2021  Intermodulation Products AB.
-
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
-License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
-version.
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with this program. If not, see
-<https://www.gnu.org/licenses/>.
 """
 import os
 import time
@@ -30,8 +19,10 @@ WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
 USE_JPA = False
 
 # Presto's IP address or hostname
-ADDRESS = "130.237.35.90"
-PORT = 42874
+# ADDRESS = "130.237.35.90"
+# PORT = 42874
+ADDRESS = "localhost"
+PORT = None
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 jpa_bias_port = 1
 
