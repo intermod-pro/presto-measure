@@ -26,7 +26,7 @@ from presto.utils import get_sourcecode
 import load_rabi_time
 
 WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
-USE_JPA = True
+USE_JPA = False
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
@@ -43,7 +43,7 @@ if WHICH_QUBIT == 1:
     jpa_bias = +0.437  # V
 elif WHICH_QUBIT == 2:
     readout_freq = 6.028_448 * 1e9  # Hz, frequency for resonator readout
-    control_freq = 4.090 * 1e9  # Hz
+    control_freq = 4.091_777 * 1e9  # Hz
     control_port = 4
     jpa_pump_freq = 2 * 6.031e9  # Hz
     jpa_pump_pwr = 9  # lmx units
@@ -57,16 +57,17 @@ readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-control_amp = 0.1  # FS
+factor = 20
+control_amp = 0.0047  # FS
 
 # cavity readout: sample
 sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
 
 # Rabi experiment
-num_averages = 1_000
-rabi_n = 128  # number of steps when changing duration of control pulse
-rabi_dt = 2e-9  # s, step size when changing duration of control pulse
+num_averages = 10_000
+rabi_n = 200  # number of steps when changing duration of control pulse
+rabi_dt = 160 * 1e-9  # s, step size when changing duration of control pulse
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
 readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 

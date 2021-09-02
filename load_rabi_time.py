@@ -13,6 +13,9 @@ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Gen
 You should have received a copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -23,7 +26,11 @@ from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "data/rabi_time_20210428_134604.h5"
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 
 def load(load_filename):
@@ -80,6 +87,7 @@ def load(load_filename):
     print("Rabi period: {} +- {} ns".format(1e9 * period, 1e9 * period_err))
     print("Pi pulse length: {:.0f} ns".format(1e9 * pi_len))
     print("Pi/2 pulse length: {:.0f} ns".format(1e9 * pi_2_len))
+    print(f"decay: {popt_x[2]} s")
 
     fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
     ax21, ax22, ax23, ax24 = ax2
@@ -99,14 +107,33 @@ def load(load_filename):
     ax2[-1].set_xlabel("Pulse length [ns]")
     fig2.show()
 
+    mult, unit = scale_unit(data.real)
+    mult_t, unit_t = scale_unit(len_arr)
+
     fig3, ax3 = plt.subplots(tight_layout=True)
-    ax3.plot(1e9 * len_arr, np.real(data), '.')
-    ax3.plot(1e9 * len_arr, func(len_arr, *popt_x), '--')
-    ax3.set_xlabel("Pulse length [ns]")
-    ax3.set_ylabel("I quadrature [FS]")
+    ax3.plot(mult_t * len_arr, mult * np.real(data), '.')
+    ax3.plot(mult_t * len_arr, mult * func(len_arr, *popt_x), '--')
+    ax3.set_xlabel(f"Pulse length [{unit_t:s}s]")
+    ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
     fig3.show()
 
     return fig1, fig2, fig3
+
+
+def scale_unit(data):
+    data_max = np.abs(data).max()
+    unit = ""
+    mult = 1.0
+    if data_max < 1e-6:
+        unit = "n"
+        mult = 1e9
+    elif data_max < 1e-3:
+        unit = "μ"
+        mult = 1e6
+    elif data_max < 1e0:
+        unit = "m"
+        mult = 1e3
+    return mult, unit
 
 
 def func(t, offset, amplitude, T2, period, phase):

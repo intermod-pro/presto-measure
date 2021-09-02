@@ -24,7 +24,7 @@ from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
 
-# import load_readout_reset
+import load_readout_reset
 
 WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
 USE_JPA = True
@@ -173,6 +173,13 @@ with pulsed.Pulsed(
         template_q=control_envelope,
         envelope=True,
     )
+    control_pulse_pi_div2 = pls.setup_template(
+        output_port=control_port,
+        group=0,
+        template=control_envelope / 2,
+        template_q=control_envelope / 2,
+        envelope=True,
+    )
 
     # Setup sampling window
     pls.set_store_ports(sample_port)
@@ -200,6 +207,10 @@ with pulsed.Pulsed(
     # *** Program pulse sequence ***
     # ******************************
     T = 0.0  # s, start at time zero ...
+    # Unconditional pi/2 pulse
+    pls.reset_phase(T, control_port)
+    pls.output_pulse(T, control_pulse_pi_div2)
+    T += control_duration
     # First readout, store and match
     pls.reset_phase(T, readout_port)
     pls.output_pulse(T, readout_pulse)
@@ -209,8 +220,8 @@ with pulsed.Pulsed(
     # Wait for first readout to decay
     T += readout_decay
     # Conditional pi pulse
-    pls.reset_phase(T, control_port)
-    pls.output_pulse(T, control_pulse)
+    # pls.reset_phase(T, control_port)
+    # pls.output_pulse(T, control_pulse)
     T += control_duration
     # Second readout, store and match
     # right after conditional pulse
@@ -283,4 +294,4 @@ print(f"Data saved to: {save_path}")
 # *****************
 # *** Plot data ***
 # *****************
-# fig1, fig2 = load_readout_reset.load(save_path)
+fig1, fig2 = load_readout_reset.load(save_path)

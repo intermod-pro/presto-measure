@@ -122,13 +122,25 @@ def load(load_filename):
     match_diff = match_e_data + match_g_data - threshold  # does |e> match better than |g>? NOTE match_g already has minus sign
     match_diff_1 = match_diff[0::2]  # first readout
     match_diff_2 = match_diff[1::2]  # second readout
-    mean_1 = match_diff_1.mean()
-    mean_2 = match_diff_2.mean()
-    std_1 = match_diff_1.std()
-    std_2 = match_diff_2.std()
-    std = max(std_1, std_2)
-    x_min = min(mean_1, mean_2) - 5 * std
-    x_max = max(mean_1, mean_2) + 5 * std
+    idx_low_1 = match_diff_1 < 0
+    idx_high_1 = np.logical_not(idx_low_1)
+    idx_low_2 = match_diff_2 < 0
+    idx_high_2 = np.logical_not(idx_low_2)
+    mean_low_1 = match_diff_1[idx_low_1].mean()
+    mean_high_1 = match_diff_1[idx_high_1].mean()
+    mean_low_2 = match_diff_2[idx_low_2].mean()
+    mean_high_2 = match_diff_2[idx_high_2].mean()
+    std_low_1 = match_diff_1[idx_low_1].std()
+    std_high_1 = match_diff_1[idx_high_1].std()
+    std_low_2 = match_diff_2[idx_low_2].std()
+    std_high_2 = match_diff_2[idx_high_2].std()
+    weight_low_1 = np.sum(idx_low_1) / len(idx_low_1)
+    weight_high_1 = 1.0 - weight_low_1
+    weight_low_2 = np.sum(idx_low_2) / len(idx_low_2)
+    weight_high_2 = 1.0 - weight_low_2
+    std = max(std_low_1, std_high_1, std_low_2, std_high_2)
+    x_min = min(mean_low_1, mean_low_2) - 5 * std
+    x_max = max(mean_high_1, mean_high_2) + 5 * std
     H_1, xedges = np.histogram(match_diff_1,
                                bins=100,
                                range=(x_min, x_max),
@@ -139,8 +151,8 @@ def load(load_filename):
                                density=True)
     xdata = 0.5 * (xedges[1:] + xedges[:-1])
 
-    init_1 = np.array([mean_1, std_1, 0.9, -mean_1, std_1, 0.1])
-    init_2 = np.array([mean_2, std_2, 0.1, -mean_2, std_2, 0.9])
+    init_1 = np.array([mean_low_1, std_low_1, weight_low_1, mean_high_1, std_high_1, weight_high_1])
+    init_2 = np.array([mean_low_2, std_low_2, weight_low_2, mean_high_2, std_high_2, weight_high_2])
     popt_1, pcov_1 = curve_fit(double_gaussian, xdata, H_1, p0=init_1)
     popt_2, pcov_2 = curve_fit(double_gaussian, xdata, H_2, p0=init_2)
     Teff_1 = Planck * control_freq / (Boltzmann * np.log(1 / popt_1[5] - 1))

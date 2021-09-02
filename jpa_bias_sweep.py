@@ -14,25 +14,18 @@ You should have received a copy of the GNU General Public License along with thi
 <https://www.gnu.org/licenses/>.
 """
 import os
-import sys
 import time
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import test
 from presto.utils import format_sec, get_sourcecode
 
-# import load_jpa_bias_sweep
+from mla_server import set_dc_bias
+import load_jpa_bias_sweep
 
-if '/home/riccardo/IntermodulatorSuite' not in sys.path:
-    sys.path.append('/home/riccardo/IntermodulatorSuite')
-from mlaapi import mla_api, mla_globals
-
-settings = mla_globals.read_config()
-mla = mla_api.MLA(settings)
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
@@ -58,7 +51,6 @@ dither = True
 extra = 2_000
 current = 32_000  # uA
 
-mla.connect()
 with test.Test(
         address=ADDRESS,
         port=PORT,
@@ -84,7 +76,7 @@ with test.Test(
 
     resp_arr = np.zeros((nr_bias, nr_freq), np.complex128)
 
-    mla.lockin.set_dc_offset(bias_port, bias_arr[0])
+    set_dc_bias(bias_port, bias_arr[0])
     time.sleep(1.0)
 
     lck.hardware.set_run(False)
@@ -105,7 +97,7 @@ with test.Test(
     count = 0
     print()
     for jj, bias in enumerate(bias_arr):
-        mla.lockin.set_dc_offset(bias_port, bias)
+        set_dc_bias(bias_port, bias)
         time.sleep(1.0)
 
         for ii, freq in enumerate(freq_arr):
@@ -155,8 +147,7 @@ with test.Test(
     # Mute outputs at the end of the sweep
     lck.hardware.set_run(False)
     lck.set_scale(output_port, 0.0, 0.0)
-    mla.lockin.set_dc_offset(bias_port, 0.0)
-mla.disconnect()
+    set_dc_bias(bias_port, 0.0)
 
 # *************************
 # *** Save data to HDF5 ***
@@ -188,4 +179,4 @@ print(f"Data saved to: {save_path}")
 # ********************
 # *** Plot results ***
 # ********************
-# fig1 = load_jpa_bias_sweep.load(save_path)
+fig1 = load_jpa_bias_sweep.load(save_path)
