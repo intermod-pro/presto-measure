@@ -19,6 +19,8 @@ if len(sys.argv) == 2:
 else:
     load_filename = None
 
+FIXED = True  # set to True to force sum of weight to 1.0
+
 
 def inprod(f, g, t=None, dt=None):
     if t is not None:
@@ -34,7 +36,6 @@ def inprod(f, g, t=None, dt=None):
 
 
 def norm(x, t=None, dt=None):
-
     return np.sqrt(np.real(inprod(x, x, t=t, dt=dt)))
 
 
@@ -44,6 +45,11 @@ def single_gaussian(x, m, s, w):
 
 def double_gaussian(x, m0, s0, w0, m1, s1, w1):
     return single_gaussian(x, m0, s0, w0) + single_gaussian(x, m1, s1, w1)
+
+
+def double_gaussian_fixed(x, m0, s0, w0, m1, s1):
+    w1 = 1.0 - w0
+    return double_gaussian(x, m0, s0, w0, m1, s1, w1)
 
 
 def hist_plot(ax, spec, bin_ar, **kwargs):
@@ -106,13 +112,26 @@ def load(load_filename):
     match_diff = match_e_data - match_g_data - threshold  # does |e> match better than |g>?
     match_diff_g = match_diff[0::2]  # qubit was prepared in |g>
     match_diff_e = match_diff[1::2]  # qubit was prepared in |e>
-    mean_g = match_diff_g.mean()
-    mean_e = match_diff_e.mean()
-    std_g = match_diff_g.std()
-    std_e = match_diff_e.std()
-    std = max(std_g, std_e)
-    x_min = min(mean_g, mean_e) - 5 * std
-    x_max = max(mean_g, mean_e) + 5 * std
+    idx_low_g = match_diff_g < 0
+    idx_high_g = np.logical_not(idx_low_g)
+    idx_low_e = match_diff_e < 0
+    idx_high_e = np.logical_not(idx_low_e)
+    mean_low_g = match_diff_g[idx_low_g].mean()
+    mean_high_g = match_diff_g[idx_high_g].mean()
+    mean_low_e = match_diff_e[idx_low_e].mean()
+    mean_high_e = match_diff_e[idx_high_e].mean()
+    std_low_g = match_diff_g[idx_low_g].std()
+    std_high_g = match_diff_g[idx_high_g].std()
+    std_low_e = match_diff_e[idx_low_e].std()
+    std_high_e = match_diff_e[idx_high_e].std()
+    weight_low_g = np.sum(idx_low_g) / len(idx_low_g)
+    weight_high_g = 1.0 - weight_low_g
+    weight_low_e = np.sum(idx_low_e) / len(idx_low_e)
+    weight_high_e = 1.0 - weight_low_e
+    std = max(std_low_g, std_high_g, std_low_e, std_high_e)
+    x_min = min(mean_low_g, mean_low_e) - 5 * std
+    x_max = max(mean_high_g, mean_high_e) + 5 * std
+
     H_g, xedges = np.histogram(match_diff_g,
                                bins=100,
                                range=(x_min, x_max),
@@ -122,12 +141,25 @@ def load(load_filename):
                                range=(x_min, x_max),
                                density=True)
     xdata = 0.5 * (xedges[1:] + xedges[:-1])
-    # z_max = max(H_g.max(), H_e.max())
 
-    init_g = np.array([mean_g, std_g, 0.9, mean_e, std_e, 0.1])
-    init_e = np.array([mean_g, std_g, 0.1, mean_e, std_e, 0.9])
-    popt_g, pcov_g = curve_fit(double_gaussian, xdata, H_g, p0=init_g)
-    popt_e, pcov_e = curve_fit(double_gaussian, xdata, H_e, p0=init_e)
+    init_g = np.array([
+        mean_low_g, std_low_g, weight_low_g, mean_high_g, std_high_g,
+        weight_high_g
+    ])
+    init_e = np.array([
+        mean_low_e, std_low_e, weight_low_e, mean_high_e, std_high_e,
+        weight_high_e
+    ])
+    if FIXED:
+        # skip second weight
+        popt_g, pcov_g = curve_fit(double_gaussian_fixed, xdata, H_g, p0=init_g[:-1])
+        popt_e, pcov_e = curve_fit(double_gaussian_fixed, xdata, H_e, p0=init_e[:-1])
+        # add back second weight for ease of use
+        popt_g = np.r_[popt_g, 1.0 - popt_g[2]]
+        popt_e = np.r_[popt_e, 1.0 - popt_e[2]]
+    else:
+        popt_g, pcov_g = curve_fit(double_gaussian, xdata, H_g, p0=init_g)
+        popt_e, pcov_e = curve_fit(double_gaussian, xdata, H_e, p0=init_e)
     fidelity_g = 0.5 * (1 + erf((0.0 - popt_g[0]) / np.sqrt(2 * popt_g[1]**2)))
     fidelity_e = 1.0 - 0.5 * (1 + erf(
         (0.0 - popt_e[3]) / np.sqrt(2 * popt_e[4]**2)))

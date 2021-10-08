@@ -68,15 +68,19 @@ def load(load_filename):
     print(f"Saving templates back into: {load_filename}")
     with h5py.File(load_filename, "r+") as h5f:
         h5f.attrs["match_t_in_store"] = match_t_in_store
-        h5f.create_dataset("template_g", data=template_g)
-        h5f.create_dataset("template_e", data=template_e)
+        try:
+            h5f.create_dataset("template_g", data=template_g)
+            h5f.create_dataset("template_e", data=template_e)
+        except OSError:
+            print("Warning: could not save templates, already there? Skipping...")
+            pass
 
     # Plot raw store data for first iteration as a check
     fig1, ax1 = plt.subplots(4, 1, sharex=True, tight_layout=True)
     for ax_ in ax1:
         ax_.axvspan(1e9 * t_arr[max_idx], 1e9 * t_arr[max_idx + match_len], facecolor="#dfdfdf")
-    ax1[0].plot(1e9 * t_arr, np.abs(trace_g))
-    ax1[0].plot(1e9 * t_arr, np.abs(trace_e))
+    ax1[0].plot(1e9 * t_arr, np.abs(trace_g), label="|g>")
+    ax1[0].plot(1e9 * t_arr, np.abs(trace_e), label="|e>")
     ax1[1].plot(1e9 * t_arr, np.angle(trace_g))
     ax1[1].plot(1e9 * t_arr, np.angle(trace_e))
     ax1[2].plot(1e9 * t_arr, np.real(trace_g))
@@ -84,11 +88,32 @@ def load(load_filename):
     ax1[3].plot(1e9 * t_arr, np.imag(trace_g))
     ax1[3].plot(1e9 * t_arr, np.imag(trace_e))
     ax1[-1].set_xlabel("Time [ns]")
+    ax1[0].set_ylabel("A [FS]")
+    ax1[1].set_ylabel("φ [rad]")
+    ax1[2].set_ylabel("I [FS]")
+    ax1[3].set_ylabel("Q [FS]")
+    ax1[0].legend()
     fig1.show()
+
+    data_max = np.abs(distance).max()
+    unit = ""
+    mult = 1.0
+    if data_max < 1e-6:
+        unit = "n"
+        mult = 1e9
+    elif data_max < 1e-3:
+        unit = "μ"
+        mult = 1e6
+    elif data_max < 1e0:
+        unit = "m"
+        mult = 1e3
 
     fig2, ax2 = plt.subplots(tight_layout=True)
     ax2.axvspan(1e9 * t_arr[max_idx], 1e9 * t_arr[max_idx + match_len], facecolor="#dfdfdf")
-    ax2.plot(1e9 * t_arr, distance)
+    ax2.plot(1e9 * t_arr, mult * distance)
+    ax2.set_xlabel("Time [ns]")
+    ax2.set_ylabel(f"Distance [{unit}FS]")
+    ax2.set_title(r"$d = \left\Vert\left|e\right> - \left|g\right>\right\Vert$")
     fig2.show()
 
     return fig1, fig2

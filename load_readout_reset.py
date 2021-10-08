@@ -20,6 +20,8 @@ if len(sys.argv) == 2:
 else:
     load_filename = None
 
+FIXED = True  # set to True to force sum of weight to 1.0
+
 
 def inprod(f, g, t=None, dt=None):
     if t is not None:
@@ -35,7 +37,6 @@ def inprod(f, g, t=None, dt=None):
 
 
 def norm(x, t=None, dt=None):
-
     return np.sqrt(np.real(inprod(x, x, t=t, dt=dt)))
 
 
@@ -45,6 +46,11 @@ def single_gaussian(x, m, s, w):
 
 def double_gaussian(x, m0, s0, w0, m1, s1, w1):
     return single_gaussian(x, m0, s0, w0) + single_gaussian(x, m1, s1, w1)
+
+
+def double_gaussian_fixed(x, m0, s0, w0, m1, s1):
+    w1 = 1.0 - w0
+    return double_gaussian(x, m0, s0, w0, m1, s1, w1)
 
 
 def hist_plot(ax, spec, bin_ar, **kwargs):
@@ -137,15 +143,26 @@ def load(load_filename):
                                density=True)
     xdata = 0.5 * (xedges[1:] + xedges[:-1])
 
-    init_1 = np.array([mean_low_1, std_low_1, weight_low_1, mean_high_1, std_high_1, weight_high_1])
-    init_2 = np.array([mean_low_2, std_low_2, weight_low_2, mean_high_2, std_high_2, weight_high_2])
-    popt_1, pcov_1 = curve_fit(double_gaussian, xdata, H_1, p0=init_1)
-    popt_2, pcov_2 = curve_fit(double_gaussian, xdata, H_2, p0=init_2)
+    init_1 = np.array([
+        mean_low_1, std_low_1, weight_low_1, mean_high_1, std_high_1,
+        weight_high_1
+    ])
+    init_2 = np.array([
+        mean_low_2, std_low_2, weight_low_2, mean_high_2, std_high_2,
+        weight_high_2
+    ])
+    if FIXED:
+        # skip second weight
+        popt_1, pcov_1 = curve_fit(double_gaussian_fixed, xdata, H_1, p0=init_1[:-1])
+        popt_2, pcov_2 = curve_fit(double_gaussian_fixed, xdata, H_2, p0=init_2[:-1])
+        # add back second weight for ease of use
+        popt_1 = np.r_[popt_1, 1.0 - popt_1[2]]
+        popt_2 = np.r_[popt_2, 1.0 - popt_2[2]]
+    else:
+        popt_1, pcov_1 = curve_fit(double_gaussian, xdata, H_1, p0=init_1)
+        popt_2, pcov_2 = curve_fit(double_gaussian, xdata, H_2, p0=init_2)
     Teff_1 = Planck * control_freq / (Boltzmann * np.log(1 / popt_1[5] - 1))
     Teff_2 = Planck * control_freq / (Boltzmann * np.log(1 / popt_2[5] - 1))
-    # fidelity_g = 0.5 * (1 + erf((0.0 - popt_g[0]) / np.sqrt(2 * popt_g[1]**2)))
-    # fidelity_e = 1.0 - 0.5 * (1 + erf(
-    #     (0.0 - popt_e[3]) / np.sqrt(2 * popt_e[4]**2)))
 
     fig2, ax2 = plt.subplots(1,
                              2,
