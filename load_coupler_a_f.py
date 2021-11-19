@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import os
+import sys
+
 import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
@@ -9,7 +12,11 @@ from presto.utils import rotate_opt
 
 rcParams['figure.dpi'] = 108.8
 
-load_filename = "data/coupler_a_f_20210429_183359.h5"
+if len(sys.argv) == 2:
+    load_filename = sys.argv[1]
+    print(f"Loading: {os.path.realpath(load_filename)}")
+else:
+    load_filename = None
 
 
 def load(load_filename):
@@ -43,15 +50,15 @@ def load(load_filename):
     idx_high = np.argmin(np.abs(t_arr - t_high))
     idx = np.arange(idx_low, idx_high)
 
-    # Plot raw store data for first iteration as a check
-    fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-    ax11, ax12 = ax1
-    ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-    ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-    ax11.plot(1e9 * t_arr, np.abs(store_arr[0, 0, :]))
-    ax12.plot(1e9 * t_arr, np.angle(store_arr[0, 0, :]))
-    ax12.set_xlabel("Time [ns]")
-    fig1.show()
+    # # Plot raw store data for first iteration as a check
+    # fig0, ax0 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+    # ax01, ax02 = ax0
+    # ax01.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+    # ax02.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+    # ax01.plot(1e9 * t_arr, np.abs(store_arr[0, 0, :]))
+    # ax02.plot(1e9 * t_arr, np.angle(store_arr[0, 0, :]))
+    # ax02.set_xlabel("Time [ns]")
+    # fig0.show()
 
     resp_arr = np.mean(store_arr[:, 0, idx], axis=-1)
     data = rotate_opt(resp_arr)
@@ -71,8 +78,8 @@ def load(load_filename):
     y_max = coupler_ac_amp_arr[-1]
     dy = coupler_ac_amp_arr[1] - coupler_ac_amp_arr[0]
 
-    fig2, ax2 = plt.subplots(tight_layout=True)
-    im = ax2.imshow(
+    fig1, ax1 = plt.subplots(tight_layout=True)
+    im = ax1.imshow(
         plot_data,
         origin='lower',
         aspect='auto',
@@ -81,14 +88,14 @@ def load(load_filename):
         vmin=lowlim,
         vmax=highlim,
     )
-    ax2.set_xlabel("Coupler frequency [MHz]")
-    ax2.set_ylabel("Coupler amplitude [FS]")
-    cb = fig2.colorbar(im)
+    ax1.set_xlabel("Coupler frequency [MHz]")
+    ax1.set_ylabel("Coupler amplitude [FS]")
+    cb = fig1.colorbar(im)
     cb.set_label("Response amplitude [FS]")
-    fig2.show()
+    fig1.show()
 
-    return fig1, fig2
+    return fig1
 
 
 if __name__ == "__main__":
-    fig1, fig2 = load(load_filename)
+    fig1 = load(load_filename)

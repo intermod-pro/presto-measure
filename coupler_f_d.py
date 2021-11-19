@@ -9,44 +9,43 @@ from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
 
-import load_coupler_f_d
+# import load_coupler_f_d
 
 # Presto's IP address or hostname
-ADDRESS = "192.0.2.53"
+ADDRESS = "130.237.35.90"
+PORT = 42874
 EXT_REF_CLK = False  # set to True to lock to an external reference clock
 
 # cavity drive: readout
-readout_freq_1 = 6.213095 * 1e9  # Hz, resonator 1
-readout_freq_2 = 6.376650 * 1e9  # Hz, resonator 2
-readout_amp = 10**(-10.0 / 20)  # FS
+readout_freq_1 = 6.167_009 * 1e9  # Hz, resonator 1, with coupler bias
+readout_freq_2 = 6.029_130 * 1e9  # Hz, resonator 2, with coupler bias
+readout_amp = 0.4  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
-control_freq_1 = 4.146391 * 1e9  # Hz <-- from data/ramsey_20210428_041929.h5, qubit 1
-control_freq_1 -= 128e3  # Hz, detuning due to coupler
-control_freq_2 = 4.776805 * 1e9  # Hz <-- from data/ramsey_20210428_160241.h5 , qubit 2
-control_freq_2 -= 296e3  # Hz, detuning due to coupler
-control_amp_1 = 0.1594  # FS <-- pi pulse from data/rabi_amp_20210428_101944.h5, qubit 1
-control_amp_2 = 0.1188  # FS <-- pi pulse from data/rabi_amp_20210428_164251.h5, qubit 2
+control_freq_1 = 3.556_520 * 1e9  # Hz, with coupler bias
+control_freq_2 = 4.093_042 * 1e9  # Hz, with coupler bias
+control_amp_1 = 0.533  # FS <-- pi pulse, with coupler bias
+control_amp_2 = 0.760  # FS <-- pi pulse, with coupler bias
+control_duration = 20 * 1e-9  # s, duration of the control pulse
+control_port_1 = 3  # qubit 1
+control_port_2 = 4  # qubit 2
 control_if = 0 * 1e6  # Hz
-control_duration = 100 * 1e-9  # s, duration of the control pulse
-control_port_1 = 5  # qubit 1
-control_port_2 = 7  # qubit 2
 
 # coupler
-coupler_ac_port = 9
-coupler_dc_port = 13
-coupler_dc_bias = 0.4  # FS, ~ 500 mV into 50 ohm, ~ 0.3 phi_0
-coupler_ac_amp = 0.35  # FS
-nr_steps = 64
+coupler_ac_port = 5
+# coupler_dc_port = 2  # MLA
+coupler_dc_bias = 1.144  # V, ≈ 0.257 * Phi_0
+coupler_ac_amp = 0.2  # FS
+nr_steps = 225
 dt_steps = 8 * 1e-9  # s
 coupler_ac_duration_arr = dt_steps * np.arange(nr_steps)  # s
 # coupler_ac_freq_center = abs(control_freq_2 - control_freq_1)  # Hz
-coupler_ac_freq_center = 629.7 * 1e6  # Hz
+coupler_ac_freq_center = 539.5 * 1e6  # Hz
 coupler_ac_freq_span = 10 * 1e6  # Hz
 coupler_ac_if = 100 * 1e6  # Hz
-nr_freqs = 64
+nr_freqs = 128
 _fstart = coupler_ac_freq_center - coupler_ac_freq_span / 2
 _fstop = coupler_ac_freq_center + coupler_ac_freq_span / 2
 coupler_ac_freq_arr = np.linspace(_fstart, _fstop, nr_freqs)
@@ -58,9 +57,9 @@ sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
 
 # other
-num_averages = 1_000
-wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 300 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+num_averages = 10_000
+wait_delay = 200e-6  # s, delay between repetitions to allow the qubit to decay
+readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 
 # up/down conversion for multiplexed readout using upper sideband
 readout_nco = 0.5 * (readout_freq_1 + readout_freq_2) - 250e6  # equally spaced around middle of Nyquist band
@@ -74,6 +73,7 @@ readout_if_2 = readout_freq_2 - readout_nco
 # Instantiate interface class
 with pulsed.Pulsed(
         address=ADDRESS,
+        port=PORT,
         ext_ref_clk=EXT_REF_CLK,
         adc_mode=AdcMode.Mixed,
         adc_fsample=AdcFSample.G2,
@@ -85,12 +85,10 @@ with pulsed.Pulsed(
     pls.hardware.set_dac_current(control_port_1, 32_000)
     pls.hardware.set_dac_current(control_port_2, 32_000)
     pls.hardware.set_dac_current(coupler_ac_port, 32_000)
-    pls.hardware.set_dac_current(coupler_dc_port, 32_000)
     pls.hardware.set_inv_sinc(readout_port, 0)
     pls.hardware.set_inv_sinc(control_port_1, 0)
     pls.hardware.set_inv_sinc(control_port_2, 0)
     pls.hardware.set_inv_sinc(coupler_ac_port, 0)
-    pls.hardware.set_inv_sinc(coupler_dc_port, 0)
     pls.hardware.configure_mixer(
         freq=readout_nco,  # for both resonators
         in_ports=sample_port,
@@ -110,11 +108,6 @@ with pulsed.Pulsed(
     pls.hardware.configure_mixer(
         freq=coupler_ac_nco,
         out_ports=coupler_ac_port,
-        sync=False,  # sync in last call
-    )
-    pls.hardware.configure_mixer(
-        freq=0.0,
-        out_ports=coupler_dc_port,
         sync=True,  # sync here
     )
 
@@ -159,13 +152,6 @@ with pulsed.Pulsed(
         phases=np.full_like(coupler_ac_if_arr, 0.0),
         phases_q=np.full_like(coupler_ac_if_arr, -np.pi / 2),  # upper sideband
     )
-    pls.setup_freq_lut(
-        output_ports=coupler_dc_port,
-        group=0,
-        frequencies=0.0,
-        phases=0.0,
-        phases_q=0.0,
-    )
 
     # Setup lookup tables for amplitudes
     pls.setup_scale_lut(
@@ -193,11 +179,6 @@ with pulsed.Pulsed(
         group=0,
         scales=coupler_ac_amp,
     )
-    pls.setup_scale_lut(
-        output_ports=coupler_dc_port,
-        group=0,
-        scales=coupler_dc_bias,
-    )
 
     # Setup readout and control pulses
     # use setup_long_drive to create a pulse with square envelope
@@ -207,19 +188,11 @@ with pulsed.Pulsed(
         output_port=readout_port,
         group=0,
         duration=readout_duration,
-        amplitude=1.0,
-        amplitude_q=1.0,
-        rise_time=0e-9,
-        fall_time=0e-9,
     )
     readout_pulse_2 = pls.setup_long_drive(
         output_port=readout_port,
         group=1,
         duration=readout_duration,
-        amplitude=1.0,
-        amplitude_q=1.0,
-        rise_time=0e-9,
-        fall_time=0e-9,
     )
     control_ns = int(round(control_duration * pls.get_fs("dac")))  # number of samples in the control template
     control_envelope = sin2(control_ns)
@@ -241,8 +214,6 @@ with pulsed.Pulsed(
         output_port=coupler_ac_port,
         group=0,
         duration=dt_steps,  # set minimum duration, then change it
-        amplitude=1.0,
-        amplitude_q=1.0,
     )
 
     # Setup sampling window
@@ -254,23 +225,18 @@ with pulsed.Pulsed(
     # ******************************
     T0 = 0.0  # s, start at time zero ...
     T = T0
-    # we'll start the coupler DC bias at time 0
-    # the DC port of the bias tee has some f_3dB ~ 20 kHz
-    # so wait at least 5 x 8 us (5 x 1 / 2*pi*f_3dB) ~ 40 us
-    # measured rise/fall time 10-90% 15 us
-    T += 40e-6  # s
     for ii in range(nr_steps):
         # start in |00>
-        # pi pulse on qubit 1
-        pls.reset_phase(T, control_port_1)
-        pls.output_pulse(T, control_pulse_1)
-        # we are in |10>
+        # pi pulse on qubit 2
+        pls.reset_phase(T, control_port_2)
+        pls.output_pulse(T, control_pulse_2)
+        # we are in |01>
         T += control_duration
         if ii > 0:
             # turn on coupler
             coupler_ac_pulse.set_total_duration(ii * dt_steps)
             pls.output_pulse(T, coupler_ac_pulse)
-        # we are somewhere between |10> and |01>
+        # we are somewhere between |01> and |10>
         # readout right after coupler pulse
         T += ii * dt_steps
         pls.reset_phase(T, readout_port)
@@ -281,16 +247,7 @@ with pulsed.Pulsed(
         T += readout_duration
         T += wait_delay
     pls.next_frequency(T, coupler_ac_port)  # prepare for next iteration
-
-    coupler_dc_pulse = pls.setup_long_drive(
-        output_port=coupler_dc_port,
-        group=0,
-        duration=T,  # total duration of experiment so far!
-        amplitude=1.0,
-        amplitude_q=1.0,
-    )
-    pls.output_pulse(T0, coupler_dc_pulse)  # start at the beginning
-    T += 40e-6  # s
+    T += wait_delay
 
     # **************************
     # *** Run the experiment ***
@@ -349,4 +306,4 @@ with h5py.File(save_path, "w") as h5f:
     h5f.create_dataset("coupler_ac_duration_arr", data=coupler_ac_duration_arr)
 print(f"Data saved to: {save_path}")
 
-fig1, fig2 = load_coupler_f_d.load(save_path)
+# fig1, fig2 = load_coupler_f_d.load(save_path)

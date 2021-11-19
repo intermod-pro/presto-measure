@@ -7,6 +7,7 @@ PORT = 7123
 
 MSG_QUIT = 0
 MSG_BIAS = 1
+MSG_AMP = 2
 
 mla = None
 
@@ -14,6 +15,13 @@ mla = None
 def set_dc_bias(port, bias):
     sock = _connect()
     payload = struct.pack("<QQd", MSG_BIAS, int(port), float(bias))
+    sock.sendall(payload)
+    sock.close()
+
+
+def set_amp(port, amp):
+    sock = _connect()
+    payload = struct.pack("<QQQ", MSG_AMP, int(port), 1 if amp else 0)
     sock.sendall(payload)
     sock.close()
 
@@ -51,6 +59,13 @@ def _handle_connection(sock):
             port, bias = struct.unpack('<Qd', buf)
             print(f"--- setting dc bias on port {port} to {bias} V")
             mla.lockin.set_dc_offset(port, bias)
+        elif msg == MSG_AMP:
+            buf = sock.recv(16)
+            if len(buf) == 0:
+                break
+            port, amp = struct.unpack('<QQ', buf)
+            print(f"--- setting amplification on port {port} to {amp}")
+            mla.analog.set_output_range(port, amp)
         else:
             print(f"*** unknown message {msg}")
 

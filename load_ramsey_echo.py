@@ -28,7 +28,8 @@ def load(load_filename):
         readout_duration = h5f.attrs["readout_duration"]
         control_duration = h5f.attrs["control_duration"]
         readout_amp = h5f.attrs["readout_amp"]
-        control_amp = h5f.attrs["control_amp"]
+        control_amp_90 = h5f.attrs["control_amp_90"]
+        control_amp_180 = h5f.attrs["control_amp_180"]
         sample_duration = h5f.attrs["sample_duration"]
         nr_delays = h5f.attrs["nr_delays"]
         dt_delays = h5f.attrs["dt_delays"]
@@ -67,18 +68,18 @@ def load(load_filename):
     try:
         popt, perr = fit_simple(delay_arr, np.real(data))
 
-        T2 = popt[2]
-        T2_err = perr[2]
-        print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
-        det = popt[3]
-        det_err = perr[3]
-        print("detuning: {} +- {} Hz".format(det, det_err))
-        sign = 1.0 if np.abs(popt[4]) < np.pi / 2 else -1.0
-        print(f"sign: {sign}")
-        i_at_e = popt[0] + sign * popt[1]
-        i_at_g = popt[0] - sign * popt[1]
-        print(f"|e>: {i_at_e} rad")
-        print(f"|g>: {i_at_g} rad")
+        T2 = popt[0]
+        T2_err = perr[0]
+        print("T2_echo time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+        # det = popt[3]
+        # det_err = perr[3]
+        # print("detuning: {} +- {} Hz".format(det, det_err))
+        # sign = 1.0 if np.abs(popt[4]) < np.pi / 2 else -1.0
+        # print(f"sign: {sign}")
+        # i_at_e = popt[0] + sign * popt[1]
+        # i_at_g = popt[0] - sign * popt[1]
+        # print(f"|e>: {i_at_e} rad")
+        # print(f"|g>: {i_at_g} rad")
 
         success = True
     except Exception:
@@ -91,7 +92,7 @@ def load(load_filename):
     ax22.plot(1e6 * delay_arr, np.unwrap(np.angle(data)))
     ax23.plot(1e6 * delay_arr, np.real(data))
     if success:
-        ax23.plot(1e6 * delay_arr, func(delay_arr, *popt), '--')
+        ax23.plot(1e6 * delay_arr, decay(delay_arr, *popt), '--')
     ax24.plot(1e6 * delay_arr, np.imag(data))
 
     ax21.set_ylabel("Amplitude [FS]")
@@ -119,44 +120,23 @@ def load(load_filename):
     ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
     ax3.set_xlabel("Ramsey delay [μs]")
     if success:
-        ax3.plot(1e6 * delay_arr, mult * func(delay_arr, *popt), '--')
-        ax3.set_title(f"T2* = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")
+        ax3.plot(1e6 * delay_arr, mult * decay(delay_arr, *popt), '--')
+        ax3.set_title(f"T2 echo = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")
     fig3.show()
 
     return fig1, fig2, fig3
 
 
-def func(t, offset, amplitude, T2, frequency, phase):
-    return offset + amplitude * np.exp(-t / T2) * np.cos(2. * np.pi * frequency * t + phase)
+def decay(t, *p):
+    T, xe, xg = p
+    return xg + (xe - xg) * np.exp(-t / T)
 
 
-def fit_simple(x, y):
-    pkpk = np.max(y) - np.min(y)
-    offset = np.min(y) + pkpk / 2
-    amplitude = 0.5 * pkpk
-    T2 = 0.5 * (np.max(x) - np.min(x))
-    freqs = np.fft.rfftfreq(len(x), x[1] - x[0])
-    fft = np.fft.rfft(y)
-    frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
-    first = (y[0] - offset) / amplitude
-    if first > 1.:
-        first = 1.
-    elif first < -1.:
-        first = -1.
-    phase = np.arccos(first)
-    p0 = (
-        offset,
-        amplitude,
-        T2,
-        frequency,
-        phase,
-    )
-    popt, pcov = curve_fit(
-        func,
-        x,
-        y,
-        p0=p0,
-    )
+def fit_simple(t, x):
+    T = 0.5 * (t[-1] - t[0])
+    xe, xg = x[0], x[-1]
+    p0 = (T, xe, xg)
+    popt, pcov = curve_fit(decay, t, x, p0)
     perr = np.sqrt(np.diag(pcov))
     return popt, perr
 

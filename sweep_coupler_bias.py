@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Simple frequency sweep using the Lockin mode.
+Simple frequency sweep using the Lockin mode. Also sweep DC bias on coupler. So it's a 2D sweep!
 """
 import os
 import time
@@ -12,7 +12,8 @@ from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import lockin
 from presto.utils import format_sec, get_sourcecode
 
-# import load_sweep_nco_time
+from mla_server import set_dc_bias, set_amp
+# import load_sweep_coupler_bias
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
@@ -26,13 +27,34 @@ amp = 0.1
 phase = 0.0
 dither = True
 
-# f_center = 6.0285 * 1e9  # resonator 2
-f_center = 6.1666 * 1e9  # resonator 1
-f_span = 20 * 1e6
+f_center = 6.0285 * 1e9  # resonator 2
+# f_center = 6.1666 * 1e9  # resonator 1
+f_span = 20.44 * 1e6
 f_start = f_center - f_span / 2
 f_stop = f_center + f_span / 2
-df = 1e4  # Hz
-Navg = 1000
+df = 4e4  # Hz
+Navg = 400
+
+# Coupler bias sweep
+nr_bias = 512
+bias_min = -4.5  # V
+bias_max = +4.5  # V
+coupler_bias_arr = np.linspace(bias_min, bias_max, nr_bias)
+coupler_bias_port = 2  # MLA
+
+# Tune
+ns = int(round(500e6 / df))
+df = 500e6 / ns
+n_start = int(round(f_start / df))
+n_stop = int(round(f_stop / df))
+n_arr = np.arange(n_start, n_stop + 1)
+nr_freqs = len(n_arr)
+freq_arr = df * n_arr
+resp_arr = np.zeros((nr_bias, nr_freqs), np.complex128)
+
+set_amp(coupler_bias_port, True)
+set_dc_bias(coupler_bias_port, coupler_bias_arr[0])
+time.sleep(1.0)
 
 with lockin.Lockin(
         address=ADDRESS,
@@ -44,18 +66,8 @@ with lockin.Lockin(
         dac_fsample=DacFSample.G10,
 ) as lck:
     lck.hardware.set_adc_attenuation(input_port, 0.0)
-    # lck.hardware.set_dac_current(output_port, 6_425)
     lck.hardware.set_dac_current(output_port, 32_000)
     lck.hardware.set_inv_sinc(output_port, 0)
-
-    _, df = lck.tune(0.0, df)
-
-    n_start = int(round(f_start / df))
-    n_stop = int(round(f_stop / df))
-    n_arr = np.arange(n_start, n_stop + 1)
-    nr_freq = len(n_arr)
-    freq_arr = df * n_arr
-    resp_arr = np.zeros(nr_freq, np.complex128)
 
     lck.hardware.configure_mixer(
         freq=freq_arr[0],
@@ -78,44 +90,52 @@ with lockin.Lockin(
     t_last = t_start
     prev_print_len = 0
     print()
-    for ii in range(len(n_arr)):
-        f = freq_arr[ii]
 
-        lck.hardware.configure_mixer(
-            freq=f,
-            in_ports=input_port,
-            out_ports=output_port,
-        )
-        lck.hardware.sleep(1e-3, False)
+    for bb, coupler_bias in enumerate(coupler_bias_arr):
+        set_dc_bias(coupler_bias_port, coupler_bias)
+        time.sleep(1.0)
 
-        _d = lck.get_pixels(Navg)
-        data_i = _d[input_port][1][:, 0]
-        data_q = _d[input_port][2][:, 0]
+        for ii in range(len(n_arr)):
+            f = freq_arr[ii]
 
-        avg_i = np.mean(data_i)
-        avg_q = np.mean(data_q)
-        resp_arr[ii] = avg_i.real + 1j * avg_q.real
+            lck.hardware.configure_mixer(
+                freq=f,
+                in_ports=input_port,
+                out_ports=output_port,
+            )
+            lck.hardware.sleep(1e-3, False)
 
-        # Calculate and print remaining time
-        t_now = time.time()
-        if t_now - t_last > np.pi / 3 / 5:
-            t_last = t_now
-            t_sofar = t_now - t_start
-            nr_sofar = ii + 1
-            nr_left = nr_freq - ii - 1
-            t_avg = t_sofar / nr_sofar
-            t_left = t_avg * nr_left
-            str_left = format_sec(t_left)
-            msg = "Time remaining: {:s}".format(str_left)
-            print_len = len(msg)
-            if print_len < prev_print_len:
-                msg += " " * (prev_print_len - print_len)
-            print(msg, end="\r", flush=True)
-            prev_print_len = print_len
+            _d = lck.get_pixels(Navg)
+            data_i = _d[input_port][1][:, 0]
+            data_q = _d[input_port][2][:, 0]
+
+            avg_i = np.mean(data_i)
+            avg_q = np.mean(data_q)
+            resp_arr[bb, ii] = avg_i.real + 1j * avg_q.real
+
+            # Calculate and print remaining time
+            t_now = time.time()
+            if t_now - t_last > np.pi / 3 / 5:
+                t_last = t_now
+                t_sofar = t_now - t_start
+                nr_sofar = (bb * nr_freqs) + (ii + 1)
+                nr_left = nr_bias * nr_freqs - nr_sofar
+                t_avg = t_sofar / nr_sofar
+                t_left = t_avg * nr_left
+                str_left = format_sec(t_left)
+                msg = "Time remaining: {:s}".format(str_left)
+                print_len = len(msg)
+                if print_len < prev_print_len:
+                    msg += " " * (prev_print_len - print_len)
+                print(msg, end="\r", flush=True)
+                prev_print_len = print_len
 
     # Mute outputs at the end of the sweep
     og.set_amplitudes(0.0)
     lck.apply_settings()
+
+set_dc_bias(coupler_bias_port, 0.0)
+set_amp(coupler_bias_port, False)
 
 # *************************
 # *** Save data to HDF5 ***
@@ -138,6 +158,7 @@ with h5py.File(save_path, "w") as h5f:
     h5f.attrs["dither"] = dither
     h5f.attrs["input_port"] = input_port
     h5f.attrs["output_port"] = output_port
+    h5f.create_dataset("coupler_bias_arr", data=coupler_bias_arr)
     h5f.create_dataset("freq_arr", data=freq_arr)
     h5f.create_dataset("resp_arr", data=resp_arr)
 print(f"Data saved to: {save_path}")
@@ -145,4 +166,4 @@ print(f"Data saved to: {save_path}")
 # *****************
 # *** Plot data ***
 # *****************
-# fig1, span_a, span_p = load_sweep_nco_time.load(save_path)
+# fig1, span_a, span_p = load_sweep_coupler_bias.load(save_path)
