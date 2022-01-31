@@ -65,7 +65,7 @@ def load(load_filename):
 
     # Fit data to I quadrature
     try:
-        popt, perr = fit_simple(delay_arr, np.real(data))
+        popt, perr, p0 = fit_simple(delay_arr, np.real(data))
 
         T2 = popt[2]
         T2_err = perr[2]
@@ -81,8 +81,9 @@ def load(load_filename):
         print(f"|g>: {i_at_g} rad")
 
         success = True
-    except Exception:
+    except Exception as err:
         print("Unable to fit data!")
+        print(err)
         success = False
 
     fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
@@ -119,6 +120,7 @@ def load(load_filename):
     ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
     ax3.set_xlabel("Ramsey delay [μs]")
     if success:
+        ax3.plot(1e6 * delay_arr, mult * func(delay_arr, *p0), '--')
         ax3.plot(1e6 * delay_arr, mult * func(delay_arr, *popt), '--')
         ax3.set_title(f"T2* = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")
     fig3.show()
@@ -137,13 +139,16 @@ def fit_simple(x, y):
     T2 = 0.5 * (np.max(x) - np.min(x))
     freqs = np.fft.rfftfreq(len(x), x[1] - x[0])
     fft = np.fft.rfft(y)
-    frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
-    first = (y[0] - offset) / amplitude
-    if first > 1.:
-        first = 1.
-    elif first < -1.:
-        first = -1.
-    phase = np.arccos(first)
+    fft[0] = 0
+    idx_max = np.argmax(np.abs(fft))
+    frequency = freqs[idx_max]
+    # first = (y[0] - offset) / amplitude
+    # if first > 1.:
+    #     first = 1.
+    # elif first < -1.:
+    #     first = -1.
+    # phase = np.arccos(first)
+    phase = np.angle(fft[idx_max])
     p0 = (
         offset,
         amplitude,
@@ -151,6 +156,7 @@ def fit_simple(x, y):
         frequency,
         phase,
     )
+    print(p0)
     popt, pcov = curve_fit(
         func,
         x,
@@ -158,7 +164,7 @@ def fit_simple(x, y):
         p0=p0,
     )
     perr = np.sqrt(np.diag(pcov))
-    return popt, perr
+    return popt, perr, p0
 
 
 if __name__ == "__main__":

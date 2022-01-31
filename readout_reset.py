@@ -13,7 +13,7 @@ from presto.utils import get_sourcecode, sin2
 import load_readout_reset
 
 WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
-USE_JPA = True
+USE_JPA = False
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
@@ -81,6 +81,7 @@ with pulsed.Pulsed(
         dac_fsample=[
             DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6
         ],
+        dry_run=True,
 ) as pls:
     pls.hardware.set_adc_attenuation(sample_port, 0.0)
     pls.hardware.set_dac_current(readout_port, 32_000)

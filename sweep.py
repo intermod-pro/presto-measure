@@ -12,7 +12,7 @@ from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import lockin
 from presto.utils import format_sec, get_sourcecode
 
-# import load_sweep_nco_time
+import load_sweep_nco_time
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
@@ -26,8 +26,8 @@ amp = 0.1
 phase = 0.0
 dither = True
 
-# f_center = 6.0285 * 1e9  # resonator 2
-f_center = 6.1666 * 1e9  # resonator 1
+f_center = 6.028_450 * 1e9  # resonator 2
+# f_center = 6.1666 * 1e9  # resonator 1
 f_span = 20 * 1e6
 f_start = f_center - f_span / 2
 f_stop = f_center + f_span / 2
@@ -145,4 +145,4 @@ print(f"Data saved to: {save_path}")
 # *****************
 # *** Plot data ***
 # *****************
-# fig1, span_a, span_p = load_sweep_nco_time.load(save_path)
+fig1, span_a, span_p = load_sweep_nco_time.load(save_path)

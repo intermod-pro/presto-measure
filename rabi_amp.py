@@ -425,14 +425,14 @@ def _fit_period(x: list[float], y: list[float]) -> tuple[list[float], list[float
 
 if __name__ == "__main__":
     WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
-    USE_JPA = False
+    USE_JPA = True
     WITH_COUPLER = False
 
     # Presto's IP address or hostname
-    # ADDRESS = "130.237.35.90"
-    # PORT = 42874
-    ADDRESS = "127.0.0.1"
-    PORT = 7878
+    ADDRESS = "130.237.35.90"
+    PORT = 42874
+    # ADDRESS = "127.0.0.1"
+    # PORT = 7878
     EXT_REF_CLK = False  # set to True to lock to an external reference clock
     jpa_bias_port = 1
 
@@ -452,7 +452,7 @@ if __name__ == "__main__":
             readout_freq = 6.029_130 * 1e9  # Hz, frequency for resonator readout
             control_freq = 4.093_042 * 1e9  # Hz
         else:
-            readout_freq = 6.028_450 * 1e9  # Hz, frequency for resonator readout
+            readout_freq = 6.028_400 * 1e9  # Hz, frequency for resonator readout
             control_freq = 4.093_372 * 1e9  # Hz
         control_port = 4
         jpa_pump_freq = 2 * 6.031e9  # Hz
@@ -504,3 +504,4 @@ if __name__ == "__main__":
         jpa_params,
     )
     rabi.run(ADDRESS, PORT, EXT_REF_CLK)
+    fig = rabi.analyze()

@@ -41,9 +41,9 @@ elif WHICH_QUBIT == 2:
         control_amp = 0.380  # FS <-- pi/2 pulse
         control_freq = 4.093_042 * 1e9  # Hz
     else:
-        readout_freq = 6.028_448 * 1e9  # Hz, frequency for resonator readout
-        control_amp = 0.3862  # FS <-- pi/2 pulse
-        control_freq = 4.093_368 * 1e9  # Hz
+        readout_freq = 6.028_450 * 1e9  # Hz, frequency for resonator readout
+        control_amp = 0.3808  # FS <-- pi/2 pulse
+        control_freq = 4.093_372 * 1e9  # Hz
     control_port = 4
     jpa_pump_freq = 2 * 6.031e9  # Hz
     jpa_pump_pwr = 9  # lmx units
@@ -52,13 +52,13 @@ else:
     raise ValueError
 
 # cavity drive: readout
-readout_amp = 0.1  # FS
+readout_amp = 0.4  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
 # qubit drive: control
 # control_freq += 500e3  # Hz, detune from qubit frequency
-control_freq += 125e3  # Hz, detune from qubit frequency
+control_freq += 10 * 1e6  # Hz, detune from qubit frequency
 control_if = 0 * 1e6  # Hz
 control_duration = 20 * 1e-9  # s, duration of the control pulse
 
@@ -67,12 +67,11 @@ sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
 
 # Ramsey experiment
-# num_averages = 1_000
-num_averages = 10_000
+num_averages = 1_000
 # nr_delays = 128  # number of steps when changing delay between control and readout pulses
 nr_delays = 256  # number of steps when changing delay between control and readout pulses
 # dt_delays = 0.1 * 1e-6  # s, step size when changing delay between control and readout pulses
-dt_delays = 0.4 * 1e-6  # s, step size when changing delay between control and readout pulses
+dt_delays = 2 * 1e-9  # s, step size when changing delay between control and readout pulses
 wait_delay = 200e-6  # s, delay between repetitions to allow the qubit to decay
 readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
 

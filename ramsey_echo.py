@@ -10,7 +10,7 @@ from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
 
-import load_ramsey_echo
+# import load_ramsey_echo
 
 WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
 USE_JPA = True
@@ -41,10 +41,10 @@ elif WHICH_QUBIT == 2:
         control_amp_90 = 0.380  # FS <-- pi/2 pulse
         control_freq = 4.093_042 * 1e9  # Hz
     else:
-        readout_freq = 6.028_448 * 1e9  # Hz, frequency for resonator readout
-        control_amp_90 = 0.3862  # FS <-- pi/2 pulse
-        control_amp_180 = 0.7723  # FS <-- pi pulse
-        control_freq = 4.093_368 * 1e9  # Hz
+        readout_freq = 6.028_450 * 1e9  # Hz, frequency for resonator readout
+        control_amp_90 = 0.3808  # FS <-- pi/2 pulse
+        control_amp_180 = 0.7617  # FS <-- pi pulse
+        control_freq = 4.093_372 * 1e9  # Hz
     control_port = 4
     jpa_pump_freq = 2 * 6.031e9  # Hz
     jpa_pump_pwr = 9  # lmx units
@@ -255,4 +255,4 @@ print(f"Data saved to: {save_path}")
 # *****************
 # *** Plot data ***
 # *****************
-load_ramsey_echo.load(save_path)
+# load_ramsey_echo.load(save_path)
