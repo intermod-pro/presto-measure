@@ -1,150 +1,377 @@
 # -*- coding: utf-8 -*-
 """
-2D sweep of drive power and frequency with the Test mode.
+2D sweep of drive power and frequency in Lockin mode.
 """
-import os
 import time
 
 import h5py
 import numpy as np
+from numpy.typing import ArrayLike
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import lockin
-from presto.utils import format_sec, get_sourcecode
+from presto.utils import format_sec
 
-import load_sweep_power
+from _base import Base
 
-# Presto's IP address or hostname
-ADDRESS = "130.237.35.90"
-PORT = 42874
-EXT_REF_CLK = False  # set to True to lock to an external reference clock
+DAC_CURRENT = 32_000  # uA
+CONVERTER_CONFIGURATION = {
+    "adc_mode": AdcMode.Mixed,
+    "adc_fsample": AdcFSample.G4,
+    "dac_mode": DacMode.Mixed42,
+    "dac_fsample": DacFSample.G10,
+}
 
-output_port = 1
-input_port = 1
-dither = True
-phase = 0.0
-current = 32_000  # uA
 
-# f_center = 6.028_450 * 1e9  # resonator 2
-f_center = 6.1666 * 1e9  # resonator 1
-f_span = 20 * 1e6
-f_start = f_center - f_span / 2
-f_stop = f_center + f_span / 2
-df = 1e4  # Hz
-Navg = 1000
+class SweepPower(Base):
+    def __init__(
+        self,
+        freq_center: float,
+        freq_span: float,
+        df: float,
+        num_averages: int,
+        amp_arr: ArrayLike,
+        output_port: int,
+        input_port: int,
+        dither=True,
+        num_skip=1,
+    ) -> None:
+        self.freq_center = freq_center
+        self.freq_span = freq_span
+        self.df = df  # modified after tuning
+        self.num_averages = num_averages
+        self.amp_arr = np.atleast_1d(amp_arr).astype(np.float64)
+        self.output_port = output_port
+        self.input_port = input_port
+        self.dither = dither
+        self.num_skip = num_skip
 
-amp_arr = np.logspace(-10, 0, 64, base=2, endpoint=False)
-nr_amps = len(amp_arr)
+        self.freq_arr = None  # replaced by run
+        self.resp_arr = None  # replaced by run
 
-with lockin.Lockin(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_REF_CLK,
-        adc_mode=AdcMode.Mixed,
-        adc_fsample=AdcFSample.G2,
-        dac_mode=DacMode.Mixed42,
-        dac_fsample=DacFSample.G10,
-) as lck:
-    lck.hardware.set_adc_attenuation(input_port, 0.0)
-    lck.hardware.set_dac_current(output_port, current)
-    lck.hardware.set_inv_sinc(output_port, 0)
+    def run(
+        self,
+        presto_address: str,
+        presto_port: int = None,
+        ext_ref_clk: bool = False,
+    ):
+        with lockin.Lockin(
+                address=presto_address,
+                port=presto_port,
+                ext_ref_clk=ext_ref_clk,
+                **CONVERTER_CONFIGURATION,
+        ) as lck:
+            assert lck.hardware is not None
 
-    _, df = lck.tune(0.0, df)
+            lck.hardware.set_adc_attenuation(self.input_port, 0.0)
+            lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
+            lck.hardware.set_inv_sinc(self.output_port, 0)
 
-    n_start = int(round(f_start / df))
-    n_stop = int(round(f_stop / df))
-    n_arr = np.arange(n_start, n_stop + 1)
-    nr_freq = len(n_arr)
-    freq_arr = df * n_arr
-    resp_arr = np.zeros((nr_amps, nr_freq), np.complex128)
+            nr_amps = len(self.amp_arr)
 
-    lck.hardware.configure_mixer(
-        freq=freq_arr[0],
-        in_ports=input_port,
-        out_ports=output_port,
-    )
-    lck.set_df(df)
-    og = lck.add_output_group(output_port, 1)
-    og.set_frequencies(0.0)
-    og.set_amplitudes(amp_arr[0])
-    og.set_phases(phase, phase)
+            # tune frequencies
+            _, self.df = lck.tune(0.0, self.df)
+            f_start = self.freq_center - self.freq_span / 2
+            f_stop = self.freq_center + self.freq_span / 2
+            n_start = int(round(f_start / self.df))
+            n_stop = int(round(f_stop / self.df))
+            n_arr = np.arange(n_start, n_stop + 1)
+            nr_freq = len(n_arr)
+            self.freq_arr = self.df * n_arr
+            self.resp_arr = np.zeros((nr_amps, nr_freq), np.complex128)
 
-    lck.set_dither(dither, output_port)
-    ig = lck.add_input_group(input_port, 1)
-    ig.set_frequencies(0.0)
-
-    lck.apply_settings()
-
-    t_start = time.time()
-    t_last = t_start
-    prev_print_len = 0
-    print()
-    for jj, amp in enumerate(amp_arr):
-        og.set_amplitudes(amp)
-        lck.apply_settings()
-
-        for ii, freq in enumerate(freq_arr):
             lck.hardware.configure_mixer(
-                freq=freq,
-                in_ports=input_port,
-                out_ports=output_port,
+                freq=self.freq_arr[0],
+                in_ports=self.input_port,
+                out_ports=self.output_port,
             )
-            lck.hardware.sleep(1e-3, False)
+            lck.set_df(self.df)
+            og = lck.add_output_group(self.output_port, 1)
+            og.set_frequencies(0.0)
+            og.set_amplitudes(self.amp_arr[0])
+            og.set_phases(0.0, 0.0)
 
-            _d = lck.get_pixels(Navg)
-            data_i = _d[input_port][1][:, 0]
-            data_q = _d[input_port][2][:, 0]
+            lck.set_dither(self.dither, self.output_port)
+            ig = lck.add_input_group(self.input_port, 1)
+            ig.set_frequencies(0.0)
 
-            avg_i = np.mean(data_i)
-            avg_q = np.mean(data_q)
-            resp_arr[jj, ii] = avg_i.real + 1j * avg_q.real
+            lck.apply_settings()
 
-            # Calculate and print remaining time
-            t_now = time.time()
-            if t_now - t_last > np.pi / 3 / 5:
-                t_last = t_now
-                t_sofar = t_now - t_start
-                nr_sofar = jj * nr_freq + ii + 1
-                nr_left = (nr_amps - jj - 1) * nr_freq + (nr_freq - ii - 1)
-                t_avg = t_sofar / nr_sofar
-                t_left = t_avg * nr_left
-                str_left = format_sec(t_left)
-                msg = "Time remaining: {:s}".format(str_left)
-                print_len = len(msg)
-                if print_len < prev_print_len:
-                    msg += " " * (prev_print_len - print_len)
-                print(msg, end="\r", flush=True)
-                prev_print_len = print_len
+            t_start = time.time()
+            t_last = t_start
+            prev_print_len = 0
+            print()
+            for jj, amp in enumerate(self.amp_arr):
+                og.set_amplitudes(amp)
+                lck.apply_settings()
 
-    # Mute outputs at the end of the sweep
-    og.set_amplitudes(0.0)
-    lck.apply_settings()
+                for ii, freq in enumerate(self.freq_arr):
+                    lck.hardware.configure_mixer(
+                        freq=freq,
+                        in_ports=self.input_port,
+                        out_ports=self.output_port,
+                    )
+                    lck.hardware.sleep(1e-3, False)
 
-# *************************
-# *** Save data to HDF5 ***
-# *************************
-script_path = os.path.realpath(__file__)  # full path of current script
-current_dir, script_basename = os.path.split(script_path)
-script_filename = os.path.splitext(script_basename)[0]  # name of current script
-timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
-save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
-save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
-with h5py.File(save_path, "w") as h5f:
-    dt = h5py.string_dtype(encoding='utf-8')
-    ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
-    for ii, line in enumerate(source_code):
-        ds[ii] = line
-    h5f.attrs["df"] = df
-    h5f.attrs["dither"] = dither
-    h5f.attrs["input_port"] = input_port
-    h5f.attrs["output_port"] = output_port
-    h5f.create_dataset("freq_arr", data=freq_arr)
-    h5f.create_dataset("amp_arr", data=amp_arr)
-    h5f.create_dataset("resp_arr", data=resp_arr)
-print(f"Data saved to: {save_path}")
+                    _d = lck.get_pixels(self.num_skip + self.num_averages)
+                    data_i = _d[self.input_port][1][:, 0]
+                    data_q = _d[self.input_port][2][:, 0]
+                    data = data_i.real + 1j * data_q.real  # using zero IF
 
-# ********************
-# *** Plot results ***
-# ********************
-fig1 = load_sweep_power.load(save_path)
+                    self.resp_arr[jj, ii] = np.mean(data[-self.num_averages:])
+
+                    # Calculate and print remaining time
+                    t_now = time.time()
+                    if t_now - t_last > np.pi / 3 / 5:
+                        t_last = t_now
+                        t_sofar = t_now - t_start
+                        nr_sofar = jj * nr_freq + ii + 1
+                        nr_left = (nr_amps - jj - 1) * nr_freq + (nr_freq - ii - 1)
+                        t_avg = t_sofar / nr_sofar
+                        t_left = t_avg * nr_left
+                        str_left = format_sec(t_left)
+                        msg = "Time remaining: {:s}".format(str_left)
+                        print_len = len(msg)
+                        if print_len < prev_print_len:
+                            msg += " " * (prev_print_len - print_len)
+                        print(msg, end="\r", flush=True)
+                        prev_print_len = print_len
+
+            # Mute outputs at the end of the sweep
+            og.set_amplitudes(0.0)
+            lck.apply_settings()
+
+        return self.save()
+
+    @classmethod
+    def load(cls, load_filename):
+        with h5py.File(load_filename, "r") as h5f:
+            freq_center = h5f.attrs["freq_center"]
+            freq_span = h5f.attrs["freq_span"]
+            df = h5f.attrs["df"]
+            num_averages = h5f.attrs["num_averages"]
+            output_port = h5f.attrs["output_port"]
+            input_port = h5f.attrs["input_port"]
+            dither = h5f.attrs["dither"]
+            num_skip = h5f.attrs["num_skip"]
+
+            amp_arr = h5f["amp_arr"][()]
+            freq_arr = h5f["freq_arr"][()]
+            resp_arr = h5f["resp_arr"][()]
+
+        self = cls(
+            freq_center=freq_center,
+            freq_span=freq_span,
+            df=df,
+            num_averages=num_averages,
+            amp_arr=amp_arr,
+            output_port=output_port,
+            input_port=input_port,
+            dither=dither,
+            num_skip=num_skip,
+        )
+        self.freq_arr = freq_arr
+        self.resp_arr = resp_arr
+
+        return self
+
+    def analyze(self, norm=True, portrait=True, blit=False):
+        if self.freq_arr is None:
+            raise RuntimeError
+        if self.resp_arr is None:
+            raise RuntimeError
+
+        import matplotlib.pyplot as plt
+        try:
+            from resonator_tools import circuit
+            import matplotlib.widgets as mwidgets
+            _do_fit = True
+        except ImportError:
+            _do_fit = False
+
+        nr_amps = len(self.amp_arr)
+        self._AMP_IDX = nr_amps // 2
+
+        if norm:
+            resp_scaled = np.zeros_like(self.resp_arr)
+            for jj in range(nr_amps):
+                resp_scaled[jj] = self.resp_arr[jj] / self.amp_arr[jj]
+        else:
+            resp_scaled = self.resp_arr
+
+        resp_dB = 20. * np.log10(np.abs(resp_scaled))
+        amp_dBFS = 20 * np.log10(self.amp_arr / 1.0)
+
+        # choose limits for colorbar
+        cutoff = 1.  # %
+        lowlim = np.percentile(resp_dB, cutoff)
+        highlim = np.percentile(resp_dB, 100. - cutoff)
+
+        # extent
+        x_min = 1e-9 * self.freq_arr[0]
+        x_max = 1e-9 * self.freq_arr[-1]
+        dx = 1e-9 * (self.freq_arr[1] - self.freq_arr[0])
+        y_min = amp_dBFS[0]
+        y_max = amp_dBFS[-1]
+        dy = amp_dBFS[1] - amp_dBFS[0]
+
+        if portrait:
+            fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
+            ax1 = fig1.add_subplot(2, 1, 1)
+            # fig1 = plt.figure(tight_layout=True)
+            # ax1 = fig1.add_subplot(1, 1, 1)
+        else:
+            fig1 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
+            ax1 = fig1.add_subplot(1, 2, 1)
+        im = ax1.imshow(
+            resp_dB,
+            origin='lower',
+            aspect='auto',
+            interpolation='none',
+            extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+            vmin=lowlim,
+            vmax=highlim,
+        )
+        line_sel = ax1.axhline(amp_dBFS[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit)
+        # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
+        ax1.set_xlabel("Frequency [GHz]")
+        ax1.set_ylabel("Drive amplitude [dBFS]")
+        cb = fig1.colorbar(im)
+        if portrait:
+            cb.set_label("Response amplitude [dB]")
+        else:
+            ax1.set_title("Response amplitude [dB]")
+        fig1.show()
+        # return fig1
+
+        if portrait:
+            ax2 = fig1.add_subplot(4, 1, 3)
+            ax3 = fig1.add_subplot(4, 1, 4, sharex=ax2)
+        else:
+            ax2 = fig1.add_subplot(2, 2, 2)
+            ax3 = fig1.add_subplot(2, 2, 4, sharex=ax2)
+            ax2.yaxis.set_label_position("right")
+            ax2.yaxis.tick_right()
+            ax3.yaxis.set_label_position("right")
+            ax3.yaxis.tick_right()
+
+        line_a, = ax2.plot(1e-9 * self.freq_arr, resp_dB[self._AMP_IDX], label="measured", animated=blit)
+        line_p, = ax3.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr[self._AMP_IDX]), animated=blit)
+        if _do_fit:
+            line_fit_a, = ax2.plot(1e-9 * self.freq_arr,
+                                   np.full_like(self.freq_arr, np.nan),
+                                   ls="--",
+                                   label="fit",
+                                   animated=blit)
+            line_fit_p, = ax3.plot(1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", animated=blit)
+
+        f_min = 1e-9 * self.freq_arr.min()
+        f_max = 1e-9 * self.freq_arr.max()
+        f_rng = f_max - f_min
+        a_min = resp_dB.min()
+        a_max = resp_dB.max()
+        a_rng = a_max - a_min
+        p_min = -np.pi
+        p_max = np.pi
+        p_rng = p_max - p_min
+        ax2.set_xlim(f_min - 0.05 * f_rng, f_max + 0.05 * f_rng)
+        ax2.set_ylim(a_min - 0.05 * a_rng, a_max + 0.05 * a_rng)
+        ax3.set_xlim(f_min - 0.05 * f_rng, f_max + 0.05 * f_rng)
+        ax3.set_ylim(p_min - 0.05 * p_rng, p_max + 0.05 * p_rng)
+
+        ax3.set_xlabel("Frequency [GHz]")
+        ax2.set_ylabel("Response amplitude [dB]")
+        ax3.set_ylabel("Response phase [rad]")
+
+        ax2.legend(loc="lower right")
+
+        def onbuttonpress(event):
+            if event.inaxes == ax1:
+                self._AMP_IDX = np.argmin(np.abs(amp_dBFS - event.ydata))
+                update()
+
+        def onkeypress(event):
+            if event.inaxes == ax1:
+                if event.key == "up":
+                    self._AMP_IDX += 1
+                    if self._AMP_IDX >= len(amp_dBFS):
+                        self._AMP_IDX = len(amp_dBFS) - 1
+                    update()
+                elif event.key == "down":
+                    self._AMP_IDX -= 1
+                    if self._AMP_IDX < 0:
+                        self._AMP_IDX = 0
+                    update()
+
+        def update():
+            line_sel.set_ydata([amp_dBFS[self._AMP_IDX], amp_dBFS[self._AMP_IDX]])
+            # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
+            print(
+                f"drive amp {self._AMP_IDX:d}: {self.amp_arr[self._AMP_IDX]:.2e} FS = {amp_dBFS[self._AMP_IDX]:.1f} dBFS"
+            )
+            line_a.set_ydata(resp_dB[self._AMP_IDX])
+            line_p.set_ydata(np.angle(self.resp_arr[self._AMP_IDX]))
+            if _do_fit:
+                line_fit_a.set_ydata(np.full_like(self.freq_arr, np.nan))
+                line_fit_p.set_ydata(np.full_like(self.freq_arr, np.nan))
+            # ax2.set_title("")
+            if blit:
+                fig1.canvas.restore_region(self._bg)
+                ax1.draw_artist(line_sel)
+                ax2.draw_artist(line_a)
+                ax3.draw_artist(line_p)
+                fig1.canvas.blit(fig1.bbox)
+                fig1.canvas.flush_events()
+            else:
+                fig1.canvas.draw()
+
+        if _do_fit:
+
+            def onselect(xmin, xmax):
+                port = circuit.notch_port(self.freq_arr, self.resp_arr[self._AMP_IDX])
+                port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
+                if norm:
+                    line_fit_a.set_data(1e-9 * port.f_data,
+                                        20 * np.log10(np.abs(port.z_data_sim / self.amp_arr[self._AMP_IDX])))
+                else:
+                    line_fit_a.set_data(1e-9 * port.f_data, 20 * np.log10(np.abs(port.z_data_sim)))
+                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))
+                # print(port.fitresults)
+                print("----------------")
+                print(f"fr = {port.fitresults['fr']}")
+                print(f"Qi = {port.fitresults['Qi_dia_corr']}")
+                print(f"Qc = {port.fitresults['Qc_dia_corr']}")
+                print(f"Ql = {port.fitresults['Ql']}")
+                print(f"kappa = {port.fitresults['fr'] / port.fitresults['Qc_dia_corr']}")
+                print("----------------")
+                # ax2.set_title(
+                #     f"fr = {1e-6*fr:.0f} MHz, Ql = {Ql:.0f}, Qi = {Qi:.0f}, Qc = {Qc:.0f}, kappa = {1e-3*kappa:.0f} kHz")
+                if blit:
+                    fig1.canvas.restore_region(self._bg)
+                    ax1.draw_artist(line_sel)
+                    ax2.draw_artist(line_a)
+                    ax2.draw_artist(line_fit_a)
+                    ax3.draw_artist(line_p)
+                    ax3.draw_artist(line_fit_p)
+                    fig1.canvas.blit(fig1.bbox)
+                    fig1.canvas.flush_events()
+                else:
+                    fig1.canvas.draw()
+
+            rectprops = dict(facecolor='tab:gray', alpha=0.5)
+            fig1._span_a = mwidgets.SpanSelector(ax2, onselect, 'horizontal', rectprops=rectprops, useblit=blit)
+            fig1._span_p = mwidgets.SpanSelector(ax3, onselect, 'horizontal', rectprops=rectprops, useblit=blit)
+
+        fig1.canvas.mpl_connect('button_press_event', onbuttonpress)
+        fig1.canvas.mpl_connect('key_press_event', onkeypress)
+        fig1.show()
+        if blit:
+            fig1.canvas.draw()
+            fig1.canvas.flush_events()
+            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)
+            ax1.draw_artist(line_sel)
+            ax2.draw_artist(line_a)
+            ax3.draw_artist(line_p)
+            fig1.canvas.blit(fig1.bbox)
+
+        return fig1
