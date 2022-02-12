@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 import time
-from typing import Optional
 
 import h5py
 import numpy as np
@@ -13,11 +12,9 @@ class Base:
     """
     Base class for measurements
     """
-    def save(self, save_filename: Optional[str] = None) -> str:
-        # *************************
-        # *** Save data to HDF5 ***
-        # *************************
-        script_path = os.path.realpath(__file__)  # full path of current script
+    def save(self, script_path: str, save_filename: str = None) -> str:
+        script_path = os.path.realpath(script_path)  # full path of current script
+
         if save_filename is None:
             current_dir, script_basename = os.path.split(script_path)
             script_filename = os.path.splitext(script_basename)[0]  # name of current script

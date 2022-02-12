@@ -49,5 +49,9 @@ frequency and internal and external quality factors for a slice of the data at a
 Two tone spectroscopy using **lockin** mode. 2D sweep of qubit drive amplitude and frequency, with fixed resonator
 drive frequency and amplitude.
 
+### `two_tone_pulsed`
+Two tone spectroscopy using **pulsed** mode. 1D sweep of qubit drive frequency, with fixed amplitude and fixed
+resonator drive frequency and amplitude.
+
 ## Older stuff
 Scripts in `bak` folder may or may not work, with higher chances on the may-not case.

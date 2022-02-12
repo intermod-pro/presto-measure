@@ -2,15 +2,12 @@
 """
 2D sweep of drive power and frequency in Lockin mode.
 """
-import time
-
 import h5py
 import numpy as np
-from numpy.typing import ArrayLike
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import lockin
-from presto.utils import format_sec
+from presto.utils import ProgressBar
 
 from _base import Base
 
@@ -30,11 +27,11 @@ class SweepPower(Base):
         freq_span: float,
         df: float,
         num_averages: int,
-        amp_arr: ArrayLike,
+        amp_arr: list[float],
         output_port: int,
         input_port: int,
-        dither=True,
-        num_skip=1,
+        dither: bool = True,
+        num_skip: int = 1,
     ) -> None:
         self.freq_center = freq_center
         self.freq_span = freq_span
@@ -54,7 +51,7 @@ class SweepPower(Base):
         presto_address: str,
         presto_port: int = None,
         ext_ref_clk: bool = False,
-    ):
+    ) -> str:
         with lockin.Lockin(
                 address=presto_address,
                 port=presto_port,
@@ -97,10 +94,8 @@ class SweepPower(Base):
 
             lck.apply_settings()
 
-            t_start = time.time()
-            t_last = t_start
-            prev_print_len = 0
-            print()
+            pb = ProgressBar(nr_amps * nr_freq)
+            pb.start()
             for jj, amp in enumerate(self.amp_arr):
                 og.set_amplitudes(amp)
                 lck.apply_settings()
@@ -120,22 +115,9 @@ class SweepPower(Base):
 
                     self.resp_arr[jj, ii] = np.mean(data[-self.num_averages:])
 
-                    # Calculate and print remaining time
-                    t_now = time.time()
-                    if t_now - t_last > np.pi / 3 / 5:
-                        t_last = t_now
-                        t_sofar = t_now - t_start
-                        nr_sofar = jj * nr_freq + ii + 1
-                        nr_left = (nr_amps - jj - 1) * nr_freq + (nr_freq - ii - 1)
-                        t_avg = t_sofar / nr_sofar
-                        t_left = t_avg * nr_left
-                        str_left = format_sec(t_left)
-                        msg = "Time remaining: {:s}".format(str_left)
-                        print_len = len(msg)
-                        if print_len < prev_print_len:
-                            msg += " " * (prev_print_len - print_len)
-                        print(msg, end="\r", flush=True)
-                        prev_print_len = print_len
+                    pb.increment()
+
+            pb.done()
 
             # Mute outputs at the end of the sweep
             og.set_amplitudes(0.0)
@@ -143,8 +125,11 @@ class SweepPower(Base):
 
         return self.save()
 
+    def save(self, save_filename: str = None) -> str:
+        return super().save(__file__, save_filename=save_filename)
+
     @classmethod
-    def load(cls, load_filename):
+    def load(cls, load_filename: str) -> 'SweepPower':
         with h5py.File(load_filename, "r") as h5f:
             freq_center = h5f.attrs["freq_center"]
             freq_span = h5f.attrs["freq_span"]
@@ -175,7 +160,7 @@ class SweepPower(Base):
 
         return self
 
-    def analyze(self, norm=True, portrait=True, blit=False):
+    def analyze(self, norm: bool = True, portrait: bool = True, blit: bool = False):
         if self.freq_arr is None:
             raise RuntimeError
         if self.resp_arr is None:

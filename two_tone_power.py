@@ -2,15 +2,12 @@
 """
 Two-tone spectroscopy in Lockin mode: 2D sweep of pump power and frequency, with fixed probe.
 """
-import time
-
 import h5py
 import numpy as np
-from numpy.typing import ArrayLike
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import lockin
-from presto.utils import format_sec, ProgressBar
+from presto.utils import ProgressBar, rotate_opt
 
 from _base import Base
 
@@ -22,63 +19,6 @@ CONVERTER_CONFIGURATION = {
     "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
 }
 
-# WHICH_QUBIT = 1  # 1 or 2
-
-# # Presto's IP address or hostname
-# ADDRESS = "130.237.35.90"
-# PORT = 42874
-# EXT_REF_CLK = False  # set to True to lock to an external reference clock
-# USE_JPA = True
-
-# if WHICH_QUBIT == 1:
-#     center_freq = 3.437 * 1e9  # Hz, center frequency for qubit sweep, qubit 1
-#     cavity_freq = 6.166_600 * 1e9  # Hz, frequency for cavity, resonator 1
-#     qubit_port = 3  # qubit 1
-# elif WHICH_QUBIT == 2:
-#     center_freq = 3.975 * 1e9  # Hz, center frequency for qubit sweep, qubit 2
-#     cavity_freq = 6.028_448 * 1e9  # Hz, frequency for cavity, resonator 2
-#     qubit_port = 4  # qubit 2
-# else:
-#     raise ValueError
-
-# span = 350 * 1e6  # Hz, span for qubit frequency sweep
-# df = 1e6  # Hz, measurement bandwidth for each point in sweep
-
-# cavity_amp = 10**(-20.0 / 20)  # FS
-
-# nr_amps = 61
-# self.control_amp_arr = np.logspace(-3, 0, nr_amps)
-
-# cavity_port = 1
-# input_port = 1
-# dither = True
-# extra = 500
-# Navg = 1_000
-
-# if USE_JPA:
-#     jpa_bias_port = 1
-#     if WHICH_QUBIT == 1:
-#         jpa_bias = +0.437  # V
-#         jpa_pump_pwr = 11
-#         jpa_pump_freq = 2 * 6.169 * 1e9  # 2.5 MHz away from resonator 1
-#     elif WHICH_QUBIT == 2:
-#         jpa_bias = +0.449  # V
-#         jpa_pump_pwr = 9
-#         jpa_pump_freq = 2 * 6.031 * 1e9  # 2.5 MHz away from resonator 2
-#     else:
-#         raise ValueError
-
-#     import sys
-#     if '/home/riccardo/IntermodulatorSuite' not in sys.path:
-#         sys.path.append('/home/riccardo/IntermodulatorSuite')
-#     from mlaapi import mla_api, mla_globals
-
-#     settings = mla_globals.read_config()
-#     mla = mla_api.MLA(settings)
-#     mla.connect()
-#     mla.lockin.set_dc_offset(jpa_bias_port, jpa_bias)
-#     time.sleep(1.0)
-
 
 class TwoTonePower(Base):
     def __init__(
@@ -88,13 +28,13 @@ class TwoTonePower(Base):
         control_freq_span: float,
         df: float,
         readout_amp: float,
-        control_amp_arr: ArrayLike,
+        control_amp_arr: list[float],
         readout_port: int,
         control_port: int,
         input_port: int,
         num_averages: int,
-        dither=True,
-        num_skip=1,
+        dither: bool = True,
+        num_skip: int = 1,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq_center = control_freq_center
@@ -117,7 +57,7 @@ class TwoTonePower(Base):
         presto_address: str,
         presto_port: int = None,
         ext_ref_clk: bool = False,
-    ):
+    ) -> str:
         with lockin.Lockin(
                 address=presto_address,
                 port=presto_port,
@@ -208,8 +148,11 @@ class TwoTonePower(Base):
 
         return self.save()
 
+    def save(self, save_filename: str = None) -> str:
+        return super().save(__file__, save_filename=save_filename)
+
     @classmethod
-    def load(cls, load_filename):
+    def load(cls, load_filename: str) -> 'TwoTonePower':
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs["readout_freq"]
             control_freq_center = h5f.attrs["control_freq_center"]
@@ -246,23 +189,35 @@ class TwoTonePower(Base):
 
         return self
 
-    def analyze(self, logscale=False, linecut=False, blit=True):
+    def analyze(self, quantity: str = "quadrature", linecut: bool = False, blit: bool = True):
         if self.control_freq_arr is None:
             raise RuntimeError
         if self.resp_arr is None:
             raise RuntimeError
+        if quantity not in ["quadrature", "amplitude", "phase", "dB"]:
+            raise ValueError
 
         import matplotlib.pyplot as plt
         nr_amps = len(self.control_amp_arr)
 
         self._AMP_IDX = nr_amps // 2
 
-        if logscale:
+        if quantity == "dB":
             data = 20. * np.log10(np.abs(self.resp_arr))
-            unit = "dB"
+            unit = "dBFS"
+            title = "Response amplitude"
+        elif quantity == "phase":
+            data = np.angle(self.resp_arr)
+            unit = "rad"
+            title = "Response phase"
         else:
-            data = np.abs(self.resp_arr)
-            data_max = data.max()
+            if quantity == "amplitude":
+                data = np.abs(self.resp_arr)
+                title = "Response amplitude"
+            else:  # "quadrature"
+                data = rotate_opt(self.resp_arr).real
+                title = "Response quadrature"
+            data_max = np.abs(data).max()
             unit = ""
             if data_max < 1e-6:
                 unit = "n"
@@ -273,6 +228,8 @@ class TwoTonePower(Base):
             elif data_max < 1e0:
                 unit = "m"
                 data *= 1e3
+            unit += "FS"
+
         amp_dBFS = 20 * np.log10(self.control_amp_arr / 1.0)
 
         # choose limits for colorbar
@@ -289,11 +246,13 @@ class TwoTonePower(Base):
         dy = amp_dBFS[1] - amp_dBFS[0]
 
         if linecut:
-            fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
-            ax1 = fig1.add_subplot(2, 1, 1)
+            fig1 = plt.figure(tight_layout=True, figsize=(6.4, 7.2))
+            gs = fig1.add_gridspec(3, 1)
+            ax1 = fig1.add_subplot(gs[:-1, 0])
         else:
             fig1 = plt.figure(tight_layout=True, figsize=(6.4, 4.8))
-            ax1 = fig1.add_subplot(1, 1, 1)
+            gs = fig1.add_gridspec(1, 1)
+            ax1 = fig1.add_subplot(gs[0, 0])
         im = ax1.imshow(
             data,
             origin='lower',
@@ -309,22 +268,12 @@ class TwoTonePower(Base):
         ax1.set_xlabel("Pump frequency [GHz]")
         ax1.set_ylabel("Pump amplitude [dBFS]")
         cb = fig1.colorbar(im)
-        cb.set_label(f"Response amplitude [{unit:s}FS]")
+        cb.set_label(f"{title:s} [{unit:s}]")
 
         if linecut:
-            ax2 = fig1.add_subplot(4, 1, 3)
-            ax3 = fig1.add_subplot(4, 1, 4, sharex=ax2)
+            ax2 = fig1.add_subplot(gs[-1, 0])
 
             line_a, = ax2.plot(1e-9 * self.control_freq_arr, data[self._AMP_IDX], animated=blit)
-            line_fit_a, = ax2.plot(1e-9 * self.control_freq_arr,
-                                   np.full_like(self.control_freq_arr, np.nan),
-                                   ls="--",
-                                   animated=blit)
-            line_p, = ax3.plot(1e-9 * self.control_freq_arr, np.angle(self.resp_arr[self._AMP_IDX]), animated=blit)
-            line_fit_p, = ax3.plot(1e-9 * self.control_freq_arr,
-                                   np.full_like(self.control_freq_arr, np.nan),
-                                   ls="--",
-                                   animated=blit)
 
             f_min = 1e-9 * self.control_freq_arr.min()
             f_max = 1e-9 * self.control_freq_arr.max()
@@ -332,20 +281,11 @@ class TwoTonePower(Base):
             a_min = data.min()
             a_max = data.max()
             a_rng = a_max - a_min
-            p_min = -np.pi
-            p_max = np.pi
-            p_rng = p_max - p_min
             ax2.set_xlim(f_min - 0.05 * f_rng, f_max + 0.05 * f_rng)
             ax2.set_ylim(a_min - 0.05 * a_rng, a_max + 0.05 * a_rng)
-            ax3.set_xlim(f_min - 0.05 * f_rng, f_max + 0.05 * f_rng)
-            ax3.set_ylim(p_min - 0.05 * p_rng, p_max + 0.05 * p_rng)
 
-            ax3.set_xlabel("Frequency [GHz]")
-            if logscale:
-                ax2.set_ylabel("Response amplitude [dB]")
-            else:
-                ax2.set_ylabel(f"Response amplitude [{unit:s}FS]")
-            ax3.set_ylabel("Response phase [rad]")
+            ax2.set_xlabel("Frequency [GHz]")
+            ax2.set_ylabel(f"{title:s} [{unit:s}]")
 
             def onbuttonpress(event):
                 if event.inaxes == ax1:
@@ -372,15 +312,11 @@ class TwoTonePower(Base):
                     f"drive amp {self._AMP_IDX:d}: {self.control_amp_arr[self._AMP_IDX]:.2e} FS = {amp_dBFS[self._AMP_IDX]:.1f} dBFS"
                 )
                 line_a.set_ydata(data[self._AMP_IDX])
-                line_p.set_ydata(np.angle(self.resp_arr[self._AMP_IDX]))
-                line_fit_a.set_ydata(np.full_like(self.control_freq_arr, np.nan))
-                line_fit_p.set_ydata(np.full_like(self.control_freq_arr, np.nan))
                 # ax2.set_title("")
                 if blit:
                     fig1.canvas.restore_region(self._bg)
                     ax1.draw_artist(line_sel)
                     ax2.draw_artist(line_a)
-                    ax3.draw_artist(line_p)
                     fig1.canvas.blit(fig1.bbox)
                     # fig1.canvas.flush_events()
                 else:
@@ -396,40 +332,6 @@ class TwoTonePower(Base):
             self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)
             ax1.draw_artist(line_sel)
             ax2.draw_artist(line_a)
-            ax3.draw_artist(line_p)
             fig1.canvas.blit(fig1.bbox)
 
         return fig1
-
-
-# # *************************
-# # *** Save data to HDF5 ***
-# # *************************
-# script_path = os.path.realpath(__file__)  # full path of current script
-# current_dir, script_basename = os.path.split(script_path)
-# script_filename = os.path.splitext(script_basename)[0]  # name of current script
-# timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
-# save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
-# save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-# source_code = get_sourcecode(script_path)  # save also the sourcecode of the script for future reference
-# with h5py.File(save_path, "w") as h5f:
-#     dt = h5py.string_dtype(encoding='utf-8')
-#     ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
-#     for ii, line in enumerate(source_code):
-#         ds[ii] = line
-#     h5f.attrs["df"] = df
-#     h5f.attrs["dither"] = dither
-#     h5f.attrs["input_port"] = input_port
-#     h5f.attrs["cavity_port"] = cavity_port
-#     h5f.attrs["qubit_port"] = qubit_port
-#     h5f.attrs["cavity_amp"] = cavity_amp
-#     h5f.attrs["cavity_freq"] = cavity_freq
-#     h5f.create_dataset("self.control_freq_arr", data=self.control_freq_arr)
-#     h5f.create_dataset("self.control_amp_arr", data=self.control_amp_arr)
-#     h5f.create_dataset("resp_arr", data=resp_arr)
-# print(f"Data saved to: {save_path}")
-
-# ********************
-# *** Plot results ***
-# ********************
-# fig1 = load_two_tone_power.load(save_path)

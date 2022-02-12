@@ -2,247 +2,303 @@
 """
 Two-tone spectroscopy with Pulsed mode: sweep of pump frequency, with fixed pump power and fixed probe.
 """
-import os
-import time
-
+import ast
 import h5py
 import numpy as np
 
-from mla_server import set_dc_bias
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import get_sourcecode, sin2
+from presto.utils import rotate_opt, sin2
 
-import load_two_tone_pulsed
+from _base import Base
 
-WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
-USE_JPA = True
+DAC_CURRENT = 32_000  # uA
+CONVERTER_CONFIGURATION = {
+    "adc_mode": AdcMode.Mixed,
+    "adc_fsample": AdcFSample.G4,
+    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+}
+IDX_LOW = 1_500
+IDX_HIGH = 2_000
 
-# Presto's IP address or hostname
-ADDRESS = "130.237.35.90"
-PORT = 42874
-EXT_REF_CLK = False  # set to True to lock to an external reference clock
-jpa_bias_port = 1
 
-if WHICH_QUBIT == 1:
-    readout_freq = 6.166_600 * 1e9  # Hz, frequency for resonator readout
-    control_freq = 3.557_866 * 1e9  # Hz
-    control_amp = 0.1026  # FS, pi pulse
-    control_port = 3
-    jpa_pump_freq = 2 * 6.169e9  # Hz
-    jpa_pump_pwr = 11  # lmx units
-    jpa_bias = +0.437  # V
-elif WHICH_QUBIT == 2:
-    readout_freq = 6.028_448 * 1e9  # Hz, frequency for resonator readout
-    control_freq = 4.091_777 * 1e9  # Hz
-    control_amp = 0.1537  # FS, pi pulse
-    control_port = 4
-    jpa_pump_freq = 2 * 6.031e9  # Hz
-    jpa_pump_pwr = 9  # lmx units
-    jpa_bias = +0.449  # V
-else:
-    raise ValueError
+class TwoTonePulsed(Base):
+    def __init__(
+        self,
+        readout_freq: float,
+        control_freq_center: float,
+        control_freq_span: float,
+        control_freq_nr: int,
+        readout_amp: float,
+        control_amp: float,
+        readout_duration: float,
+        control_duration: float,
+        sample_duration: float,
+        readout_port: int,
+        control_port: int,
+        sample_port: int,
+        wait_delay: float,
+        readout_sample_delay: float,
+        num_averages: int,
+        jpa_params: dict = None,
+    ) -> None:
+        self.readout_freq = readout_freq
+        self.control_freq_center = control_freq_center
+        self.control_freq_span = control_freq_span
+        self.control_freq_nr = control_freq_nr
+        self.readout_amp = readout_amp
+        self.control_amp = control_amp
+        self.readout_duration = readout_duration
+        self.control_duration = control_duration
+        self.sample_duration = sample_duration
+        self.readout_port = readout_port
+        self.control_port = control_port
+        self.sample_port = sample_port
+        self.wait_delay = wait_delay
+        self.readout_sample_delay = readout_sample_delay
+        self.num_averages = num_averages
 
-# cavity drive: readout
-readout_amp = 0.1  # FS
-readout_duration = 2e-6  # s, duration of the readout pulse
-readout_port = 1
+        self.t_arr = None  # replaced by run
+        self.store_arr = None  # replaced by run
+        self.control_freq_arr = None  # replaced by run
 
-# qubit drive: control
-control_duration = 100e-9  # s, duration of the control pulse
+        self.jpa_params = jpa_params
 
-control_amp /= 10
-control_duration *= 10
+    def run(
+        self,
+        presto_address: str,
+        presto_port: int = None,
+        ext_ref_clk: bool = False,
+    ) -> str:
+        with pulsed.Pulsed(
+                address=presto_address,
+                port=presto_port,
+                ext_ref_clk=ext_ref_clk,
+                **CONVERTER_CONFIGURATION,
+        ) as pls:
+            assert pls.hardware is not None
 
-# cavity readout: sample
-sample_duration = 4 * 1e-6  # s, duration of the sampling window
-sample_port = 1
+            # figure out frequencies
+            assert self.control_freq_center > (self.control_freq_span / 2)
+            assert self.control_freq_span < pls.get_fs("dac") / 2  # fits in HSB
+            control_if_center = pls.get_fs("dac") / 4  # middle of HSB
+            control_if_start = control_if_center - self.control_freq_span / 2
+            control_if_stop = control_if_center + self.control_freq_span / 2
+            control_if_arr = np.linspace(control_if_start, control_if_stop, self.control_freq_nr)
+            control_nco = self.control_freq_center - control_if_center
+            self.control_freq_arr = control_nco + control_if_arr
 
-# Control frequency sweep
-num_averages = 1_000
-nr_freqs = 512
-freq_span = 100 * 1e6
-freq_center = 100 * 1e6
-assert freq_center > (freq_span / 2)
-freq_if_arr = np.linspace(freq_center - freq_span / 2,
-                          freq_center + freq_span / 2, nr_freqs)
-freq_nco = control_freq - freq_center
-control_freq_arr = freq_nco + freq_if_arr
+            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
+            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_inv_sinc(self.readout_port, 0)
+            pls.hardware.set_inv_sinc(self.control_port, 0)
+            pls.hardware.configure_mixer(
+                freq=self.readout_freq,
+                in_ports=self.sample_port,
+                out_ports=self.readout_port,
+                sync=False,  # sync in next call
+            )
+            pls.hardware.configure_mixer(
+                freq=control_nco,
+                out_ports=self.control_port,
+                sync=True,  # sync here
+            )
+            if self.jpa_params is not None:
+                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'])
+                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.sleep(1.0, False)
 
-wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+            # ************************************
+            # *** Setup measurement parameters ***
+            # ************************************
 
-# Instantiate interface class
-with pulsed.Pulsed(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_REF_CLK,
-        adc_mode=AdcMode.Mixed,
-        adc_fsample=AdcFSample.G2,
-        dac_mode=[
-            DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02
-        ],
-        dac_fsample=[
-            DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6
-        ],
-) as pls:
-    pls.hardware.set_adc_attenuation(sample_port, 0.0)
-    pls.hardware.set_dac_current(readout_port, 32_000)
-    pls.hardware.set_dac_current(control_port, 32_000)
-    pls.hardware.set_inv_sinc(readout_port, 0)
-    pls.hardware.set_inv_sinc(control_port, 0)
-    pls.hardware.configure_mixer(
-        freq=readout_freq,
-        in_ports=sample_port,
-        out_ports=readout_port,
-        sync=False,  # sync in next call
-    )
-    pls.hardware.configure_mixer(
-        freq=freq_nco,
-        out_ports=control_port,
-        sync=True,  # sync here
-    )
-    if USE_JPA:
-        pls.hardware.set_lmx(jpa_pump_freq, jpa_pump_pwr)
-        set_dc_bias(jpa_bias_port, jpa_bias)
-        time.sleep(1.0)
+            # Setup lookup tables for frequencies
+            pls.setup_freq_lut(
+                output_ports=self.readout_port,
+                group=0,
+                frequencies=0.0,
+                phases=0.0,
+                phases_q=0.0,
+            )
+            pls.setup_freq_lut(
+                output_ports=self.control_port,
+                group=0,
+                frequencies=control_if_arr,
+                phases=np.full_like(control_if_arr, 0.0),
+                phases_q=np.full_like(control_if_arr, -np.pi / 2),  # HSB
+            )
 
-    # ************************************
-    # *** Setup measurement parameters ***
-    # ************************************
+            # Setup lookup tables for amplitudes
+            pls.setup_scale_lut(
+                output_ports=self.readout_port,
+                group=0,
+                scales=self.readout_amp,
+            )
+            pls.setup_scale_lut(
+                output_ports=self.control_port,
+                group=0,
+                scales=self.control_amp,
+            )
 
-    # Setup lookup tables for frequencies
-    pls.setup_freq_lut(
-        output_ports=readout_port,
-        group=0,
-        frequencies=0.0,
-        phases=0.0,
-        phases_q=0.0,
-    )
-    pls.setup_freq_lut(
-        output_ports=control_port,
-        group=0,
-        frequencies=freq_if_arr,
-        phases=np.full_like(freq_if_arr, 0.0),
-        phases_q=np.full_like(freq_if_arr, -np.pi / 2),  # HSB
-    )
+            # Setup readout and control pulses
+            # use setup_long_drive to create a pulse with square envelope
+            # setup_long_drive supports smooth rise and fall transitions for the pulse,
+            # but we keep it simple here
+            readout_pulse = pls.setup_long_drive(
+                output_port=self.readout_port,
+                group=0,
+                duration=self.readout_duration,
+                amplitude=1.0,
+                amplitude_q=1.0,
+                rise_time=0e-9,
+                fall_time=0e-9,
+            )
+            # For the control pulse we create a sine-squared envelope,
+            # and use setup_template to use the user-defined envelope
+            control_ns = int(round(self.control_duration *
+                                   pls.get_fs("dac")))  # number of samples in the control template
+            control_envelope = sin2(control_ns)
+            control_pulse = pls.setup_template(
+                output_port=self.control_port,
+                group=0,
+                template=control_envelope,
+                template_q=control_envelope,
+                envelope=True,
+            )
 
-    # Setup lookup tables for amplitudes
-    pls.setup_scale_lut(
-        output_ports=readout_port,
-        group=0,
-        scales=readout_amp,
-    )
-    pls.setup_scale_lut(
-        output_ports=control_port,
-        group=0,
-        scales=control_amp,
-    )
+            # Setup sampling window
+            pls.set_store_ports(self.sample_port)
+            pls.set_store_duration(self.sample_duration)
 
-    # Setup readout and control pulses
-    # use setup_long_drive to create a pulse with square envelope
-    # setup_long_drive supports smooth rise and fall transitions for the pulse,
-    # but we keep it simple here
-    readout_pulse = pls.setup_long_drive(
-        output_port=readout_port,
-        group=0,
-        duration=readout_duration,
-        amplitude=1.0,
-        amplitude_q=1.0,
-        rise_time=0e-9,
-        fall_time=0e-9,
-    )
-    # For the control pulse we create a sine-squared envelope,
-    # and use setup_template to use the user-defined envelope
-    control_ns = int(
-        round(control_duration *
-              pls.get_fs("dac")))  # number of samples in the control template
-    control_envelope = sin2(control_ns)
-    control_pulse = pls.setup_template(
-        output_port=control_port,
-        group=0,
-        template=control_envelope,
-        template_q=control_envelope,
-        envelope=True,
-    )
+            # ******************************
+            # *** Program pulse sequence ***
+            # ******************************
+            T = 0.0  # s, start at time zero ...
+            # Control pulse
+            pls.reset_phase(T, self.control_port)
+            pls.output_pulse(T, control_pulse)
+            # Readout pulse starts right after control pulse
+            T += self.control_duration
+            pls.reset_phase(T, self.readout_port)
+            pls.output_pulse(T, readout_pulse)
+            # Sampling window
+            pls.store(T + self.readout_sample_delay)
+            # Move to next Rabi amplitude
+            T += self.readout_duration
+            pls.next_frequency(T, self.control_port)  # every iteration will have a different frequency
+            # Wait for decay
+            T += self.wait_delay
 
-    # Setup sampling window
-    pls.set_store_ports(sample_port)
-    pls.set_store_duration(sample_duration)
+            # **************************
+            # *** Run the experiment ***
+            # **************************
+            # repeat the whole sequence `rabi_n` times
+            # then average `num_averages` times
+            pls.run(
+                period=T,
+                repeat_count=self.control_freq_nr,
+                num_averages=self.num_averages,
+                print_time=True,
+            )
+            self.t_arr, self.store_arr = pls.get_store_data()
 
-    # ******************************
-    # *** Program pulse sequence ***
-    # ******************************
-    T = 0.0  # s, start at time zero ...
-    # Control pulse
-    pls.reset_phase(T, control_port)
-    pls.output_pulse(T, control_pulse)
-    # Readout pulse starts right after control pulse
-    T += control_duration
-    pls.reset_phase(T, readout_port)
-    pls.output_pulse(T, readout_pulse)
-    # Sampling window
-    pls.store(T + readout_sample_delay)
-    # Move to next Rabi amplitude
-    T += readout_duration
-    pls.next_frequency(
-        T, control_port)  # every iteration will have a different frequency
-    # Wait for decay
-    T += wait_delay
+            if self.jpa_params is not None:
+                pls.hardware.set_lmx(0.0, 0.0)
+                pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
 
-    # **************************
-    # *** Run the experiment ***
-    # **************************
-    # repeat the whole sequence `rabi_n` times
-    # then average `num_averages` times
-    pls.run(
-        period=T,
-        repeat_count=nr_freqs,
-        num_averages=num_averages,
-        print_time=True,
-    )
-    t_arr, (data_I, data_Q) = pls.get_store_data()
-    if USE_JPA:
-        pls.hardware.set_lmx(0.0, 0.0)
-        set_dc_bias(jpa_bias_port, 0.0)
+        return self.save()
 
-store_arr = data_I + 1j * data_Q
+    def save(self, save_filename: str = None) -> str:
+        return super().save(__file__, save_filename=save_filename)
 
-# *************************
-# *** Save data to HDF5 ***
-# *************************
-script_path = os.path.realpath(__file__)  # full path of current script
-current_dir, script_basename = os.path.split(script_path)
-script_filename = os.path.splitext(script_basename)[
-    0]  # name of current script
-timestamp = time.strftime("%Y%m%d_%H%M%S",
-                          time.localtime())  # current date and time
-save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
-save_path = os.path.join(current_dir, "data",
-                         save_basename)  # full path of save file
-source_code = get_sourcecode(
-    __file__)  # save also the sourcecode of the script for future reference
-with h5py.File(save_path, "w") as h5f:
-    dt = h5py.string_dtype(encoding='utf-8')
-    ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
-    for ii, line in enumerate(source_code):
-        ds[ii] = line
-    h5f.attrs["num_averages"] = num_averages
-    h5f.attrs["readout_freq"] = readout_freq
-    h5f.attrs["readout_duration"] = readout_duration
-    h5f.attrs["control_duration"] = control_duration
-    h5f.attrs["readout_amp"] = readout_amp
-    h5f.attrs["control_amp"] = control_amp
-    h5f.attrs["sample_duration"] = sample_duration
-    h5f.attrs["nr_freqs"] = nr_freqs
-    h5f.attrs["wait_delay"] = wait_delay
-    h5f.attrs["readout_sample_delay"] = readout_sample_delay
-    h5f.create_dataset("control_freq_arr", data=control_freq_arr)
-    h5f.create_dataset("t_arr", data=t_arr)
-    h5f.create_dataset("store_arr", data=store_arr)
-print(f"Data saved to: {save_path}")
+    @classmethod
+    def load(cls, load_filename: str) -> 'TwoTonePulsed':
+        with h5py.File(load_filename, "r") as h5f:
+            readout_freq = h5f.attrs['readout_freq']
+            control_freq_center = h5f.attrs['control_freq_center']
+            control_freq_span = h5f.attrs['control_freq_span']
+            control_freq_nr = h5f.attrs['control_freq_nr']
+            readout_amp = h5f.attrs['readout_amp']
+            control_amp = h5f.attrs['control_amp']
+            readout_duration = h5f.attrs['readout_duration']
+            control_duration = h5f.attrs['control_duration']
+            sample_duration = h5f.attrs['sample_duration']
+            readout_port = h5f.attrs['readout_port']
+            control_port = h5f.attrs['control_port']
+            sample_port = h5f.attrs['sample_port']
+            wait_delay = h5f.attrs['wait_delay']
+            readout_sample_delay = h5f.attrs['readout_sample_delay']
+            num_averages = h5f.attrs['num_averages']
 
-# *****************
-# *** Plot data ***
-# *****************
-fig1, fig2 = load_two_tone_pulsed.load(os.path.join(save_path))
+            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
+
+            t_arr = h5f['t_arr'][()]
+            store_arr = h5f['store_arr'][()]
+            control_freq_arr = h5f['control_freq_arr'][()]
+
+        self = cls(
+            readout_freq=readout_freq,
+            control_freq_center=control_freq_center,
+            control_freq_span=control_freq_span,
+            control_freq_nr=control_freq_nr,
+            readout_amp=readout_amp,
+            control_amp=control_amp,
+            readout_duration=readout_duration,
+            control_duration=control_duration,
+            sample_duration=sample_duration,
+            readout_port=readout_port,
+            control_port=control_port,
+            sample_port=sample_port,
+            wait_delay=wait_delay,
+            readout_sample_delay=readout_sample_delay,
+            num_averages=num_averages,
+            jpa_params=jpa_params,
+        )
+        self.t_arr = t_arr
+        self.store_arr = store_arr
+        self.control_freq_arr = control_freq_arr
+
+        return self
+
+    def analyze(self):
+        assert self.t_arr is not None
+        assert self.store_arr is not None
+        assert self.control_freq_arr is not None
+
+        import matplotlib.pyplot as plt
+
+        idx = np.arange(IDX_LOW, IDX_HIGH)
+        t_low = self.t_arr[IDX_LOW]
+        t_high = self.t_arr[IDX_HIGH]
+
+        # Plot raw store data for first iteration as a check
+        fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+        ax11, ax12 = ax1
+        ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+        ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+        ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
+        ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
+        ax12.set_xlabel("Time [ns]")
+        fig1.show()
+
+        # Analyze
+        resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
+        data = rotate_opt(resp_arr)
+
+        fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
+        ax21, ax22, ax23, ax24 = ax2
+        ax21.plot(1e-9 * self.control_freq_arr, np.abs(data))
+        ax22.plot(1e-9 * self.control_freq_arr, np.angle(data))
+        ax23.plot(1e-9 * self.control_freq_arr, np.real(data))
+        ax24.plot(1e-9 * self.control_freq_arr, np.imag(data))
+
+        ax21.set_ylabel("Amplitude [FS]")
+        ax22.set_ylabel("Phase [rad]")
+        ax23.set_ylabel("I [FS]")
+        ax24.set_ylabel("Q [FS]")
+        ax2[-1].set_xlabel("Control frequency [GHz]")
+        fig2.show()
+
+        return fig1, fig2
