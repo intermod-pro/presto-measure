@@ -6,52 +6,61 @@ The control pulse has a sin^2 envelope, while the readout pulse is square.
 """
 import ast
 import math
-import os
-import time
 
 import h5py
 import numpy as np
-from numpy.typing import ArrayLike
 
-from mla_server import set_dc_bias
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import get_sourcecode, sin2
+from presto.utils import rotate_opt, sin2
+
+from _base import Base
+
+DAC_CURRENT = 32_000  # uA
+CONVERTER_CONFIGURATION = {
+    "adc_mode": AdcMode.Mixed,
+    "adc_fsample": AdcFSample.G4,
+    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+}
+IDX_LOW = 1_500
+IDX_HIGH = 2_000
 
 
-class RabiAmp:
+class RabiAmp(Base):
     def __init__(
         self,
         readout_freq: float,
         control_freq: float,
-        readout_port: int,
-        control_port: int,
         readout_amp: float,
+        control_amp_arr: list[float],
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
+        readout_port: int,
+        control_port: int,
         sample_port: int,
-        control_amp_arr: ArrayLike,
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params=None,
-    ):
+        num_pulses: int = 1,
+        jpa_params: dict = None,
+    ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
-        self.readout_port = readout_port
-        self.control_port = control_port
         self.readout_amp = readout_amp
+        self.control_amp_arr = np.atleast_1d(control_amp_arr).astype(np.float64)
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
+        self.readout_port = readout_port
+        self.control_port = control_port
         self.sample_port = sample_port
-        self.control_amp_arr = control_amp_arr
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
+        self.num_pulses = num_pulses
 
-        self.rabi_n = len(control_amp_arr)
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
 
@@ -59,23 +68,22 @@ class RabiAmp:
 
     def run(
         self,
-        presto_address,
-        presto_port=None,
-        ext_ref_clk=False,
-    ):
+        presto_address: str,
+        presto_port: int = None,
+        ext_ref_clk: bool = False,
+    ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
                 address=presto_address,
                 port=presto_port,
                 ext_ref_clk=ext_ref_clk,
-                adc_mode=AdcMode.Mixed,
-                adc_fsample=AdcFSample.G2,
-                dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-                dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+                **CONVERTER_CONFIGURATION,
         ) as pls:
+            assert pls.hardware is not None
+
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, 32_000)
-            pls.hardware.set_dac_current(self.control_port, 32_000)
+            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
             pls.hardware.configure_mixer(
@@ -90,9 +98,10 @@ class RabiAmp:
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['jpa_pump_freq'], self.jpa_params['jpa_pump_pwr'])
-                set_dc_bias(self.jpa_params['jpa_bias_port'], self.jpa_params['jpa_bias'])
-                time.sleep(1.0)
+                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
+                                     self.jpa_params['pump_port'])
+                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.sleep(1.0, False)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -162,153 +171,115 @@ class RabiAmp:
             T = 0.0  # s, start at time zero ...
             # Control pulse
             pls.reset_phase(T, self.control_port)
-            pls.output_pulse(T, control_pulse)
-            # Readout pulse starts right after control pulse
-            T += self.control_duration
+            for _ in range(self.num_pulses):
+                pls.output_pulse(T, control_pulse)
+                T += self.control_duration
+            # Readout
             pls.reset_phase(T, self.readout_port)
             pls.output_pulse(T, readout_pulse)
-            # Sampling window
             pls.store(T + self.readout_sample_delay)
-            # Move to next Rabi amplitude
             T += self.readout_duration
+            # Move to next Rabi amplitude
             pls.next_scale(T, self.control_port)  # every iteration will have a different amplitude
             # Wait for decay
             T += self.wait_delay
 
+            if self.jpa_params is not None:
+                # adjust period to minimize effect of JPA idler
+                idler_freq = self.jpa_params['pump_freq'] - self.readout_freq
+                idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
+                idler_period = 1 / idler_if
+                T_clk = int(round(T * pls.get_clk_f()))
+                idler_period_clk = int(round(idler_period * pls.get_clk_f()))
+                # first make T a multiple of idler period
+                if T_clk % idler_period_clk > 0:
+                    T_clk += idler_period_clk - (T_clk % idler_period_clk)
+                # then make it off by one clock cycle
+                T_clk += 1
+                T = T_clk * pls.get_clk_T()
+
             # **************************
             # *** Run the experiment ***
             # **************************
-            # repeat the whole sequence `rabi_n` times
+            # repeat the whole sequence `nr_amps` times
             # then average `num_averages` times
+
+            nr_amps = len(self.control_amp_arr)
             pls.run(
                 period=T,
-                repeat_count=self.rabi_n,
+                repeat_count=nr_amps,
                 num_averages=self.num_averages,
                 print_time=True,
             )
-            t_arr, (data_I, data_Q) = pls.get_store_data()
+            self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0)
-                set_dc_bias(self.jpa_params['jpa_bias_port'], 0.0)
-
-        self.t_arr = t_arr
-        self.store_arr = data_I + 1j * data_Q
+                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
+                pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
 
         return self.save()
 
-    def save(self, save_filename=None):
-        # *************************
-        # *** Save data to HDF5 ***
-        # *************************
-        if save_filename is None:
-            script_path = os.path.realpath(__file__)  # full path of current script
-            current_dir, script_basename = os.path.split(script_path)
-            script_filename = os.path.splitext(script_basename)[0]  # name of current script
-            timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
-            save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
-            save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-        else:
-            save_path = os.path.realpath(save_filename)
-
-        source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
-        with h5py.File(save_path, "w") as h5f:
-            dt = h5py.string_dtype(encoding='utf-8')
-            ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
-            for ii, line in enumerate(source_code):
-                ds[ii] = line
-
-            for attribute in self.__dict__:
-                print(f"{attribute}: {self.__dict__[attribute]}")
-                if attribute.startswith("_"):
-                    # don't save private attributes
-                    continue
-                if attribute == "jpa_params":
-                    h5f.attrs[attribute] = str(self.__dict__[attribute])
-                elif np.isscalar(self.__dict__[attribute]):
-                    h5f.attrs[attribute] = self.__dict__[attribute]
-                else:
-                    h5f.create_dataset(attribute, data=self.__dict__[attribute])
-        print(f"Data saved to: {save_path}")
-        return save_path
+    def save(self, save_filename: str = None) -> str:
+        return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename):
+    def load(cls, load_filename: str) -> 'RabiAmp':
         with h5py.File(load_filename, "r") as h5f:
-            num_averages = h5f.attrs["num_averages"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_freq = h5f.attrs["readout_freq"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            readout_amp = h5f.attrs["readout_amp"]
-            sample_duration = h5f.attrs["sample_duration"]
-            # rabi_n = h5f.attrs["rabi_n"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
+            readout_freq = h5f.attrs['readout_freq']
+            control_freq = h5f.attrs['control_freq']
+            readout_amp = h5f.attrs['readout_amp']
+            control_amp_arr = h5f['control_amp_arr'][()]
+            readout_duration = h5f.attrs['readout_duration']
+            control_duration = h5f.attrs['control_duration']
+            sample_duration = h5f.attrs['sample_duration']
+            readout_port = h5f.attrs['readout_port']
+            control_port = h5f.attrs['control_port']
+            sample_port = h5f.attrs['sample_port']
+            wait_delay = h5f.attrs['wait_delay']
+            readout_sample_delay = h5f.attrs['readout_sample_delay']
+            num_averages = h5f.attrs['num_averages']
+            num_pulses = h5f.attrs['num_pulses']
 
-            control_amp_arr = h5f["control_amp_arr"][()]
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
-            # source_code = h5f["source_code"][()]
+            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            # these were added later
-            try:
-                readout_port = h5f.attrs["readout_port"]
-            except KeyError:
-                readout_port = 0
-            try:
-                control_port = h5f.attrs["control_port"]
-            except KeyError:
-                control_port = 0
-            try:
-                sample_port = h5f.attrs["sample_port"]
-            except KeyError:
-                sample_port = 0
-            try:
-                jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
-            except KeyError:
-                jpa_params = None
+            t_arr = h5f['t_arr'][()]
+            store_arr = h5f['store_arr'][()]
 
         self = cls(
-            readout_freq,
-            control_freq,
-            readout_port,
-            control_port,
-            readout_amp,
-            readout_duration,
-            control_duration,
-            sample_duration,
-            sample_port,
-            control_amp_arr,
-            wait_delay,
-            readout_sample_delay,
-            num_averages,
-            jpa_params,
+            readout_freq=readout_freq,
+            control_freq=control_freq,
+            readout_amp=readout_amp,
+            control_amp_arr=control_amp_arr,
+            readout_duration=readout_duration,
+            control_duration=control_duration,
+            sample_duration=sample_duration,
+            readout_port=readout_port,
+            control_port=control_port,
+            sample_port=sample_port,
+            wait_delay=wait_delay,
+            readout_sample_delay=readout_sample_delay,
+            num_averages=num_averages,
+            num_pulses=num_pulses,
+            jpa_params=jpa_params,
         )
-        self.control_amp_arr = control_amp_arr
         self.t_arr = t_arr
         self.store_arr = store_arr
 
         return self
 
-    def analyze(self, all_plots=False):
+    def analyze(self, all_plots: bool = False):
         if self.t_arr is None:
             raise RuntimeError
         if self.store_arr is None:
             raise RuntimeError
 
         import matplotlib.pyplot as plt
-        from presto.utils import rotate_opt
 
         ret_fig = []
 
-        t_low = 1500 * 1e-9
-        t_high = 2000 * 1e-9
-        # t_span = t_high - t_low
-        idx_low = np.argmin(np.abs(self.t_arr - t_low))
-        idx_high = np.argmin(np.abs(self.t_arr - t_high))
-        idx = np.arange(idx_low, idx_high)
-        # nr_samples = len(idx)
+        idx = np.arange(IDX_LOW, IDX_HIGH)
+        t_low = self.t_arr[IDX_LOW]
+        t_high = self.t_arr[IDX_HIGH]
 
         if all_plots:
             # Plot raw store data for first iteration as a check
@@ -332,9 +303,11 @@ class RabiAmp:
         period_err = perr_x[3]
         pi_amp = period / 2
         pi_2_amp = period / 4
-        print("Tau pulse amplitude: {} +- {} FS".format(period, period_err))
-        print("Pi pulse amplitude: {} +- {} FS".format(pi_amp, period_err / 2))
-        print("Pi/2 pulse amplitude: {} +- {} FS".format(pi_2_amp, period_err / 4))
+        if self.num_pulses > 1:
+            print(f"{self.num_pulses} pulses")
+        print("Tau pulse amplitude: {} +- {} FS".format(period * self.num_pulses, period_err * self.num_pulses))
+        print("Pi pulse amplitude: {} +- {} FS".format(pi_amp * self.num_pulses, period_err / 2 * self.num_pulses))
+        print("Pi/2 pulse amplitude: {} +- {} FS".format(pi_2_amp * self.num_pulses, period_err / 4 * self.num_pulses))
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
@@ -371,6 +344,8 @@ class RabiAmp:
         ax3.plot(self.control_amp_arr, mult * _func(self.control_amp_arr, *popt_x), '--')
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel("Pulse amplitude [FS]")
+        if self.num_pulses > 1:
+            ax3.set_title(f"{self.num_pulses} pulses")
         fig3.show()
         ret_fig.append(fig3)
 
@@ -382,11 +357,8 @@ def _func(t, offset, amplitude, T2, period, phase):
     return offset + amplitude * np.exp(-t / T2) * np.cos(math.tau * frequency * t + phase)
 
 
-
-
 def _fit_period(x: list[float], y: list[float]) -> tuple[list[float], list[float]]:
     from scipy.optimize import curve_fit
-    # from scipy.optimize import least_squares
 
     pkpk = np.max(y) - np.min(y)
     offset = np.min(y) + pkpk / 2
@@ -415,93 +387,3 @@ def _fit_period(x: list[float], y: list[float]) -> tuple[list[float], list[float
     perr = np.sqrt(np.diag(pcov))
     offset, amplitude, T2, period, phase = popt
     return popt, perr
-    # def _residuals(p, x, y):
-    #     offset, amplitude, T2, period, phase = p
-    #     return _func(x, offset, amplitude, T2, period, phase) - y
-    # res = least_squares(_residuals, p0, args=(x, y))
-    # # offset, amplitude, T2, period, phase = res.x
-    # return res.x, np.zeros_like(res.x)
-
-
-if __name__ == "__main__":
-    WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
-    USE_JPA = True
-    WITH_COUPLER = False
-
-    # Presto's IP address or hostname
-    ADDRESS = "130.237.35.90"
-    PORT = 42874
-    # ADDRESS = "127.0.0.1"
-    # PORT = 7878
-    EXT_REF_CLK = False  # set to True to lock to an external reference clock
-    jpa_bias_port = 1
-
-    if WHICH_QUBIT == 1:
-        if WITH_COUPLER:
-            readout_freq = 6.167_009 * 1e9  # Hz, frequency for resonator readout
-            control_freq = 3.556_520 * 1e9  # Hz
-        else:
-            readout_freq = 6.166_600 * 1e9  # Hz, frequency for resonator readout
-            control_freq = 3.557_866 * 1e9  # Hz
-        control_port = 3
-        jpa_pump_freq = 2 * 6.169e9  # Hz
-        jpa_pump_pwr = 11  # lmx units
-        jpa_bias = +0.437  # V
-    elif WHICH_QUBIT == 2:
-        if WITH_COUPLER:
-            readout_freq = 6.029_130 * 1e9  # Hz, frequency for resonator readout
-            control_freq = 4.093_042 * 1e9  # Hz
-        else:
-            readout_freq = 6.028_400 * 1e9  # Hz, frequency for resonator readout
-            control_freq = 4.093_372 * 1e9  # Hz
-        control_port = 4
-        jpa_pump_freq = 2 * 6.031e9  # Hz
-        jpa_pump_pwr = 9  # lmx units
-        jpa_bias = +0.449  # V
-    else:
-        raise ValueError
-
-    # cavity drive: readout
-    readout_amp = 0.4  # FS
-    readout_duration = 2e-6  # s, duration of the readout pulse
-    readout_port = 1
-
-    # qubit drive: control
-    control_duration = 20e-9  # s, duration of the control pulse
-
-    # cavity readout: sample
-    sample_duration = 4 * 1e-6  # s, duration of the sampling window
-    sample_port = 1
-
-    # Rabi experiment
-    num_averages = 1_000
-    rabi_n = 128  # number of steps when changing duration of control pulse
-    control_amp_arr = np.linspace(0.0, 1.0, rabi_n)  # FS, amplitudes for control pulse
-    wait_delay = 200e-6  # s, delay between repetitions to allow the qubit to decay
-    readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
-
-    jpa_params = {
-        'jpa_bias': jpa_bias,
-        'jpa_bias_port': jpa_bias_port,
-        'jpa_pump_freq': jpa_pump_freq,
-        'jpa_pump_pwr': jpa_pump_pwr,
-    } if USE_JPA else None
-
-    rabi = RabiAmp(
-        readout_freq,
-        control_freq,
-        readout_port,
-        control_port,
-        readout_amp,
-        readout_duration,
-        control_duration,
-        sample_duration,
-        sample_port,
-        control_amp_arr,
-        wait_delay,
-        readout_sample_delay,
-        num_averages,
-        jpa_params,
-    )
-    rabi.run(ADDRESS, PORT, EXT_REF_CLK)
-    fig = rabi.analyze()

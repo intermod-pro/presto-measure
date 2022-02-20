@@ -3,6 +3,7 @@
 Two-tone spectroscopy with Pulsed mode: sweep of pump frequency, with fixed pump power and fixed probe.
 """
 import ast
+
 import h5py
 import numpy as np
 
@@ -106,7 +107,8 @@ class TwoTonePulsed(Base):
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'])
+                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
+                                     self.jpa_params['pump_port'])
                 pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
                 pls.hardware.sleep(1.0, False)
 
@@ -191,6 +193,20 @@ class TwoTonePulsed(Base):
             # Wait for decay
             T += self.wait_delay
 
+            if self.jpa_params is not None:
+                # adjust period to minimize effect of JPA idler
+                idler_freq = self.jpa_params['pump_freq'] - self.readout_freq
+                idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
+                idler_period = 1 / idler_if
+                T_clk = int(round(T * pls.get_clk_f()))
+                idler_period_clk = int(round(idler_period * pls.get_clk_f()))
+                # first make T a multiple of idler period
+                if T_clk % idler_period_clk > 0:
+                    T_clk += idler_period_clk - (T_clk % idler_period_clk)
+                # then make it off by one clock cycle
+                T_clk += 1
+                T = T_clk * pls.get_clk_T()
+
             # **************************
             # *** Run the experiment ***
             # **************************
@@ -205,7 +221,7 @@ class TwoTonePulsed(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0)
+                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
                 pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
 
         return self.save()
@@ -262,26 +278,30 @@ class TwoTonePulsed(Base):
 
         return self
 
-    def analyze(self):
+    def analyze(self, all_plots: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
         assert self.control_freq_arr is not None
 
         import matplotlib.pyplot as plt
+        from scipy.optimize import curve_fit
+        ret_fig = []
 
         idx = np.arange(IDX_LOW, IDX_HIGH)
         t_low = self.t_arr[IDX_LOW]
         t_high = self.t_arr[IDX_HIGH]
 
-        # Plot raw store data for first iteration as a check
-        fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-        ax11, ax12 = ax1
-        ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-        ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-        ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
-        ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
-        ax12.set_xlabel("Time [ns]")
-        fig1.show()
+        if all_plots:
+            # Plot raw store data for first iteration as a check
+            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+            ax11, ax12 = ax1
+            ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+            ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
+            ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
+            ax12.set_xlabel("Time [ns]")
+            fig1.show()
+            ret_fig.append(fig1)
 
         # Analyze
         resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
@@ -292,6 +312,18 @@ class TwoTonePulsed(Base):
         ax21.plot(1e-9 * self.control_freq_arr, np.abs(data))
         ax22.plot(1e-9 * self.control_freq_arr, np.angle(data))
         ax23.plot(1e-9 * self.control_freq_arr, np.real(data))
+        try:
+            data_min = data.real.min()
+            data_max = data.real.max()
+            data_rng = data_max - data_min
+            p0 = [self.control_freq_center, self.control_freq_span / 4, data_rng, data_min]
+            popt, pcov = curve_fit(_gaussian, self.control_freq_arr, data.real,
+                                   p0)
+            ax23.plot(1e-9 * self.control_freq_arr, _gaussian(self.control_freq_arr, *popt), '--')
+            print(f"f0 = {popt[0]} Hz")
+            print(f"sigma = {abs(popt[1])} Hz")
+        except Exception:
+            print("fit failed")
         ax24.plot(1e-9 * self.control_freq_arr, np.imag(data))
 
         ax21.set_ylabel("Amplitude [FS]")
@@ -300,5 +332,13 @@ class TwoTonePulsed(Base):
         ax24.set_ylabel("Q [FS]")
         ax2[-1].set_xlabel("Control frequency [GHz]")
         fig2.show()
+        ret_fig.append(fig2)
 
-        return fig1, fig2
+        return ret_fig
+
+
+def _lorentzian(x, x0, gamma, a, o):
+    return a * (gamma / 2)**2 / ((x - x0)**2 + (gamma / 2)**2) + o
+
+def _gaussian(x, x0, s, a, o):
+    return a * np.exp(-0.5 * ((x - x0) / s)**2) + o

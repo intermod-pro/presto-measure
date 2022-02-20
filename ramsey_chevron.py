@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Measure Ramsey oscillations by changing the delay between two π/2 pulses.
-
-Fit detuning of control drive frequency from qubit, and T2*. The control pulse has a sin^2 envelope, while the readout
-pulse is square.
-
+"""Measure a Ramsey chevron pattern by changing the delay between two π/2 pulses and their frequency.
 """
 import ast
 
@@ -27,11 +23,13 @@ IDX_LOW = 1_500
 IDX_HIGH = 2_000
 
 
-class RamseySingle(Base):
+class RamseyChevron(Base):
     def __init__(
         self,
         readout_freq: float,
-        control_freq: float,
+        control_freq_center: float,
+        control_freq_span: float,
+        control_freq_nr: int,
         readout_amp: float,
         control_amp: float,
         readout_duration: float,
@@ -47,7 +45,9 @@ class RamseySingle(Base):
         jpa_params: dict = None,
     ) -> None:
         self.readout_freq = readout_freq
-        self.control_freq = control_freq
+        self.control_freq_center = control_freq_center
+        self.control_freq_span = control_freq_span
+        self.control_freq_nr = control_freq_nr
         self.readout_amp = readout_amp
         self.control_amp = control_amp
         self.readout_duration = readout_duration
@@ -62,6 +62,7 @@ class RamseySingle(Base):
         self.num_averages = num_averages
         self.jpa_params = jpa_params
 
+        self.control_freq_arr = None  # replaced by run
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
 
@@ -80,6 +81,16 @@ class RamseySingle(Base):
         ) as pls:
             assert pls.hardware is not None
 
+            # figure out frequencies
+            assert self.control_freq_center > (self.control_freq_span / 2)
+            assert self.control_freq_span < pls.get_fs("dac") / 2  # fits in HSB
+            control_if_center = pls.get_fs("dac") / 4  # middle of HSB
+            control_if_start = control_if_center - self.control_freq_span / 2
+            control_if_stop = control_if_center + self.control_freq_span / 2
+            control_if_arr = np.linspace(control_if_start, control_if_stop, self.control_freq_nr)
+            control_nco = self.control_freq_center - control_if_center
+            self.control_freq_arr = control_nco + control_if_arr
+
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -92,7 +103,7 @@ class RamseySingle(Base):
                 sync=False,  # sync in next call
             )
             pls.hardware.configure_mixer(
-                freq=self.control_freq,
+                freq=control_nco,
                 out_ports=self.control_port,
                 sync=True,  # sync here
             )
@@ -118,9 +129,9 @@ class RamseySingle(Base):
             pls.setup_freq_lut(
                 output_ports=self.control_port,
                 group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
+                frequencies=control_if_arr,
+                phases=np.full_like(control_if_arr, 0.0),
+                phases_q=np.full_like(control_if_arr, -np.pi / 2),  # HSB
             )
 
             # Setup lookup tables for amplitudes
@@ -182,8 +193,10 @@ class RamseySingle(Base):
                 pls.output_pulse(T, readout_pulse)
                 pls.store(T + self.readout_sample_delay)
                 T += self.readout_duration
-                # Move to next iteration, waiting for decay
+                # Move to next iteration
                 T += self.wait_delay
+            pls.next_frequency(T, self.control_port)
+            T += self.wait_delay
 
             if self.jpa_params is not None:
                 # adjust period to minimize effect of JPA idler
@@ -204,7 +217,7 @@ class RamseySingle(Base):
             # **************************
             pls.run(
                 period=T,
-                repeat_count=1,
+                repeat_count=self.control_freq_nr,
                 num_averages=self.num_averages,
                 print_time=True,
             )
@@ -220,10 +233,12 @@ class RamseySingle(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'RamseySingle':
+    def load(cls, load_filename: str) -> 'RamseyChevron':
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs['readout_freq']
-            control_freq = h5f.attrs['control_freq']
+            control_freq_center = h5f.attrs['control_freq_center']
+            control_freq_span = h5f.attrs['control_freq_span']
+            control_freq_nr = h5f.attrs['control_freq_nr']
             readout_amp = h5f.attrs['readout_amp']
             control_amp = h5f.attrs['control_amp']
             readout_duration = h5f.attrs['readout_duration']
@@ -239,12 +254,15 @@ class RamseySingle(Base):
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
 
+            control_freq_arr = h5f['control_freq_arr'][()]
             t_arr = h5f['t_arr'][()]
             store_arr = h5f['store_arr'][()]
 
         self = cls(
             readout_freq=readout_freq,
-            control_freq=control_freq,
+            control_freq_center=control_freq_center,
+            control_freq_span=control_freq_span,
+            control_freq_nr=control_freq_nr,
             readout_amp=readout_amp,
             control_amp=control_amp,
             readout_duration=readout_duration,
@@ -259,16 +277,17 @@ class RamseySingle(Base):
             num_averages=num_averages,
             jpa_params=jpa_params,
         )
+        self.control_freq_arr = control_freq_arr
         self.t_arr = t_arr
         self.store_arr = store_arr
 
         return self
 
     def analyze(self, all_plots: bool = False):
-        if self.t_arr is None:
-            raise RuntimeError
-        if self.store_arr is None:
-            raise RuntimeError
+        assert self.t_arr is not None
+        assert self.store_arr is not None
+        assert self.control_freq_arr is not None
+        assert len(self.control_freq_arr) == self.control_freq_nr
 
         import matplotlib.pyplot as plt
 
@@ -290,46 +309,13 @@ class RamseySingle(Base):
             fig1.show()
             ret_fig.append(fig1)
 
-        # Analyze T2
+        # Analyze T1
         resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
+        resp_arr.shape = (self.control_freq_nr, len(self.delay_arr))
         data = rotate_opt(resp_arr)
+        plot_data = data.real
 
-        # Fit data to I quadrature
-        try:
-            popt, perr = _fit_simple(self.delay_arr, np.real(data))
-
-            T2 = popt[2]
-            T2_err = perr[2]
-            print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
-            det = popt[3]
-            det_err = perr[3]
-            print("detuning: {} +- {} Hz".format(det, det_err))
-
-            success = True
-        except Exception as err:
-            print("Unable to fit data!")
-            print(err)
-            success = False
-
-        if all_plots:
-            fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-            ax21, ax22, ax23, ax24 = ax2
-            ax21.plot(1e6 * self.delay_arr, np.abs(data))
-            ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(data)))
-            ax23.plot(1e6 * self.delay_arr, np.real(data))
-            if success:
-                ax23.plot(1e6 * self.delay_arr, _func(self.delay_arr, *popt), '--')
-            ax24.plot(1e6 * self.delay_arr, np.imag(data))
-
-            ax21.set_ylabel("Amplitude [FS]")
-            ax22.set_ylabel("Phase [rad]")
-            ax23.set_ylabel("I [FS]")
-            ax24.set_ylabel("Q [FS]")
-            ax2[-1].set_xlabel("Ramsey delay [us]")
-            fig2.show()
-            ret_fig.append(fig2)
-
-        data_max = np.abs(data.real).max()
+        data_max = np.abs(plot_data).max()
         unit = ""
         mult = 1.0
         if data_max < 1e-6:
@@ -341,15 +327,74 @@ class RamseySingle(Base):
         elif data_max < 1e0:
             unit = "m"
             mult = 1e3
+        plot_data *= mult
+
+        # choose limits for colorbar
+        cutoff = 0.0  # %
+        lowlim = np.percentile(plot_data, cutoff)
+        highlim = np.percentile(plot_data, 100. - cutoff)
+
+        # extent
+        x_min = 1e+6 * self.delay_arr[0]
+        x_max = 1e+6 * self.delay_arr[-1]
+        dx = 1e+6 * (self.delay_arr[1] - self.delay_arr[0])
+        y_min = 1e-9 * self.control_freq_arr[0]
+        y_max = 1e-9 * self.control_freq_arr[-1]
+        dy = 1e-9 * (self.control_freq_arr[1] - self.control_freq_arr[0])
+
+        fig2, ax2 = plt.subplots(tight_layout=True)
+        im = ax2.imshow(
+            plot_data,
+            origin='lower',
+            aspect='auto',
+            interpolation='none',
+            extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+            vmin=lowlim,
+            vmax=highlim,
+        )
+        ax2.set_xlabel("Ramsey delay [μs]")
+        ax2.set_ylabel("Control frequency [GHz]")
+        cb = fig2.colorbar(im)
+        cb.set_label(f"Response I quadrature [{unit:s}FS]")
+        fig2.show()
+        ret_fig.append(fig2)
+
+        fit_freq = np.zeros_like(self.control_freq_arr)
+        for jj in range(self.control_freq_nr):
+            try:
+                res, _err = _fit_simple(self.delay_arr, plot_data[jj])
+                fit_freq[jj] = np.abs(res[3])
+            except Exception:
+                fit_freq[jj] = np.nan
+
+        n_fit = self.control_freq_nr // 4
+        pfit1 = np.polyfit(self.control_freq_arr[:n_fit], fit_freq[:n_fit], 1)
+        pfit2 = np.polyfit(self.control_freq_arr[-n_fit:], fit_freq[-n_fit:], 1)
+        x0 = np.roots(pfit1 - pfit2)[0]
 
         fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(1e6 * self.delay_arr, mult * np.real(data), '.')
-        ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel("Ramsey delay [μs]")
-        if success:
-            ax3.plot(1e6 * self.delay_arr, mult * _func(self.delay_arr, *popt), '--')
-            ax3.set_title(f"T2* = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")
+        ax3.plot(self.control_freq_arr, fit_freq, '.')
+        ax3.set_ylabel("Fitted detuning [Hz]")
+        ax3.set_xlabel("Control frequency [Hz]$]")
         fig3.show()
+        _lims = ax3.axis()
+        ax3.plot(
+            self.control_freq_arr,
+            np.polyval(pfit1, self.control_freq_arr),
+            '--',
+            c='tab:orange',
+        )
+        ax3.plot(
+            self.control_freq_arr,
+            np.polyval(pfit2, self.control_freq_arr),
+            '--',
+            c='tab:green',
+        )
+        ax3.axhline(0.0, ls='--', c='tab:gray')
+        ax3.axvline(x0, ls='--', c='tab:gray')
+        ax3.axis(_lims)
+        fig3.canvas.draw()
+        print(f"Fitted qubit frequency: {x0} Hz")
         ret_fig.append(fig3)
 
         return ret_fig
