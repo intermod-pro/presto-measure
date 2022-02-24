@@ -68,6 +68,10 @@ qubit, and T2*. The control pulse has a sin^2 envelope, while the readout pulse 
 ### `ramsey_chevron`
 Measure a Ramsey chevron pattern by changing the delay between two π/2 pulses and their frequency.
 
+### `excited_sweep`
+Pulsed frequency sweep on the resonator with and without a π/2 control pulse: plot (and fit) resonance curves for
+ground and excited states.
+
 
 
 ## JPA calibration

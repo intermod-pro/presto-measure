@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Measure a Ramsey chevron pattern by changing the delay between two π/2 pulses and their frequency.
-"""
+"""Measure a Ramsey chevron pattern by changing the delay between two π/2 pulses and their frequency."""
 import ast
 
 import h5py
