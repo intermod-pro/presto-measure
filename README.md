@@ -72,6 +72,9 @@ Measure a Ramsey chevron pattern by changing the delay between two π/2 pulses a
 Pulsed frequency sweep on the resonator with and without a π/2 control pulse: plot (and fit) resonance curves for
 ground and excited states.
 
+### `t1`
+Measure the energy-relaxation time T1.
+
 
 
 ## JPA calibration

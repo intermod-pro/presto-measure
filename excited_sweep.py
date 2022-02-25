@@ -270,6 +270,12 @@ class ExcitedSweep(Base):
         assert len(self.readout_if_arr) == self.readout_freq_nr
 
         import matplotlib.pyplot as plt
+        from scipy.optimize import curve_fit
+        try:
+            from resonator_tools import circuit
+            _has_resonator_tools = True
+        except ImportError:
+            _has_resonator_tools = False
 
         ret_fig = []
 
@@ -327,20 +333,52 @@ class ExcitedSweep(Base):
         resp_phase[1, :] -= background
         separation = np.abs(resp_H_arr[1, :] - resp_H_arr[0, :])
 
-        # TODO: fit the results with resonator_tools?
+        p0 = [
+            self.readout_freq_arr[np.argmax(separation)],
+            1 / self.readout_duration,
+            np.max(separation),
+            0.0,
+        ]
+        popt, pcov = curve_fit(_gaussian, self.readout_freq_arr, separation, p0)
 
-        fig2, ax2 = plt.subplots(3, 1, sharex=True, tight_layout=True)
+        print("----------------")
+        if _has_resonator_tools:
+            port_g = circuit.notch_port(self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background))
+            port_e = circuit.notch_port(self.readout_freq_arr, resp_H_arr[1, :] * np.exp(-1j * background))
+            port_g.autofit()
+            port_e.autofit()
+
+            f_g = port_g.fitresults['fr']
+            f_e = port_e.fitresults['fr']
+            chi_hz = (f_e - f_g) / 2
+            print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
+            print(f"ω_e / 2π = {f_e * 1e-9:.6f} GHz")
+            print(f"χ / 2π = {chi_hz * 1e-3:.2f} kHz")
+        print(f"ω_opt / 2π = {popt[0] * 1e-9:.6f} GHz")
+        print("----------------")
+
+        fig2, ax2 = plt.subplots(3, 1, sharex=True, tight_layout=True, figsize=(6.4, 6.4))
         ax21, ax22, ax23 = ax2
 
-        ax21.axvline(1e-9 * self.readout_freq_center, ls='--', c='tab:gray', alpha=0.5)
-        ax22.axvline(1e-9 * self.readout_freq_center, ls='--', c='tab:gray', alpha=0.5)
-        ax23.axvline(1e-9 * self.readout_freq_center, ls='--', c='tab:gray', alpha=0.5)
+        for ax_ in ax2:
+            if _has_resonator_tools:
+                ax_.axvline(1e-9 * f_g, ls='--', c='tab:red', alpha=0.5)
+                ax_.axvline(1e-9 * f_e, ls='--', c='tab:purple', alpha=0.5)
+            ax_.axvline(1e-9 * popt[0], ls='--', c='tab:brown', alpha=0.5)
 
-        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], label='|g>')
-        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], label='|e>')
-        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :])
-        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[1, :])
+        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="tab:blue", label='|g>')
+        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], c="tab:orange", label='|e>')
+        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="tab:blue")
+        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[1, :], c="tab:orange")
         ax23.plot(1e-9 * self.readout_freq_arr, 1e3 * separation, c='tab:green', label='||e> - |g>|')
+
+        if _has_resonator_tools:
+            ax21.plot(1e-9 * port_g.f_data, 20 * np.log10(np.abs(port_g.z_data_sim)), c="tab:red", ls='--')
+            ax21.plot(1e-9 * port_e.f_data, 20 * np.log10(np.abs(port_e.z_data_sim)), c="tab:purple", ls='--')
+            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="tab:red", ls='--')
+            ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="tab:purple", ls='--')
+
+        ax23.plot(1e-9 * self.readout_freq_arr, 1e3 * _gaussian(self.readout_freq_arr, *popt), c='tab:brown', ls='--')
 
         ax21.set_ylabel("Amplitude [dBFS]")
         ax22.set_ylabel("Phase [rad]")
@@ -352,3 +390,7 @@ class ExcitedSweep(Base):
         ret_fig.append(fig2)
 
         return ret_fig
+
+
+def _gaussian(x, x0, s, a, o):
+    return a * np.exp(-0.5 * ((x - x0) / s)**2) + o
