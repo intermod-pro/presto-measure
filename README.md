@@ -75,6 +75,9 @@ ground and excited states.
 ### `t1`
 Measure the energy-relaxation time T1.
 
+### `ramsey_echo`
+Measure the decoherence time T2 with a Ramsey echo experiment.
+
 
 
 ## JPA calibration

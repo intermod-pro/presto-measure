@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Measure the energy-relaxation time T1."""
+"""Measure the decoherence time T2 with a Ramsey echo experiment."""
 import ast
 
 import h5py
@@ -22,13 +22,14 @@ IDX_LOW = 1_500
 IDX_HIGH = 2_000
 
 
-class T1(Base):
+class RamseyEcho(Base):
     def __init__(
         self,
         readout_freq: float,
         control_freq: float,
         readout_amp: float,
-        control_amp: float,
+        control_amp_90: float,
+        control_amp_180: float,
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
@@ -46,7 +47,8 @@ class T1(Base):
         self.readout_freq = readout_freq
         self.control_freq = control_freq
         self.readout_amp = readout_amp
-        self.control_amp = control_amp
+        self.control_amp_90 = control_amp_90
+        self.control_amp_180 = control_amp_180
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
@@ -58,12 +60,11 @@ class T1(Base):
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
         self.num_pulses = num_pulses
+        self.jpa_params = jpa_params
         self.drag = drag
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
-
-        self.jpa_params = jpa_params
 
     def run(
         self,
@@ -132,7 +133,8 @@ class T1(Base):
             pls.setup_scale_lut(
                 output_ports=self.control_port,
                 group=0,
-                scales=self.control_amp,
+                # scales=control_amp,
+                scales=1.0,
             )
 
             # Setup readout and control pulses
@@ -151,11 +153,18 @@ class T1(Base):
             control_ns = int(round(self.control_duration *
                                    pls.get_fs("dac")))  # number of samples in the control template
             control_envelope = sin2(control_ns, drag=self.drag)
-            control_pulse = pls.setup_template(
+            control_pulse_90 = pls.setup_template(
                 output_port=self.control_port,
                 group=0,
-                template=control_envelope,
-                template_q=control_envelope if self.drag == 0.0 else None,
+                template=self.control_amp_90 * control_envelope,
+                template_q=self.control_amp_90 * control_envelope if self.drag == 0.0 else None,
+                envelope=True,
+            )
+            control_pulse_180 = pls.setup_template(
+                output_port=self.control_port,
+                group=0,
+                template=self.control_amp_180 * control_envelope,
+                template_q=self.control_amp_180 * control_envelope if self.drag == 0.0 else None,
                 envelope=True,
             )
 
@@ -168,12 +177,20 @@ class T1(Base):
             # ******************************
             T = 0.0  # s, start at time zero ...
             for delay in self.delay_arr:
-                # pi pulse
+                # first pi/2 pulse
                 pls.reset_phase(T, self.control_port)
-                pls.output_pulse(T, control_pulse)
+                pls.output_pulse(T, control_pulse_90)
                 T += self.control_duration
-                # increasing delay
-                T += delay
+                # wait first half
+                T += delay / 2
+                # pi pulse, echo
+                pls.output_pulse(T, control_pulse_180)
+                T += self.control_duration
+                # wait second half
+                T += delay / 2
+                # second pi/2 pulse
+                pls.output_pulse(T, control_pulse_90)
+                T += self.control_duration
                 # Readout
                 pls.reset_phase(T, self.readout_port)
                 pls.output_pulse(T, readout_pulse)
@@ -222,7 +239,8 @@ class T1(Base):
             readout_freq = h5f.attrs['readout_freq']
             control_freq = h5f.attrs['control_freq']
             readout_amp = h5f.attrs['readout_amp']
-            control_amp = h5f.attrs['control_amp']
+            control_amp_90 = h5f.attrs['control_amp_90']
+            control_amp_180 = h5f.attrs['control_amp_180']
             readout_duration = h5f.attrs['readout_duration']
             control_duration = h5f.attrs['control_duration']
             sample_duration = h5f.attrs['sample_duration']
@@ -245,7 +263,8 @@ class T1(Base):
             readout_freq=readout_freq,
             control_freq=control_freq,
             readout_amp=readout_amp,
-            control_amp=control_amp,
+            control_amp_90=control_amp_90,
+            control_amp_180=control_amp_180,
             readout_duration=readout_duration,
             control_duration=control_duration,
             sample_duration=sample_duration,
@@ -291,36 +310,42 @@ class T1(Base):
             fig1.show()
             ret_fig.append(fig1)
 
-        # Analyze T1
+        # Analyze T2
         resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
-        resp_arr = rotate_opt(resp_arr)
+        data = rotate_opt(resp_arr)
 
-        # Fit data
-        popt, perr = _fit_simple(self.delay_arr, np.real(resp_arr))
+        # Fit data to I quadrature
+        try:
+            popt, perr = _fit_simple(self.delay_arr, np.real(data))
 
-        T1 = popt[0]
-        T1_err = perr[0]
-        print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+            T2 = popt[0]
+            T2_err = perr[0]
+            print(f"T2_echo time: {1e6*T2} ± {1e6*T2_err} μs")
+
+            success = True
+        except Exception:
+            print("Unable to fit data!")
+            success = False
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
             ax21, ax22, ax23, ax24 = ax2
-            ax21.plot(1e6 * self.delay_arr, np.abs(resp_arr))
-            ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(resp_arr)))
-            ax23.plot(1e6 * self.delay_arr, np.real(resp_arr))
-            ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), '--')
-            ax24.plot(1e6 * self.delay_arr, np.imag(resp_arr))
+            ax21.plot(1e6 * self.delay_arr, np.abs(data))
+            ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(data)))
+            ax23.plot(1e6 * self.delay_arr, np.real(data))
+            if success:
+                ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), '--')
+            ax24.plot(1e6 * self.delay_arr, np.imag(data))
 
             ax21.set_ylabel("Amplitude [FS]")
             ax22.set_ylabel("Phase [rad]")
             ax23.set_ylabel("I [FS]")
             ax24.set_ylabel("Q [FS]")
-            ax2[-1].set_xlabel("Control-readout delay [μs]")
+            ax2[-1].set_xlabel("Ramsey delay [us]")
             fig2.show()
             ret_fig.append(fig2)
 
-        # bigger plot just for I quadrature
-        data_max = np.abs(resp_arr.real).max()
+        data_max = np.abs(data.real).max()
         unit = ""
         mult = 1.0
         if data_max < 1e-6:
@@ -334,11 +359,12 @@ class T1(Base):
             mult = 1e3
 
         fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(1e6 * self.delay_arr, mult * np.real(resp_arr), '.')
-        ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), '--')
+        ax3.plot(1e6 * self.delay_arr, mult * np.real(data), '.')
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel(r"Control-readout delay [μs]")
-        ax3.set_title("T1 = {:s} μs".format(format_precision(1e6 * T1, 1e6 * T1_err)))
+        ax3.set_xlabel("Ramsey delay [μs]")
+        if success:
+            ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), '--')
+            ax3.set_title("T2 echo = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))
         fig3.show()
         ret_fig.append(fig3)
 
@@ -346,16 +372,16 @@ class T1(Base):
 
 
 def _decay(t, *p):
-    T1, xe, xg = p
-    return xg + (xe - xg) * np.exp(-t / T1)
+    T, xe, xg = p
+    return xg + (xe - xg) * np.exp(-t / T)
 
 
 def _fit_simple(t, x):
     from scipy.optimize import curve_fit
 
-    T1 = 0.5 * (t[-1] - t[0])
+    T = 0.5 * (t[-1] - t[0])
     xe, xg = x[0], x[-1]
-    p0 = (T1, xe, xg)
+    p0 = (T, xe, xg)
     popt, pcov = curve_fit(_decay, t, x, p0)
     perr = np.sqrt(np.diag(pcov))
     return popt, perr
