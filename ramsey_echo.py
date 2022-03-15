@@ -40,7 +40,6 @@ class RamseyEcho(Base):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        num_pulses: int = 1,
         jpa_params: dict = None,
         drag: float = 0.0,
     ) -> None:
@@ -59,7 +58,6 @@ class RamseyEcho(Base):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.num_pulses = num_pulses
         self.jpa_params = jpa_params
         self.drag = drag
 
@@ -234,7 +232,7 @@ class RamseyEcho(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'T1':
+    def load(cls, load_filename: str) -> 'RamseyEcho':
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs['readout_freq']
             control_freq = h5f.attrs['control_freq']
@@ -251,7 +249,6 @@ class RamseyEcho(Base):
             wait_delay = h5f.attrs['wait_delay']
             readout_sample_delay = h5f.attrs['readout_sample_delay']
             num_averages = h5f.attrs['num_averages']
-            num_pulses = h5f.attrs['num_pulses']
             drag = h5f.attrs['drag']
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
@@ -275,7 +272,6 @@ class RamseyEcho(Base):
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
-            num_pulses=num_pulses,
             jpa_params=jpa_params,
             drag=drag,
         )
