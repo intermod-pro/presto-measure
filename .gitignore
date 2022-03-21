@@ -3,6 +3,7 @@
 ##############
 
 main.py
+*.~undo-tree~
 
 #Measurement data
 data
