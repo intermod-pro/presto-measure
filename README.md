@@ -78,6 +78,10 @@ Measure the energy-relaxation time T1.
 ### `ramsey_echo`
 Measure the decoherence time T2 with a Ramsey echo experiment.
 
+### `ac_stark_shift`
+Measure AC-Stark shift and measurement-induced dephasing by performing a Ramsey measurement while driving the resonator
+with variable power.
+
 
 
 ## JPA calibration
