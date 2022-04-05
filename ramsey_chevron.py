@@ -42,6 +42,7 @@ class RamseyChevron(Base):
         readout_sample_delay: float,
         num_averages: int,
         jpa_params: dict = None,
+        drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq_center = control_freq_center
@@ -60,6 +61,7 @@ class RamseyChevron(Base):
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
         self.jpa_params = jpa_params
+        self.drag = drag
 
         self.control_freq_arr = None  # replaced by run
         self.t_arr = None  # replaced by run
@@ -142,7 +144,7 @@ class RamseyChevron(Base):
             pls.setup_scale_lut(
                 output_ports=self.control_port,
                 group=0,
-                scales=self.control_amp,
+                scales=1.0,  # set amplitude in template
             )
 
             # Setup readout and control pulses
@@ -158,14 +160,26 @@ class RamseyChevron(Base):
                 rise_time=0e-9,
                 fall_time=0e-9,
             )
-            control_ns = int(round(self.control_duration *
-                                   pls.get_fs("dac")))  # number of samples in the control template
-            control_envelope = sin2(control_ns)
+            # number of samples in the control template
+            control_ns = int(round(self.control_duration * pls.get_fs("dac")))
+            control_envelope = self.control_amp * sin2(control_ns, drag=self.drag)
+            print(control_envelope)
+
+            # we loose 3 dB by using a nonzero IF
+            # so multiply the envelope by sqrt(2)
+            if self.drag == 0.0:
+                control_envelope *= np.sqrt(2)
+            else:
+                # for DRAG we also rotate by 45 deg
+                # so that we don't saturate the output
+                control_envelope *= np.sqrt(2) * np.exp(1j * np.pi / 4)
+                print(control_envelope)
+
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
                 group=0,
                 template=control_envelope,
-                template_q=control_envelope,
+                template_q=control_envelope if self.drag == 0.0 else None,
                 envelope=True,
             )
 
@@ -257,6 +271,11 @@ class RamseyChevron(Base):
             t_arr = h5f['t_arr'][()]
             store_arr = h5f['store_arr'][()]
 
+            try:
+                drag = h5f.attrs['drag']
+            except KeyError:
+                drag = 0.0
+
         self = cls(
             readout_freq=readout_freq,
             control_freq_center=control_freq_center,
@@ -275,6 +294,7 @@ class RamseyChevron(Base):
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
             jpa_params=jpa_params,
+            drag=drag,
         )
         self.control_freq_arr = control_freq_arr
         self.t_arr = t_arr

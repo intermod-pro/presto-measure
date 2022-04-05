@@ -43,6 +43,7 @@ class TwoTonePulsed(Base):
         readout_sample_delay: float,
         num_averages: int,
         jpa_params: dict = None,
+        drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq_center = control_freq_center
@@ -59,6 +60,7 @@ class TwoTonePulsed(Base):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
+        self.drag = drag
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
@@ -161,12 +163,12 @@ class TwoTonePulsed(Base):
             # and use setup_template to use the user-defined envelope
             control_ns = int(round(self.control_duration *
                                    pls.get_fs("dac")))  # number of samples in the control template
-            control_envelope = sin2(control_ns)
+            control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
                 group=0,
                 template=control_envelope,
-                template_q=control_envelope,
+                template_q=control_envelope if self.drag == 0.0 else None,
                 envelope=True,
             )
 
@@ -254,6 +256,11 @@ class TwoTonePulsed(Base):
             store_arr = h5f['store_arr'][()]
             control_freq_arr = h5f['control_freq_arr'][()]
 
+            try:
+                drag = h5f.attrs['drag']
+            except KeyError:
+                drag = 0.0
+
         self = cls(
             readout_freq=readout_freq,
             control_freq_center=control_freq_center,
@@ -271,6 +278,7 @@ class TwoTonePulsed(Base):
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
             jpa_params=jpa_params,
+            drag=drag,
         )
         self.t_arr = t_arr
         self.store_arr = store_arr
