@@ -163,7 +163,6 @@ class RamseyChevron(Base):
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
             control_envelope = self.control_amp * sin2(control_ns, drag=self.drag)
-            print(control_envelope)
 
             # we loose 3 dB by using a nonzero IF
             # so multiply the envelope by sqrt(2)
@@ -173,7 +172,6 @@ class RamseyChevron(Base):
                 # for DRAG we also rotate by 45 deg
                 # so that we don't saturate the output
                 control_envelope *= np.sqrt(2) * np.exp(1j * np.pi / 4)
-                print(control_envelope)
 
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
