@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Measure the decoherence time T2 with a Ramsey echo experiment."""
+"""Pulsed readout starting from ground and excited state.
+
+Acquire reference templates for template matching.
+"""
 import ast
-from typing import Optional
 
 import h5py
 import numpy as np
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.pulsed import MAX_TEMPLATE_LEN
+from presto.utils import sin2, to_pm_pi
 
-from _base import Base, project
+from _base import Base
 
 DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
@@ -23,54 +26,50 @@ IDX_LOW = 1_500
 IDX_HIGH = 2_000
 
 
-class RamseyEcho(Base):
+class ReadoutRef(Base):
     def __init__(
         self,
         readout_freq: float,
         control_freq: float,
         readout_amp: float,
-        control_amp_90: float,
-        control_amp_180: float,
+        control_amp: float,
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: list[float],
         readout_port: int,
         control_port: int,
         sample_port: int,
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
         self.readout_amp = readout_amp
-        self.control_amp_90 = control_amp_90
-        self.control_amp_180 = control_amp_180
+        self.control_amp = control_amp
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
-        self.delay_arr = np.atleast_1d(delay_arr).astype(np.float64)
         self.readout_port = readout_port
         self.control_port = control_port
         self.sample_port = sample_port
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.jpa_params = jpa_params
         self.drag = drag
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
+
+        self.jpa_params = jpa_params
 
     def run(
         self,
         presto_address: str,
         presto_port: int = None,
         ext_ref_clk: bool = False,
-        save: bool = True,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
@@ -79,8 +78,6 @@ class RamseyEcho(Base):
                 ext_ref_clk=ext_ref_clk,
                 **CONVERTER_CONFIGURATION,
         ) as pls:
-            assert pls.hardware is not None
-
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -108,7 +105,6 @@ class RamseyEcho(Base):
             # ************************************
 
             # Setup lookup tables for frequencies
-            # we only need to use carrier 1
             pls.setup_freq_lut(
                 output_ports=self.readout_port,
                 group=0,
@@ -133,8 +129,7 @@ class RamseyEcho(Base):
             pls.setup_scale_lut(
                 output_ports=self.control_port,
                 group=0,
-                # scales=control_amp,
-                scales=1.0,
+                scales=self.control_amp,
             )
 
             # Setup readout and control pulses
@@ -150,21 +145,16 @@ class RamseyEcho(Base):
                 rise_time=0e-9,
                 fall_time=0e-9,
             )
+            # For the control pulse we create a sine-squared envelope,
+            # and use setup_template to use the user-defined envelope
             control_ns = int(round(self.control_duration *
                                    pls.get_fs("dac")))  # number of samples in the control template
             control_envelope = sin2(control_ns, drag=self.drag)
-            control_pulse_90 = pls.setup_template(
+            control_pulse = pls.setup_template(
                 output_port=self.control_port,
                 group=0,
-                template=self.control_amp_90 * control_envelope,
-                template_q=self.control_amp_90 * control_envelope if self.drag == 0.0 else None,
-                envelope=True,
-            )
-            control_pulse_180 = pls.setup_template(
-                output_port=self.control_port,
-                group=0,
-                template=self.control_amp_180 * control_envelope,
-                template_q=self.control_amp_180 * control_envelope if self.drag == 0.0 else None,
+                template=control_envelope,
+                template_q=control_envelope if self.drag == 0.0 else None,
                 envelope=True,
             )
 
@@ -176,27 +166,19 @@ class RamseyEcho(Base):
             # *** Program pulse sequence ***
             # ******************************
             T = 0.0  # s, start at time zero ...
-            for delay in self.delay_arr:
-                # first pi/2 pulse
+            for ii in range(2):
                 pls.reset_phase(T, self.control_port)
-                pls.output_pulse(T, control_pulse_90)
+                if ii > 0:
+                    # pi pulse
+                    pls.output_pulse(T, control_pulse)
+                # Readout pulse starts after control pulse
                 T += self.control_duration
-                # wait first half
-                T += delay / 2
-                # pi pulse, echo
-                pls.output_pulse(T, control_pulse_180)
-                T += self.control_duration
-                # wait second half
-                T += delay / 2
-                # second pi/2 pulse
-                pls.output_pulse(T, control_pulse_90)
-                T += self.control_duration
-                # Readout
                 pls.reset_phase(T, self.readout_port)
                 pls.output_pulse(T, readout_pulse)
+                # Sampling window
                 pls.store(T + self.readout_sample_delay)
+                # Move to next iteration
                 T += self.readout_duration
-                # Wait for decay
                 T += self.wait_delay
 
             if self.jpa_params is not None:
@@ -228,26 +210,21 @@ class RamseyEcho(Base):
                 pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
                 pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
 
-        if save:
-            return self.save()
-        else:
-            return ""
+        return self.save()
 
     def save(self, save_filename: str = None) -> str:
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'RamseyEcho':
+    def load(cls, load_filename: str) -> 'ReadoutRef':
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs['readout_freq']
             control_freq = h5f.attrs['control_freq']
             readout_amp = h5f.attrs['readout_amp']
-            control_amp_90 = h5f.attrs['control_amp_90']
-            control_amp_180 = h5f.attrs['control_amp_180']
+            control_amp = h5f.attrs['control_amp']
             readout_duration = h5f.attrs['readout_duration']
             control_duration = h5f.attrs['control_duration']
             sample_duration = h5f.attrs['sample_duration']
-            delay_arr = h5f['delay_arr'][()]
             readout_port = h5f.attrs['readout_port']
             control_port = h5f.attrs['control_port']
             sample_port = h5f.attrs['sample_port']
@@ -265,12 +242,10 @@ class RamseyEcho(Base):
             readout_freq=readout_freq,
             control_freq=control_freq,
             readout_amp=readout_amp,
-            control_amp_90=control_amp_90,
-            control_amp_180=control_amp_180,
+            control_amp=control_amp,
             readout_duration=readout_duration,
             control_duration=control_duration,
             sample_duration=sample_duration,
-            delay_arr=delay_arr,
             readout_port=readout_port,
             control_port=control_port,
             sample_port=sample_port,
@@ -285,27 +260,7 @@ class RamseyEcho(Base):
 
         return self
 
-    def analyze_batch(self, reference_templates: Optional[tuple] = None):
-        assert self.t_arr is not None
-        assert self.store_arr is not None
-
-        if reference_templates is None:
-            idx = np.arange(IDX_LOW, IDX_HIGH)
-            resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
-            data = np.real(rotate_opt(resp_arr))
-        else:
-            resp_arr = self.store_arr[:, 0, :]
-            data = project(resp_arr, reference_templates)
-
-        try:
-            popt, perr = _fit_simple(self.delay_arr, data)
-        except Exception as err:
-            print(f"unable to fit T2: {err}")
-            popt, perr = None, None
-
-        return data, (popt, perr)
-
-    def analyze(self, all_plots: bool = False):
+    def analyze(self, rotate: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
 
@@ -313,58 +268,61 @@ class RamseyEcho(Base):
 
         ret_fig = []
 
-        idx = np.arange(IDX_LOW, IDX_HIGH)
-        t_low = self.t_arr[IDX_LOW]
-        t_high = self.t_arr[IDX_HIGH]
+        nr_samples = len(self.t_arr)
 
-        if all_plots:
-            # Plot raw store data for first iteration as a check
-            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-            ax11, ax12 = ax1
-            ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
-            ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
-            ax12.set_xlabel("Time [ns]")
-            fig1.show()
-            ret_fig.append(fig1)
+        trace_g = self.store_arr[0, 0, :]
+        trace_e = self.store_arr[1, 0, :]
+        if rotate:
+            trace_g, trace_e = _rotate_opt(trace_g, trace_e)
 
-        # Analyze T2
-        resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
-        data = rotate_opt(resp_arr)
+        distance = np.abs(trace_e - trace_g)
+        match_len = MAX_TEMPLATE_LEN // 2  # I and Q
 
-        # Fit data to I quadrature
-        try:
-            popt, perr = _fit_simple(self.delay_arr, np.real(data))
+        max_idx = 0
+        max_dist = 0.0
+        idx = -2
+        while idx + 2 + match_len <= nr_samples:
+            idx += 2  # next clock cycle
+            dist = np.sum(distance[idx:idx + match_len])
+            if dist > max_dist:
+                max_dist = dist
+                max_idx = idx
 
-            T2 = popt[0]
-            T2_err = perr[0]
-            print(f"T2_echo time: {1e6*T2} ± {1e6*T2_err} μs")
+        template_g = trace_g[max_idx:max_idx + match_len]
+        template_e = trace_e[max_idx:max_idx + match_len]
+        match_t_in_store = self.t_arr[max_idx]
+        print(f"Match starts at {1e9 * match_t_in_store:.0f} ns in store")
+        # print(f"Saving templates back into: {load_filename}")
+        # with h5py.File(load_filename, "r+") as h5f:
+        #     h5f.attrs["match_t_in_store"] = match_t_in_store
+        #     try:
+        #         h5f.create_dataset("template_g", data=template_g)
+        #         h5f.create_dataset("template_e", data=template_e)
+        #     except OSError:
+        #         print("Warning: could not save templates, already there? Skipping...")
+        #         pass
 
-            success = True
-        except Exception:
-            print("Unable to fit data!")
-            success = False
+        fig1, ax1 = plt.subplots(4, 1, sharex=True, tight_layout=True)
+        for ax_ in ax1:
+            ax_.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
+        ax1[0].plot(1e9 * self.t_arr, np.abs(trace_g), label="|g>")
+        ax1[0].plot(1e9 * self.t_arr, np.abs(trace_e), label="|e>")
+        ax1[1].plot(1e9 * self.t_arr, np.angle(trace_g))
+        ax1[1].plot(1e9 * self.t_arr, np.angle(trace_e))
+        ax1[2].plot(1e9 * self.t_arr, np.real(trace_g))
+        ax1[2].plot(1e9 * self.t_arr, np.real(trace_e))
+        ax1[3].plot(1e9 * self.t_arr, np.imag(trace_g))
+        ax1[3].plot(1e9 * self.t_arr, np.imag(trace_e))
+        ax1[-1].set_xlabel("Time [ns]")
+        ax1[0].set_ylabel("A [FS]")
+        ax1[1].set_ylabel("φ [rad]")
+        ax1[2].set_ylabel("I [FS]")
+        ax1[3].set_ylabel("Q [FS]")
+        ax1[0].legend()
+        fig1.show()
+        ret_fig.append(fig1)
 
-        if all_plots:
-            fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-            ax21, ax22, ax23, ax24 = ax2
-            ax21.plot(1e6 * self.delay_arr, np.abs(data))
-            ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(data)))
-            ax23.plot(1e6 * self.delay_arr, np.real(data))
-            if success:
-                ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), '--')
-            ax24.plot(1e6 * self.delay_arr, np.imag(data))
-
-            ax21.set_ylabel("Amplitude [FS]")
-            ax22.set_ylabel("Phase [rad]")
-            ax23.set_ylabel("I [FS]")
-            ax24.set_ylabel("Q [FS]")
-            ax2[-1].set_xlabel("Ramsey delay [us]")
-            fig2.show()
-            ret_fig.append(fig2)
-
-        data_max = np.abs(data.real).max()
+        data_max = distance.max()
         unit = ""
         mult = 1.0
         if data_max < 1e-6:
@@ -377,30 +335,49 @@ class RamseyEcho(Base):
             unit = "m"
             mult = 1e3
 
-        fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(1e6 * self.delay_arr, mult * np.real(data), '.')
-        ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel("Ramsey delay [μs]")
-        if success:
-            ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), '--')
-            ax3.set_title("T2 echo = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))
-        fig3.show()
-        ret_fig.append(fig3)
+        fig2, ax2 = plt.subplots(tight_layout=True)
+        ax2.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
+        ax2.plot(1e9 * self.t_arr, mult * distance)
+        ax2.set_xlabel("Time [ns]")
+        ax2.set_ylabel(f"Distance [{unit}FS]")
+        ax2.set_title(r"$d = \left\Vert\left|e\right> - \left|g\right>\right\Vert$")
+        fig2.show()
+        ret_fig.append(fig2)
 
-        return ret_fig
-
-
-def _decay(t, *p):
-    T, xe, xg = p
-    return xg + (xe - xg) * np.exp(-t / T)
+        return ret_fig, (trace_g, trace_e)
 
 
-def _fit_simple(t, x):
-    from scipy.optimize import curve_fit
+def _rotate_opt(trace_g, trace_e):
+    data = trace_e - trace_g  # complex distance
 
-    T = 0.5 * (t[-1] - t[0])
-    xe, xg = x[0], x[-1]
-    p0 = (T, xe, xg)
-    popt, pcov = curve_fit(_decay, t, x, p0)
-    perr = np.sqrt(np.diag(pcov))
-    return popt, perr
+    # calculate the mean of data.imag**2 in steps of 1 deg
+    N = 360
+    _mean = np.zeros(N)
+    for ii in range(N):
+        _data = data * np.exp(1j * 2 * np.pi / N * ii)
+        _mean[ii] = np.mean(_data.imag**2)
+
+    # the mean goes like cos(x)**2
+    # FFT and find the phase at frequency "2"
+    fft = np.fft.rfft(_mean) / N
+    # first solution
+    x_fft1 = -np.angle(fft[2])  # compensate for measured phase
+    x_fft1 -= np.pi  # we want to be at the zero of cos(2x)
+    x_fft1 /= 2  # move from frequency "2" to "1"
+    # there's a second solution np.pi away (a minus sign)
+    x_fft2 = x_fft1 + np.pi
+
+    # convert to +/- interval
+    x_fft1 = to_pm_pi(x_fft1)
+    x_fft2 = to_pm_pi(x_fft2)
+    # choose the closest to zero
+    if np.abs(x_fft1) < np.abs(x_fft2):
+        x_fft = x_fft1
+    else:
+        x_fft = x_fft2
+
+    # rotate the data and return a copy
+    trace_g = trace_g * np.exp(1j * x_fft)
+    trace_e = trace_e * np.exp(1j * x_fft)
+
+    return trace_g, trace_e

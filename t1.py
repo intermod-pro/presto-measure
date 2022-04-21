@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
 import ast
+from typing import Optional
 
 import h5py
 import numpy as np
@@ -9,7 +10,7 @@ from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import format_precision, rotate_opt, sin2
 
-from _base import Base
+from _base import Base, project
 
 DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
@@ -39,8 +40,7 @@ class T1(Base):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        num_pulses: int = 1,
-        jpa_params: dict = None,
+        jpa_params: Optional[dict] = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -57,7 +57,6 @@ class T1(Base):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.num_pulses = num_pulses
         self.drag = drag
 
         self.t_arr = None  # replaced by run
@@ -70,6 +69,7 @@ class T1(Base):
         presto_address: str,
         presto_port: int = None,
         ext_ref_clk: bool = False,
+        save: bool = True,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
@@ -211,7 +211,10 @@ class T1(Base):
                 pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
                 pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
 
-        return self.save()
+        if save:
+            return self.save()
+        else:
+            return ""
 
     def save(self, save_filename: str = None) -> str:
         return super().save(__file__, save_filename=save_filename)
@@ -233,7 +236,6 @@ class T1(Base):
             wait_delay = h5f.attrs['wait_delay']
             readout_sample_delay = h5f.attrs['readout_sample_delay']
             num_averages = h5f.attrs['num_averages']
-            num_pulses = h5f.attrs['num_pulses']
             drag = h5f.attrs['drag']
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
@@ -256,7 +258,6 @@ class T1(Base):
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
-            num_pulses=num_pulses,
             jpa_params=jpa_params,
             drag=drag,
         )
@@ -265,11 +266,29 @@ class T1(Base):
 
         return self
 
+    def analyze_batch(self, reference_templates: Optional[tuple] = None):
+        assert self.t_arr is not None
+        assert self.store_arr is not None
+
+        if reference_templates is None:
+            idx = np.arange(IDX_LOW, IDX_HIGH)
+            resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
+            data = np.real(rotate_opt(resp_arr))
+        else:
+            resp_arr = self.store_arr[:, 0, :]
+            data = project(resp_arr, reference_templates)
+
+        try:
+            popt, perr = _fit_simple(self.delay_arr, data)
+        except Exception as err:
+            print(f"unable to fit T1: {err}")
+            popt, perr = None, None
+
+        return data, (popt, perr)
+
     def analyze(self, all_plots: bool = False):
-        if self.t_arr is None:
-            raise RuntimeError
-        if self.store_arr is None:
-            raise RuntimeError
+        assert self.t_arr is not None
+        assert self.store_arr is not None
 
         import matplotlib.pyplot as plt
 
