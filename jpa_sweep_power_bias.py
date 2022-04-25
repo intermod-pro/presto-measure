@@ -2,6 +2,8 @@
 """
 3D sweep of pump power, DC bias and frequency of probe, to see where we get gain.
 """
+from typing import List
+
 import h5py
 import numpy as np
 
@@ -28,8 +30,8 @@ class JpaSweepPowerBias(Base):
         df: float,
         num_averages: int,
         amp: float,
-        bias_arr: list[float],
-        pump_pwr_arr: list[int],
+        bias_arr: List[float],
+        pump_pwr_arr: List[int],
         output_port: int,
         input_port: int,
         bias_port: int,

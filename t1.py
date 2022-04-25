@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
 import ast
-from typing import Optional
+from typing import List, Optional
 
 import h5py
 import numpy as np
@@ -33,7 +33,7 @@ class T1(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: list[float],
+        delay_arr: List[float],
         readout_port: int,
         control_port: int,
         sample_port: int,

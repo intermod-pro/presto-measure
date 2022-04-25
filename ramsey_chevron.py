@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Measure a Ramsey chevron pattern by changing the delay between two π/2 pulses and their frequency."""
 import ast
+from typing import List
 
 import h5py
 import numpy as np
@@ -34,7 +35,7 @@ class RamseyChevron(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: list[float],
+        delay_arr: List[float],
         readout_port: int,
         control_port: int,
         sample_port: int,

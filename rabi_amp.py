@@ -6,6 +6,7 @@ The control pulse has a sin^2 envelope, while the readout pulse is square.
 """
 import ast
 import math
+from typing import List, Tuple
 
 import h5py
 import numpy as np
@@ -33,7 +34,7 @@ class RabiAmp(Base):
         readout_freq: float,
         control_freq: float,
         readout_amp: float,
-        control_amp_arr: list[float],
+        control_amp_arr: List[float],
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
@@ -365,7 +366,7 @@ def _func(t, offset, amplitude, T2, period, phase):
     return offset + amplitude * np.exp(-t / T2) * np.cos(math.tau * frequency * t + phase)
 
 
-def _fit_period(x: list[float], y: list[float]) -> tuple[list[float], list[float]]:
+def _fit_period(x: List[float], y: List[float]) -> Tuple[List[float], List[float]]:
     from scipy.optimize import curve_fit
 
     pkpk = np.max(y) - np.min(y)

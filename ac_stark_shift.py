@@ -4,6 +4,7 @@
 Measure Ramsey oscillations while driving the resonator with variable power.
 """
 import ast
+from typing import List
 
 import h5py
 import numpy as np
@@ -36,8 +37,8 @@ class AcStarkShift(Base):
         control_duration: float,
         sample_duration: float,
         ringup_duration: float,
-        delay_arr: list[float],
-        ringup_amp_arr: list[float],
+        delay_arr: List[float],
+        ringup_amp_arr: List[float],
         readout_port: int,
         control_port: int,
         sample_port: int,

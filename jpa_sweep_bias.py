@@ -2,6 +2,8 @@
 """
 2D sweep of DC bias and frequency of probe to find the modulation curve of the JPA.
 """
+from typing import List
+
 import h5py
 import numpy as np
 
@@ -28,7 +30,7 @@ class JpaSweepBias(Base):
         df: float,
         num_averages: int,
         amp: float,
-        bias_arr: list[float],
+        bias_arr: List[float],
         output_port: int,
         input_port: int,
         bias_port: int,

@@ -5,7 +5,7 @@ import os
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 import signal
 import time
-from typing import Optional
+from typing import List, Optional
 
 import h5py
 from matplotlib import _pylab_helpers
@@ -33,7 +33,7 @@ class CycleTs(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: list[float],
+        delay_arr: List[float],
         readout_port: int,
         control_port: int,
         sample_port: int,
@@ -42,8 +42,8 @@ class CycleTs(Base):
         num_averages: int,
         jpa_params: Optional[dict] = None,
         drag: float = 0.0,
-        ref_g: Optional[list[complex]] = None,
-        ref_e: Optional[list[complex]] = None,
+        ref_g: Optional[List[complex]] = None,
+        ref_e: Optional[List[complex]] = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq

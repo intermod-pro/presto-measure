@@ -2,6 +2,8 @@
 """
 Two-tone spectroscopy in Lockin mode: 2D sweep of pump power and frequency, with fixed probe.
 """
+from typing import List
+
 import h5py
 import numpy as np
 
@@ -28,7 +30,7 @@ class TwoTonePower(Base):
         control_freq_span: float,
         df: float,
         readout_amp: float,
-        control_amp_arr: list[float],
+        control_amp_arr: List[float],
         readout_port: int,
         control_port: int,
         input_port: int,

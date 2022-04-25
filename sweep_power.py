@@ -2,6 +2,8 @@
 """
 2D sweep of drive power and frequency in Lockin mode.
 """
+from typing import List
+
 import h5py
 import numpy as np
 
@@ -27,7 +29,7 @@ class SweepPower(Base):
         freq_span: float,
         df: float,
         num_averages: int,
-        amp_arr: list[float],
+        amp_arr: List[float],
         output_port: int,
         input_port: int,
         dither: bool = True,
