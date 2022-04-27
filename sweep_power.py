@@ -33,7 +33,7 @@ class SweepPower(Base):
         output_port: int,
         input_port: int,
         dither: bool = True,
-        num_skip: int = 1,
+        num_skip: int = 0,
     ) -> None:
         self.freq_center = freq_center
         self.freq_span = freq_span
@@ -110,7 +110,7 @@ class SweepPower(Base):
                     )
                     lck.hardware.sleep(1e-3, False)
 
-                    _d = lck.get_pixels(self.num_skip + self.num_averages)
+                    _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                     data_i = _d[self.input_port][1][:, 0]
                     data_q = _d[self.input_port][2][:, 0]
                     data = data_i.real + 1j * data_q.real  # using zero IF

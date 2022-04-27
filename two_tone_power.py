@@ -36,7 +36,7 @@ class TwoTonePower(Base):
         input_port: int,
         num_averages: int,
         dither: bool = True,
-        num_skip: int = 1,
+        num_skip: int = 0,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq_center = control_freq_center
@@ -127,7 +127,7 @@ class TwoTonePower(Base):
                     )
                     lck.hardware.sleep(1e-3, False)
 
-                    _d = lck.get_pixels(self.num_skip + self.num_averages)
+                    _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                     data_i = _d[self.input_port][1][:, 0]
                     data_q = _d[self.input_port][2][:, 0]
                     data = data_i.real + 1j * data_q.real  # using zero IF
