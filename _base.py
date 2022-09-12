@@ -42,7 +42,7 @@ class Base:
                 if attribute.startswith("_"):
                     # don't save private attributes
                     continue
-                if attribute == "jpa_params":
+                if attribute in ["jpa_params", "clear"]:
                     h5f.attrs[attribute] = str(self.__dict__[attribute])
                 elif np.isscalar(self.__dict__[attribute]):
                     h5f.attrs[attribute] = self.__dict__[attribute]

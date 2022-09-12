@@ -4,6 +4,7 @@
 Acquire reference templates for template matching.
 """
 import ast
+from typing import Optional
 
 import h5py
 import numpy as np
@@ -44,6 +45,7 @@ class ReadoutRef(Base):
         num_averages: int,
         jpa_params: dict = None,
         drag: float = 0.0,
+        clear: dict = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -59,6 +61,7 @@ class ReadoutRef(Base):
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
         self.drag = drag
+        self.clear = clear
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
@@ -124,7 +127,7 @@ class ReadoutRef(Base):
             pls.setup_scale_lut(
                 output_ports=self.readout_port,
                 group=0,
-                scales=self.readout_amp,
+                scales=1.0,  # set it in pulse
             )
             pls.setup_scale_lut(
                 output_ports=self.control_port,
@@ -136,15 +139,37 @@ class ReadoutRef(Base):
             # use setup_long_drive to create a pulse with square envelope
             # setup_long_drive supports smooth rise and fall transitions for the pulse,
             # but we keep it simple here
-            readout_pulse = pls.setup_long_drive(
-                output_port=self.readout_port,
-                group=0,
-                duration=self.readout_duration,
-                amplitude=1.0,
-                amplitude_q=1.0,
-                rise_time=0e-9,
-                fall_time=0e-9,
-            )
+            if self.clear is None:
+                readout_pulse = pls.setup_long_drive(
+                    output_port=self.readout_port,
+                    group=0,
+                    duration=self.readout_duration,
+                    amplitude=self.readout_amp,
+                    amplitude_q=self.readout_amp,
+                    rise_time=0e-9,
+                    fall_time=0e-9,
+                )
+            else:
+                from presto._clear import clear
+                lens, amps = clear(self.readout_duration * 1e9, **self.clear)
+                lens = [int(round(l * pls.get_fs("dac"))) for l in lens]
+
+                readout_ns = int(round(self.readout_duration *
+                                       pls.get_fs("dac")))  # number of samples in the control template
+                readout_envelope = np.zeros(readout_ns)
+                start = 0
+                for l, a in zip(lens, amps):
+                    stop = start + l
+                    readout_envelope[start:stop] = a
+                    start += l
+                readout_pulse = pls.setup_template(
+                    output_port=self.readout_port,
+                    group=0,
+                    template=readout_envelope,
+                    template_q=readout_envelope,
+                    envelope=True,
+                )
+
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
             control_ns = int(round(self.control_duration *
@@ -234,6 +259,7 @@ class ReadoutRef(Base):
             drag = h5f.attrs['drag']
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
+            clear = ast.literal_eval(h5f.attrs["clear"])
 
             t_arr = h5f['t_arr'][()]
             store_arr = h5f['store_arr'][()]
@@ -254,17 +280,16 @@ class ReadoutRef(Base):
             num_averages=num_averages,
             jpa_params=jpa_params,
             drag=drag,
+            clear=clear,
         )
         self.t_arr = t_arr
         self.store_arr = store_arr
 
         return self
 
-    def analyze(self, rotate: bool = False):
+    def analyze(self, plot: bool = True, rotate: bool = False, match_len: Optional[int] = None):
         assert self.t_arr is not None
         assert self.store_arr is not None
-
-        import matplotlib.pyplot as plt
 
         ret_fig = []
 
@@ -276,7 +301,14 @@ class ReadoutRef(Base):
             trace_g, trace_e = _rotate_opt(trace_g, trace_e)
 
         distance = np.abs(trace_e - trace_g)
-        match_len = MAX_TEMPLATE_LEN // 2  # I and Q
+
+        max_match_len = MAX_TEMPLATE_LEN // 2  # I and Q
+        if match_len is None:
+            match_len = max_match_len
+        else:
+            match_len = int(match_len)
+            if match_len > max_match_len:  # I and Q
+                raise ValueError("maximum match length is {max_match_len}, got {match_len}")
 
         max_idx = 0
         max_dist = 0.0
@@ -288,10 +320,21 @@ class ReadoutRef(Base):
                 max_dist = dist
                 max_idx = idx
 
-        template_g = trace_g[max_idx:max_idx + match_len]
-        template_e = trace_e[max_idx:max_idx + match_len]
+        ref_g = trace_g[max_idx:max_idx + match_len]
+        ref_e = trace_e[max_idx:max_idx + match_len]
         match_t_in_store = self.t_arr[max_idx]
+        readout_match_delay = self.readout_sample_delay + match_t_in_store
         print(f"Match starts at {1e9 * match_t_in_store:.0f} ns in store")
+        print(f"Readout-match delay: {1e9 * readout_match_delay:.0f} ns")
+        ret_dict = {
+            'trace_g': trace_g,
+            'trace_e': trace_e,
+            'ref_g': ref_g,
+            'ref_e': ref_e,
+            'match_t_in_store': match_t_in_store,
+            'readout_match_delay': readout_match_delay,
+        }
+
         # print(f"Saving templates back into: {load_filename}")
         # with h5py.File(load_filename, "r+") as h5f:
         #     h5f.attrs["match_t_in_store"] = match_t_in_store
@@ -302,49 +345,54 @@ class ReadoutRef(Base):
         #         print("Warning: could not save templates, already there? Skipping...")
         #         pass
 
-        fig1, ax1 = plt.subplots(4, 1, sharex=True, tight_layout=True)
-        for ax_ in ax1:
-            ax_.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
-        ax1[0].plot(1e9 * self.t_arr, np.abs(trace_g), label="|g>")
-        ax1[0].plot(1e9 * self.t_arr, np.abs(trace_e), label="|e>")
-        ax1[1].plot(1e9 * self.t_arr, np.angle(trace_g))
-        ax1[1].plot(1e9 * self.t_arr, np.angle(trace_e))
-        ax1[2].plot(1e9 * self.t_arr, np.real(trace_g))
-        ax1[2].plot(1e9 * self.t_arr, np.real(trace_e))
-        ax1[3].plot(1e9 * self.t_arr, np.imag(trace_g))
-        ax1[3].plot(1e9 * self.t_arr, np.imag(trace_e))
-        ax1[-1].set_xlabel("Time [ns]")
-        ax1[0].set_ylabel("A [FS]")
-        ax1[1].set_ylabel("φ [rad]")
-        ax1[2].set_ylabel("I [FS]")
-        ax1[3].set_ylabel("Q [FS]")
-        ax1[0].legend()
-        fig1.show()
-        ret_fig.append(fig1)
+        if plot:
+            import matplotlib.pyplot as plt
 
-        data_max = distance.max()
-        unit = ""
-        mult = 1.0
-        if data_max < 1e-6:
-            unit = "n"
-            mult = 1e9
-        elif data_max < 1e-3:
-            unit = "μ"
-            mult = 1e6
-        elif data_max < 1e0:
-            unit = "m"
-            mult = 1e3
+            fig1, ax1 = plt.subplots(4, 1, sharex=True, tight_layout=True)
+            for ax_ in ax1:
+                ax_.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
+            ax1[0].plot(1e9 * self.t_arr, np.abs(trace_g), label="|g>")
+            ax1[0].plot(1e9 * self.t_arr, np.abs(trace_e), label="|e>")
+            ax1[1].plot(1e9 * self.t_arr, np.angle(trace_g))
+            ax1[1].plot(1e9 * self.t_arr, np.angle(trace_e))
+            ax1[2].plot(1e9 * self.t_arr, np.real(trace_g))
+            ax1[2].plot(1e9 * self.t_arr, np.real(trace_e))
+            ax1[3].plot(1e9 * self.t_arr, np.imag(trace_g))
+            ax1[3].plot(1e9 * self.t_arr, np.imag(trace_e))
+            ax1[-1].set_xlabel("Time [ns]")
+            ax1[0].set_ylabel("A [FS]")
+            ax1[1].set_ylabel("φ [rad]")
+            ax1[2].set_ylabel("I [FS]")
+            ax1[3].set_ylabel("Q [FS]")
+            ax1[0].legend()
+            fig1.show()
+            ret_fig.append(fig1)
 
-        fig2, ax2 = plt.subplots(tight_layout=True)
-        ax2.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
-        ax2.plot(1e9 * self.t_arr, mult * distance)
-        ax2.set_xlabel("Time [ns]")
-        ax2.set_ylabel(f"Distance [{unit}FS]")
-        ax2.set_title(r"$d = \left\Vert\left|e\right> - \left|g\right>\right\Vert$")
-        fig2.show()
-        ret_fig.append(fig2)
+            data_max = distance.max()
+            unit = ""
+            mult = 1.0
+            if data_max < 1e-6:
+                unit = "n"
+                mult = 1e9
+            elif data_max < 1e-3:
+                unit = "μ"
+                mult = 1e6
+            elif data_max < 1e0:
+                unit = "m"
+                mult = 1e3
 
-        return ret_fig, (trace_g, trace_e)
+            fig2, ax2 = plt.subplots(tight_layout=True)
+            ax2.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
+            ax2.plot(1e9 * self.t_arr, mult * distance)
+            ax2.set_xlabel("Time [ns]")
+            ax2.set_ylabel(f"Distance [{unit}FS]")
+            ax2.set_title(r"$d = \left\Vert\left|e\right> - \left|g\right>\right\Vert$")
+            fig2.show()
+            ret_fig.append(fig2)
+
+            return ret_dict, ret_fig
+        else:
+            return ret_dict
 
 
 def _rotate_opt(trace_g, trace_e):
