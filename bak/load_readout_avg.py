@@ -11,7 +11,7 @@ from scipy.optimize import curve_fit
 from presto.pulsed import MAX_TEMPLATE_LEN
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -56,13 +56,13 @@ def load(load_filename):
     idx = -2
     while idx + 2 + match_len <= nr_samples:
         idx += 2  # next clock cycle
-        dist = np.sum(distance[idx:idx + match_len])
+        dist = np.sum(distance[idx : idx + match_len])
         if dist > max_dist:
             max_dist = dist
             max_idx = idx
 
-    template_g = trace_g[max_idx:max_idx + match_len]
-    template_e = trace_e[max_idx:max_idx + match_len]
+    template_g = trace_g[max_idx : max_idx + match_len]
+    template_e = trace_e[max_idx : max_idx + match_len]
     match_t_in_store = t_arr[max_idx]
     print(f"Match starts at {1e9 * t_arr[max_idx]:.0f} ns in store")
     print(f"Saving templates back into: {load_filename}")

@@ -9,7 +9,7 @@ import numpy as np
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -82,7 +82,7 @@ def load(load_filename):
         # choose limits for colorbar
         cutoff = 0.0  # %
         lowlim = np.percentile(plot_data, cutoff)
-        highlim = np.percentile(plot_data, 100. - cutoff)
+        highlim = np.percentile(plot_data, 100.0 - cutoff)
 
         # extent
         x_min = 1e9 * coupler_ac_duration_arr[0]
@@ -95,9 +95,9 @@ def load(load_filename):
         fig2, ax2 = plt.subplots(tight_layout=True)
         im = ax2.imshow(
             plot_data,
-            origin='lower',
-            aspect='auto',
-            interpolation='none',
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim,
             vmax=highlim,
@@ -140,9 +140,9 @@ def load(load_filename):
         # choose limits for colorbar
         cutoff = 0.1  # %
         lowlim_1 = np.percentile(plot_data_1, cutoff)
-        highlim_1 = np.percentile(plot_data_1, 100. - cutoff)
+        highlim_1 = np.percentile(plot_data_1, 100.0 - cutoff)
         lowlim_2 = np.percentile(plot_data_2, cutoff)
-        highlim_2 = np.percentile(plot_data_2, 100. - cutoff)
+        highlim_2 = np.percentile(plot_data_2, 100.0 - cutoff)
         # alldata = (np.r_[plot_data_1, plot_data_2]).ravel()
         # lowlim = np.percentile(alldata, cutoff)
         # highlim = np.percentile(alldata, 100. - cutoff)
@@ -161,18 +161,18 @@ def load(load_filename):
         ax21, ax22 = ax2
         im1 = ax21.imshow(
             plot_data_1,
-            origin='lower',
-            aspect='auto',
-            interpolation='none',
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim_1,
             vmax=highlim_1,
         )
         im2 = ax22.imshow(
             plot_data_2,
-            origin='lower',
-            aspect='auto',
-            interpolation='none',
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim_2,
             vmax=highlim_2,

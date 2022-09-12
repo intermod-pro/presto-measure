@@ -68,10 +68,10 @@ class JpaSweepPowerBias(Base):
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as lck:
             assert lck.hardware is not None
 
@@ -143,11 +143,15 @@ class JpaSweepPowerBias(Base):
                         data = data_i.real + 1j * data_q.real  # using zero IF
 
                         if kk == 0:
-                            self.ref_resp_arr[jj, ii] = np.mean(data[-self.num_averages:])
-                            self.ref_pwr_arr[jj, ii] = np.mean(np.abs(data[-self.num_averages:])**2)
+                            self.ref_resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
+                            self.ref_pwr_arr[jj, ii] = np.mean(
+                                np.abs(data[-self.num_averages :]) ** 2
+                            )
                         else:
-                            self.resp_arr[kk - 1, jj, ii] = np.mean(data[-self.num_averages:])
-                            self.pwr_arr[kk - 1, jj, ii] = np.mean(np.abs(data[-self.num_averages:])**2)
+                            self.resp_arr[kk - 1, jj, ii] = np.mean(data[-self.num_averages :])
+                            self.pwr_arr[kk - 1, jj, ii] = np.mean(
+                                np.abs(data[-self.num_averages :]) ** 2
+                            )
 
                         pb.increment()
 
@@ -165,28 +169,28 @@ class JpaSweepPowerBias(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'JpaSweepPowerBias':
+    def load(cls, load_filename: str) -> "JpaSweepPowerBias":
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = h5f.attrs['freq_center']
-            freq_span = h5f.attrs['freq_span']
-            df = h5f.attrs['df']
-            num_averages = h5f.attrs['num_averages']
-            amp = h5f.attrs['amp']
-            output_port = h5f.attrs['output_port']
-            input_port = h5f.attrs['input_port']
-            bias_port = h5f.attrs['bias_port']
-            pump_port = h5f.attrs['pump_port']
-            pump_freq = h5f.attrs['pump_freq']
-            dither = h5f.attrs['dither']
-            num_skip = h5f.attrs['num_skip']
+            freq_center = h5f.attrs["freq_center"]
+            freq_span = h5f.attrs["freq_span"]
+            df = h5f.attrs["df"]
+            num_averages = h5f.attrs["num_averages"]
+            amp = h5f.attrs["amp"]
+            output_port = h5f.attrs["output_port"]
+            input_port = h5f.attrs["input_port"]
+            bias_port = h5f.attrs["bias_port"]
+            pump_port = h5f.attrs["pump_port"]
+            pump_freq = h5f.attrs["pump_freq"]
+            dither = h5f.attrs["dither"]
+            num_skip = h5f.attrs["num_skip"]
 
-            bias_arr = h5f['bias_arr'][()]
-            pump_pwr_arr = h5f['pump_pwr_arr'][()]
-            freq_arr = h5f['freq_arr'][()]
-            ref_resp_arr = h5f['ref_resp_arr'][()]
-            ref_pwr_arr = h5f['ref_pwr_arr'][()]
-            resp_arr = h5f['resp_arr'][()]
-            pwr_arr = h5f['pwr_arr'][()]
+            bias_arr = h5f["bias_arr"][()]
+            pump_pwr_arr = h5f["pump_pwr_arr"][()]
+            freq_arr = h5f["freq_arr"][()]
+            ref_resp_arr = h5f["ref_resp_arr"][()]
+            ref_pwr_arr = h5f["ref_pwr_arr"][()]
+            resp_arr = h5f["resp_arr"][()]
+            pwr_arr = h5f["pwr_arr"][()]
 
         self = cls(
             freq_center=freq_center,
@@ -245,9 +249,9 @@ class JpaSweepPowerBias(Base):
                 gain_db[pp, bb, :] = data_db[pp, bb, :] - ref_db[bb, :]
 
         # choose limits for colorbar
-        cutoff = 1.  # %
+        cutoff = 1.0  # %
         lowlim = np.percentile(gain_db, cutoff)
-        highlim = np.percentile(gain_db, 100. - cutoff)
+        highlim = np.percentile(gain_db, 100.0 - cutoff)
         abslim = max(abs(lowlim), abs(highlim))
 
         # extent
@@ -261,13 +265,15 @@ class JpaSweepPowerBias(Base):
         ret_fig = []
         if nr_pump_pwr == 1:
             fig, ax = plt.subplots(tight_layout=True)
-            im = ax.imshow(gain_db[0, :, :],
-                           origin='lower',
-                           aspect='auto',
-                           extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-                           vmin=-abslim,
-                           vmax=abslim,
-                           cmap="RdBu_r")
+            im = ax.imshow(
+                gain_db[0, :, :],
+                origin="lower",
+                aspect="auto",
+                extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+                vmin=-abslim,
+                vmax=abslim,
+                cmap="RdBu_r",
+            )
             ax.set_title(f"Pump power {self.pump_pwr_arr[0]}")
             ax.set_xlabel("Frequency [GHz]")
             ax.set_ylabel("DC bias [V]")
@@ -282,16 +288,20 @@ class JpaSweepPowerBias(Base):
             nr_figs = ((nr_pump_pwr - 1) // nr_plots) + 1
 
             for jj in range(nr_figs):
-                fig, ax = plt.subplots(nr_rows, nr_columns, sharex=True, sharey=True, tight_layout=True)
+                fig, ax = plt.subplots(
+                    nr_rows, nr_columns, sharex=True, sharey=True, tight_layout=True
+                )
                 for ii in range(nr_plots):
                     _ax = ax[ii // nr_columns][ii % nr_columns]
-                    _ax.imshow(gain_db[jj * nr_plots + ii, :, :],
-                               origin='lower',
-                               aspect='auto',
-                               extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-                               vmin=-abslim,
-                               vmax=abslim,
-                               cmap="RdBu_r")
+                    _ax.imshow(
+                        gain_db[jj * nr_plots + ii, :, :],
+                        origin="lower",
+                        aspect="auto",
+                        extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+                        vmin=-abslim,
+                        vmax=abslim,
+                        cmap="RdBu_r",
+                    )
                     _ax.set_title(str(self.pump_pwr_arr[jj * nr_plots + ii]))
                 fig.show()
                 ret_fig.append(fig)

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
+
 # https://github.com/ContinuumIO/anaconda-issues/issues/905#issuecomment-232498034
-os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
+os.environ["FOR_DISABLE_CONSOLE_CTRL_HANDLER"] = "1"
 import signal
 import time
 
@@ -22,7 +23,7 @@ EXT_REF_CLK = False  # set to True to lock to an external reference clock
 # cavity drive: readout
 readout_freq_1 = 6.213095 * 1e9  # Hz, resonator 1
 readout_freq_2 = 6.376650 * 1e9  # Hz, resonator 2
-readout_amp = 10**(-10.0 / 20)  # FS
+readout_amp = 10 ** (-10.0 / 20)  # FS
 readout_duration = 2e-6  # s, duration of the readout pulse
 readout_port = 1
 
@@ -44,7 +45,9 @@ sample_port = 1
 # other
 num_averages = 1_000
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 300 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+readout_sample_delay = (
+    300 * 1e-9
+)  # s, delay between readout pulse and sample window to account for latency
 t_low = 1500 * 1e-9
 t_high = 2000 * 1e-9
 
@@ -65,12 +68,12 @@ def measure_t1(which_qubit):
     dt_delays = 4 * 1e-6  # s, step size when changing delay between control and readout pulses
 
     with pulsed.Pulsed(
-            address=ADDRESS,
-            ext_ref_clk=EXT_REF_CLK,
-            adc_mode=AdcMode.Mixed,
-            adc_fsample=AdcFSample.G2,
-            dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-            dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+        address=ADDRESS,
+        ext_ref_clk=EXT_REF_CLK,
+        adc_mode=AdcMode.Mixed,
+        adc_fsample=AdcFSample.G2,
+        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
     ) as pls:
         pls.hardware.set_adc_attenuation(sample_port, 0.0)
         pls.hardware.set_dac_current(readout_port, 32_000)
@@ -135,7 +138,9 @@ def measure_t1(which_qubit):
             rise_time=0e-9,
             fall_time=0e-9,
         )
-        control_ns = int(round(control_duration * pls.get_fs("dac")))  # number of samples in the control template
+        control_ns = int(
+            round(control_duration * pls.get_fs("dac"))
+        )  # number of samples in the control template
         control_envelope = sin2(control_ns)
         control_pulse = pls.setup_template(
             output_port=control_port,
@@ -217,12 +222,12 @@ def measure_t2(which_qubit):
 
     # Instantiate interface class
     with pulsed.Pulsed(
-            address=ADDRESS,
-            ext_ref_clk=EXT_REF_CLK,
-            adc_mode=AdcMode.Mixed,
-            adc_fsample=AdcFSample.G2,
-            dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-            dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+        address=ADDRESS,
+        ext_ref_clk=EXT_REF_CLK,
+        adc_mode=AdcMode.Mixed,
+        adc_fsample=AdcFSample.G2,
+        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
     ) as pls:
         pls.hardware.set_adc_attenuation(sample_port, 0.0)
         pls.hardware.set_dac_current(readout_port, 32_000)
@@ -287,7 +292,9 @@ def measure_t2(which_qubit):
             rise_time=0e-9,
             fall_time=0e-9,
         )
-        control_ns = int(round(control_duration * pls.get_fs("dac")))  # number of samples in the control template
+        control_ns = int(
+            round(control_duration * pls.get_fs("dac"))
+        )  # number of samples in the control template
         control_envelope = sin2(control_ns)
         control_pulse = pls.setup_template(
             output_port=control_port,
@@ -371,7 +378,7 @@ def t1_fit_simple(t, x):
 
 
 def t2_func(t, offset, amplitude, T2, frequency, phase):
-    return offset + amplitude * np.exp(-t / T2) * np.cos(2. * np.pi * frequency * t + phase)
+    return offset + amplitude * np.exp(-t / T2) * np.cos(2.0 * np.pi * frequency * t + phase)
 
 
 def t2_fit_simple(x, y):
@@ -383,10 +390,10 @@ def t2_fit_simple(x, y):
     fft = np.fft.rfft(y)
     frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
     first = (y[0] - offset) / amplitude
-    if first > 1.:
-        first = 1.
-    elif first < -1.:
-        first = -1.
+    if first > 1.0:
+        first = 1.0
+    elif first < -1.0:
+        first = -1.0
     phase = np.arccos(first)
     p0 = (
         offset,
@@ -439,14 +446,14 @@ if __name__ == "__main__":
     rel_time_arr = np.array([])
     t1_arr_q1 = np.array([])
     t1_arr_q2 = np.array([])
-    line_t1_q1, = ax1.plot(rel_time_arr, t1_arr_q1, '.', c="tab:blue")
-    line_t1_q2, = ax1.plot(rel_time_arr, t1_arr_q2, '.', c="tab:orange")
+    (line_t1_q1,) = ax1.plot(rel_time_arr, t1_arr_q1, ".", c="tab:blue")
+    (line_t1_q2,) = ax1.plot(rel_time_arr, t1_arr_q2, ".", c="tab:orange")
     ax1.set_ylabel("T1 [us]")
 
     t2_arr_q1 = np.array([])
     t2_arr_q2 = np.array([])
-    line_t2_q1, = ax2.plot(rel_time_arr, t2_arr_q1, '.', c="tab:blue")
-    line_t2_q2, = ax2.plot(rel_time_arr, t2_arr_q2, '.', c="tab:orange")
+    (line_t2_q1,) = ax2.plot(rel_time_arr, t2_arr_q1, ".", c="tab:blue")
+    (line_t2_q2,) = ax2.plot(rel_time_arr, t2_arr_q2, ".", c="tab:orange")
     ax2.set_ylabel("T2* [us]")
 
     ax2.set_xlabel("Time since start [s]")
@@ -458,7 +465,9 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, handler)
     count = 0
     timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
-    source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
+    source_code = get_sourcecode(
+        __file__
+    )  # save also the sourcecode of the script for future reference
     while KEEP_GOING:
         print("\n\n\n")
         print(f"******* Run number {count+1:d} *******")
@@ -507,8 +516,8 @@ if __name__ == "__main__":
         save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
         save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
         with h5py.File(save_path, "w") as h5f:
-            dt = h5py.string_dtype(encoding='utf-8')
-            ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+            dt = h5py.string_dtype(encoding="utf-8")
+            ds = h5f.create_dataset("source_code", (len(source_code),), dt)
             for ii, line in enumerate(source_code):
                 ds[ii] = line
             h5f.create_dataset("rel_time_arr", data=rel_time_arr)

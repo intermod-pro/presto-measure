@@ -55,10 +55,10 @@ class SweepPower(Base):
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as lck:
             assert lck.hardware is not None
 
@@ -115,7 +115,7 @@ class SweepPower(Base):
                     data_q = _d[self.input_port][2][:, 0]
                     data = data_i.real + 1j * data_q.real  # using zero IF
 
-                    self.resp_arr[jj, ii] = np.mean(data[-self.num_averages:])
+                    self.resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
 
                     pb.increment()
 
@@ -131,7 +131,7 @@ class SweepPower(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'SweepPower':
+    def load(cls, load_filename: str) -> "SweepPower":
         with h5py.File(load_filename, "r") as h5f:
             freq_center = h5f.attrs["freq_center"]
             freq_span = h5f.attrs["freq_span"]
@@ -169,9 +169,11 @@ class SweepPower(Base):
             raise RuntimeError
 
         import matplotlib.pyplot as plt
+
         try:
             from resonator_tools import circuit
             import matplotlib.widgets as mwidgets
+
             _do_fit = True
         except ImportError:
             _do_fit = False
@@ -186,13 +188,13 @@ class SweepPower(Base):
         else:
             resp_scaled = self.resp_arr
 
-        resp_dB = 20. * np.log10(np.abs(resp_scaled))
+        resp_dB = 20.0 * np.log10(np.abs(resp_scaled))
         amp_dBFS = 20 * np.log10(self.amp_arr / 1.0)
 
         # choose limits for colorbar
-        cutoff = 1.  # %
+        cutoff = 1.0  # %
         lowlim = np.percentile(resp_dB, cutoff)
-        highlim = np.percentile(resp_dB, 100. - cutoff)
+        highlim = np.percentile(resp_dB, 100.0 - cutoff)
 
         # extent
         x_min = 1e-9 * self.freq_arr[0]
@@ -212,9 +214,9 @@ class SweepPower(Base):
             ax1 = fig1.add_subplot(1, 2, 1)
         im = ax1.imshow(
             resp_dB,
-            origin='lower',
-            aspect='auto',
-            interpolation='none',
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim,
             vmax=highlim,
@@ -242,15 +244,23 @@ class SweepPower(Base):
             ax3.yaxis.set_label_position("right")
             ax3.yaxis.tick_right()
 
-        line_a, = ax2.plot(1e-9 * self.freq_arr, resp_dB[self._AMP_IDX], label="measured", animated=blit)
-        line_p, = ax3.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr[self._AMP_IDX]), animated=blit)
+        (line_a,) = ax2.plot(
+            1e-9 * self.freq_arr, resp_dB[self._AMP_IDX], label="measured", animated=blit
+        )
+        (line_p,) = ax3.plot(
+            1e-9 * self.freq_arr, np.angle(self.resp_arr[self._AMP_IDX]), animated=blit
+        )
         if _do_fit:
-            line_fit_a, = ax2.plot(1e-9 * self.freq_arr,
-                                   np.full_like(self.freq_arr, np.nan),
-                                   ls="--",
-                                   label="fit",
-                                   animated=blit)
-            line_fit_p, = ax3.plot(1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", animated=blit)
+            (line_fit_a,) = ax2.plot(
+                1e-9 * self.freq_arr,
+                np.full_like(self.freq_arr, np.nan),
+                ls="--",
+                label="fit",
+                animated=blit,
+            )
+            (line_fit_p,) = ax3.plot(
+                1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", animated=blit
+            )
 
         f_min = 1e-9 * self.freq_arr.min()
         f_max = 1e-9 * self.freq_arr.max()
@@ -318,8 +328,10 @@ class SweepPower(Base):
                 port = circuit.notch_port(self.freq_arr, self.resp_arr[self._AMP_IDX])
                 port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
                 if norm:
-                    line_fit_a.set_data(1e-9 * port.f_data,
-                                        20 * np.log10(np.abs(port.z_data_sim / self.amp_arr[self._AMP_IDX])))
+                    line_fit_a.set_data(
+                        1e-9 * port.f_data,
+                        20 * np.log10(np.abs(port.z_data_sim / self.amp_arr[self._AMP_IDX])),
+                    )
                 else:
                     line_fit_a.set_data(1e-9 * port.f_data, 20 * np.log10(np.abs(port.z_data_sim)))
                 line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))
@@ -345,12 +357,16 @@ class SweepPower(Base):
                 else:
                     fig1.canvas.draw()
 
-            rectprops = dict(facecolor='tab:gray', alpha=0.5)
-            fig1._span_a = mwidgets.SpanSelector(ax2, onselect, 'horizontal', rectprops=rectprops, useblit=blit)
-            fig1._span_p = mwidgets.SpanSelector(ax3, onselect, 'horizontal', rectprops=rectprops, useblit=blit)
+            rectprops = dict(facecolor="tab:gray", alpha=0.5)
+            fig1._span_a = mwidgets.SpanSelector(
+                ax2, onselect, "horizontal", rectprops=rectprops, useblit=blit
+            )
+            fig1._span_p = mwidgets.SpanSelector(
+                ax3, onselect, "horizontal", rectprops=rectprops, useblit=blit
+            )
 
-        fig1.canvas.mpl_connect('button_press_event', onbuttonpress)
-        fig1.canvas.mpl_connect('key_press_event', onkeypress)
+        fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
+        fig1.canvas.mpl_connect("key_press_event", onkeypress)
         fig1.show()
         if blit:
             fig1.canvas.draw()

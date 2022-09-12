@@ -10,7 +10,7 @@ from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -43,7 +43,7 @@ def load(load_filename):
     BIAS_IDX = nr_bias // 2
 
     if LOGSCALE:
-        data = 20. * np.log10(np.abs(resp_arr))
+        data = 20.0 * np.log10(np.abs(resp_arr))
     else:
         data = np.abs(resp_arr)
         data_max = data.max()
@@ -59,9 +59,9 @@ def load(load_filename):
             data *= 1e3
 
     # choose limits for colorbar
-    cutoff = 1.  # %
+    cutoff = 1.0  # %
     lowlim = np.percentile(data, cutoff)
-    highlim = np.percentile(data, 100. - cutoff)
+    highlim = np.percentile(data, 100.0 - cutoff)
 
     # extent
     x_min = 1e-9 * freq_arr[0]
@@ -79,20 +79,15 @@ def load(load_filename):
         ax1 = fig1.add_subplot(1, 1, 1)
     im = ax1.imshow(
         data,
-        origin='lower',
-        aspect='auto',
-        interpolation='none',
-        extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2,
-                y_max + dy / 2),
+        origin="lower",
+        aspect="auto",
+        interpolation="none",
+        extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
         vmin=lowlim,
         vmax=highlim,
     )
     if LINECUT:
-        line_sel = ax1.axhline(coupler_bias_arr[BIAS_IDX],
-                               ls="--",
-                               c="k",
-                               lw=3,
-                               animated=BLIT)
+        line_sel = ax1.axhline(coupler_bias_arr[BIAS_IDX], ls="--", c="k", lw=3, animated=BLIT)
     ax1.set_xlabel("Frequency [GHz]")
     ax1.set_ylabel("Coupler bias [V]")
     cb = fig1.colorbar(im)
@@ -105,18 +100,14 @@ def load(load_filename):
         ax2 = fig1.add_subplot(4, 1, 3)
         ax3 = fig1.add_subplot(4, 1, 4, sharex=ax2)
 
-        line_a, = ax2.plot(1e-9 * freq_arr, data[BIAS_IDX], animated=BLIT)
-        line_fit_a, = ax2.plot(1e-9 * freq_arr,
-                               np.full_like(freq_arr, np.nan),
-                               ls="--",
-                               animated=BLIT)
-        line_p, = ax3.plot(1e-9 * freq_arr,
-                           np.angle(resp_arr[BIAS_IDX]),
-                           animated=BLIT)
-        line_fit_p, = ax3.plot(1e-9 * freq_arr,
-                               np.full_like(freq_arr, np.nan),
-                               ls="--",
-                               animated=BLIT)
+        (line_a,) = ax2.plot(1e-9 * freq_arr, data[BIAS_IDX], animated=BLIT)
+        (line_fit_a,) = ax2.plot(
+            1e-9 * freq_arr, np.full_like(freq_arr, np.nan), ls="--", animated=BLIT
+        )
+        (line_p,) = ax3.plot(1e-9 * freq_arr, np.angle(resp_arr[BIAS_IDX]), animated=BLIT)
+        (line_fit_p,) = ax3.plot(
+            1e-9 * freq_arr, np.full_like(freq_arr, np.nan), ls="--", animated=BLIT
+        )
 
         f_min = 1e-9 * freq_arr.min()
         f_max = 1e-9 * freq_arr.max()
@@ -161,12 +152,9 @@ def load(load_filename):
 
         def update():
             global BIAS_IDX
-            line_sel.set_ydata(
-                [coupler_bias_arr[BIAS_IDX], coupler_bias_arr[BIAS_IDX]])
+            line_sel.set_ydata([coupler_bias_arr[BIAS_IDX], coupler_bias_arr[BIAS_IDX]])
             # ax1.set_title(f"amp = {amp_arr[BIAS_IDX]:.2e}")
-            print(
-                f"coupler bias {BIAS_IDX:d}: {coupler_bias_arr[BIAS_IDX]:.3f} V"
-            )
+            print(f"coupler bias {BIAS_IDX:d}: {coupler_bias_arr[BIAS_IDX]:.3f} V")
             line_a.set_ydata(data[BIAS_IDX])
             line_p.set_ydata(np.angle(resp_arr[BIAS_IDX]))
             line_fit_a.set_ydata(np.full_like(freq_arr, np.nan))
@@ -183,8 +171,8 @@ def load(load_filename):
             else:
                 fig1.canvas.draw()
 
-        fig1.canvas.mpl_connect('button_press_event', onbuttonpress)
-        fig1.canvas.mpl_connect('key_press_event', onkeypress)
+        fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
+        fig1.canvas.mpl_connect("key_press_event", onkeypress)
 
     fig1.show()
     if LINECUT and BLIT:

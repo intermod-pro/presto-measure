@@ -7,7 +7,7 @@ from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 
-rcParams['figure.dpi'] = 331.3
+rcParams["figure.dpi"] = 331.3
 
 load_filename = ""
 
@@ -26,7 +26,7 @@ def load(load_filename):
         resp_arr = h5f["resp_arr"][()]
         source_code = h5f["source_code"][()]
 
-    resp_dB = 20. * np.log10(np.abs(resp_arr))
+    resp_dB = 20.0 * np.log10(np.abs(resp_arr))
 
     fig, ax = plt.subplots(2, 1, sharex=True, tight_layout=True)
     ax1, ax2 = ax

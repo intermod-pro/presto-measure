@@ -12,7 +12,7 @@ from scipy.special import erf
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -32,7 +32,7 @@ def inprod(f, g, t=None, dt=None):
         ns = len(f)
         T = ns * dt
     else:
-        T = 1.
+        T = 1.0
     return np.trapz(f * np.conj(g), x=t) / T
 
 
@@ -41,7 +41,7 @@ def norm(x, t=None, dt=None):
 
 
 def single_gaussian(x, m, s, w):
-    return w * np.exp(-(x - m)**2 / (2 * s**2)) / np.sqrt(2 * np.pi * s**2)
+    return w * np.exp(-((x - m) ** 2) / (2 * s**2)) / np.sqrt(2 * np.pi * s**2)
 
 
 def double_gaussian(x, m0, s0, w0, m1, s1, w1):
@@ -111,7 +111,9 @@ def load(load_filename):
     fig1.show()
 
     # # Analyze
-    match_diff = match_e_data + match_g_data - threshold  # does |e> match better than |g>? NOTE match_g already has minus sign
+    match_diff = (
+        match_e_data + match_g_data - threshold
+    )  # does |e> match better than |g>? NOTE match_g already has minus sign
     match_diff_1 = match_diff[0::2]  # first readout
     match_diff_2 = match_diff[1::2]  # second readout
     idx_low_1 = match_diff_1 < 0
@@ -133,24 +135,16 @@ def load(load_filename):
     std = max(std_low_1, std_high_1, std_low_2, std_high_2)
     x_min = min(mean_low_1, mean_low_2) - 5 * std
     x_max = max(mean_high_1, mean_high_2) + 5 * std
-    H_1, xedges = np.histogram(match_diff_1,
-                               bins=100,
-                               range=(x_min, x_max),
-                               density=True)
-    H_2, xedges = np.histogram(match_diff_2,
-                               bins=100,
-                               range=(x_min, x_max),
-                               density=True)
+    H_1, xedges = np.histogram(match_diff_1, bins=100, range=(x_min, x_max), density=True)
+    H_2, xedges = np.histogram(match_diff_2, bins=100, range=(x_min, x_max), density=True)
     xdata = 0.5 * (xedges[1:] + xedges[:-1])
 
-    init_1 = np.array([
-        mean_low_1, std_low_1, weight_low_1, mean_high_1, std_high_1,
-        weight_high_1
-    ])
-    init_2 = np.array([
-        mean_low_2, std_low_2, weight_low_2, mean_high_2, std_high_2,
-        weight_high_2
-    ])
+    init_1 = np.array(
+        [mean_low_1, std_low_1, weight_low_1, mean_high_1, std_high_1, weight_high_1]
+    )
+    init_2 = np.array(
+        [mean_low_2, std_low_2, weight_low_2, mean_high_2, std_high_2, weight_high_2]
+    )
     if FIXED:
         # skip second weight
         popt_1, pcov_1 = curve_fit(double_gaussian_fixed, xdata, H_1, p0=init_1[:-1])
@@ -164,12 +158,9 @@ def load(load_filename):
     Teff_1 = Planck * control_freq / (Boltzmann * np.log(1 / popt_1[5] - 1))
     Teff_2 = Planck * control_freq / (Boltzmann * np.log(1 / popt_2[5] - 1))
 
-    fig2, ax2 = plt.subplots(1,
-                             2,
-                             sharex=True,
-                             sharey=True,
-                             tight_layout=True,
-                             figsize=(12.8, 4.8))
+    fig2, ax2 = plt.subplots(
+        1, 2, sharex=True, sharey=True, tight_layout=True, figsize=(12.8, 4.8)
+    )
     ax21, ax22 = ax2
     for ax_ in ax2:
         ax_.axvline(0.0, c="tab:gray", alpha=0.25)
@@ -177,28 +168,36 @@ def load(load_filename):
 
     hist_plot(ax21, H_1, xedges, lw=1)
     ax21.plot(xdata, double_gaussian(xdata, *popt_1), c="k")
-    ax21.plot(xdata,
-              single_gaussian(xdata, *popt_1[:3]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_1[2]:.1%}")
-    ax21.plot(xdata,
-              single_gaussian(xdata, *popt_1[3:]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_1[5]:.1%}")
+    ax21.plot(
+        xdata,
+        single_gaussian(xdata, *popt_1[:3]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_1[2]:.1%}",
+    )
+    ax21.plot(
+        xdata,
+        single_gaussian(xdata, *popt_1[3:]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_1[5]:.1%}",
+    )
     ax21.set_xlabel("Comparator result")
     ax21.set_title(f"Before reset: $T_\\mathrm{{eff}}$ = {1e3*Teff_1:.0f} mK")
     ax21.legend(title="Qubit measured in")
 
     hist_plot(ax22, H_2, xedges, lw=1)
     ax22.plot(xdata, double_gaussian(xdata, *popt_2), c="k")
-    ax22.plot(xdata,
-              single_gaussian(xdata, *popt_2[:3]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_2[2]:.1%}")
-    ax22.plot(xdata,
-              single_gaussian(xdata, *popt_2[3:]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_2[5]:.1%}")
+    ax22.plot(
+        xdata,
+        single_gaussian(xdata, *popt_2[:3]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_2[2]:.1%}",
+    )
+    ax22.plot(
+        xdata,
+        single_gaussian(xdata, *popt_2[3:]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_2[5]:.1%}",
+    )
     ax22.set_xlabel("Comparator result")
     ax22.set_title(f"After reset: $T_\\mathrm{{eff}}$ = {1e3*Teff_2:.0f} mK")
     ax22.legend(title="Qubit measured in")

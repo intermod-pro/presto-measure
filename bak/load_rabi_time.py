@@ -13,7 +13,7 @@ from scipy.optimize import curve_fit
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -85,7 +85,7 @@ def load(load_filename):
     ax22.plot(1e9 * len_arr, np.angle(data))
     # ax22.plot(1e9 * len_arr, func(len_arr, *popt_p), '--')
     ax23.plot(1e9 * len_arr, np.real(data))
-    ax23.plot(1e9 * len_arr, func(len_arr, *popt_x), '--')
+    ax23.plot(1e9 * len_arr, func(len_arr, *popt_x), "--")
     ax24.plot(1e9 * len_arr, np.imag(data))
     # ax24.plot(1e9 * len_arr, func(len_arr, *popt_y), '--')
 
@@ -100,8 +100,8 @@ def load(load_filename):
     mult_t, unit_t = scale_unit(len_arr)
 
     fig3, ax3 = plt.subplots(tight_layout=True)
-    ax3.plot(mult_t * len_arr, mult * np.real(data), '.')
-    ax3.plot(mult_t * len_arr, mult * func(len_arr, *popt_x), '--')
+    ax3.plot(mult_t * len_arr, mult * np.real(data), ".")
+    ax3.plot(mult_t * len_arr, mult * func(len_arr, *popt_x), "--")
     ax3.set_xlabel(f"Pulse length [{unit_t:s}s]")
     ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
     fig3.show()
@@ -127,7 +127,7 @@ def scale_unit(data):
 
 def func(t, offset, amplitude, T2, period, phase):
     frequency = 1 / period
-    return offset + amplitude * np.exp(-t / T2) * np.cos(2. * np.pi * frequency * t + phase)
+    return offset + amplitude * np.exp(-t / T2) * np.cos(2.0 * np.pi * frequency * t + phase)
 
 
 def fit_period(x, y):
@@ -140,10 +140,10 @@ def fit_period(x, y):
     frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
     period = 1 / frequency
     first = (y[0] - offset) / amplitude
-    if first > 1.:
-        first = 1.
-    elif first < -1.:
-        first = -1.
+    if first > 1.0:
+        first = 1.0
+    elif first < -1.0:
+        first = -1.0
     phase = np.arccos(first)
     p0 = (
         offset,

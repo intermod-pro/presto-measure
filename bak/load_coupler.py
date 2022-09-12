@@ -7,7 +7,7 @@ from scipy.optimize import curve_fit
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 load_filename = "data/coupler_20210429_165327.h5"
 

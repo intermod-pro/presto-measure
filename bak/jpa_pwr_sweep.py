@@ -13,8 +13,8 @@ from presto import commands as cmd
 from presto import test
 from presto.utils import format_sec, get_sourcecode
 
-if '/home/riccardo/IntermodulatorSuite' not in sys.path:
-    sys.path.append('/home/riccardo/IntermodulatorSuite')
+if "/home/riccardo/IntermodulatorSuite" not in sys.path:
+    sys.path.append("/home/riccardo/IntermodulatorSuite")
 from mlaapi import mla_api, mla_globals
 
 settings = mla_globals.read_config()
@@ -49,13 +49,13 @@ extra = 2_000
 
 mla.connect()
 with test.Test(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_CLK_REF,
-        adc_mode=cmd.AdcMixed,
-        adc_fsample=cmd.AdcG2,
-        dac_mode=cmd.DacMixed42,
-        dac_fsample=cmd.DacG10,
+    address=ADDRESS,
+    port=PORT,
+    ext_ref_clk=EXT_CLK_REF,
+    adc_mode=cmd.AdcMixed,
+    adc_fsample=cmd.AdcG2,
+    dac_mode=cmd.DacMixed42,
+    dac_fsample=cmd.DacG10,
 ) as lck:
     lck.hardware.set_adc_attenuation(input_port, 0.0)
     lck.hardware.set_inv_sinc(output_port, 0)
@@ -113,8 +113,8 @@ with test.Test(
             lck.stop_dma()
 
             _data = lck.get_dma_data(Navg * nr_samples + extra)
-            data_i = _data[0::2][-Navg * nr_samples:]
-            data_q = _data[1::2][-Navg * nr_samples:]
+            data_i = _data[0::2][-Navg * nr_samples :]
+            data_q = _data[1::2][-Navg * nr_samples :]
 
             data_i.shape = (Navg, nr_samples)
             data_q.shape = (Navg, nr_samples)
@@ -159,10 +159,12 @@ script_filename = os.path.splitext(script_basename)[0]  # name of current script
 timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
 save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
 save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
+source_code = get_sourcecode(
+    __file__
+)  # save also the sourcecode of the script for future reference
 with h5py.File(save_path, "w") as h5f:
-    dt = h5py.string_dtype(encoding='utf-8')
-    ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+    dt = h5py.string_dtype(encoding="utf-8")
+    ds = h5f.create_dataset("source_code", (len(source_code),), dt)
     for ii, line in enumerate(source_code):
         ds[ii] = line
     h5f.attrs["df"] = df
@@ -191,13 +193,15 @@ high = np.percentile(gain_db, 99)
 lim = max(abs(low), abs(high))
 
 fig, ax = plt.subplots(tight_layout=True)
-im = ax.imshow(gain_db,
-               origin='lower',
-               aspect='auto',
-               extent=(1e-9 * freq_arr[0], 1e-9 * freq_arr[-1], pump_pwr_arr[1], pump_pwr_arr[-1]),
-               vmin=-lim,
-               vmax=lim,
-               cmap="RdBu_r")
+im = ax.imshow(
+    gain_db,
+    origin="lower",
+    aspect="auto",
+    extent=(1e-9 * freq_arr[0], 1e-9 * freq_arr[-1], pump_pwr_arr[1], pump_pwr_arr[-1]),
+    vmin=-lim,
+    vmax=lim,
+    cmap="RdBu_r",
+)
 ax.set_xlabel("Frequency [GHz]")
 ax.set_ylabel("Pump power [arb. units]")
 fig.show()

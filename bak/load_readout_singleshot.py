@@ -11,7 +11,7 @@ from scipy.special import erf
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -31,7 +31,7 @@ def inprod(f, g, t=None, dt=None):
         ns = len(f)
         T = ns * dt
     else:
-        T = 1.
+        T = 1.0
     return np.trapz(f * np.conj(g), x=t) / T
 
 
@@ -40,7 +40,7 @@ def norm(x, t=None, dt=None):
 
 
 def single_gaussian(x, m, s, w):
-    return w * np.exp(-(x - m)**2 / (2 * s**2)) / np.sqrt(2 * np.pi * s**2)
+    return w * np.exp(-((x - m) ** 2) / (2 * s**2)) / np.sqrt(2 * np.pi * s**2)
 
 
 def double_gaussian(x, m0, s0, w0, m1, s1, w1):
@@ -108,7 +108,7 @@ def load(load_filename):
     fig1.show()
 
     # # Analyze
-    threshold = 0.5 * (norm(template_e)**2 - norm(template_g)**2)
+    threshold = 0.5 * (norm(template_e) ** 2 - norm(template_g) ** 2)
     match_diff = match_e_data - match_g_data - threshold  # does |e> match better than |g>?
     match_diff_g = match_diff[0::2]  # qubit was prepared in |g>
     match_diff_e = match_diff[1::2]  # qubit was prepared in |e>
@@ -132,24 +132,16 @@ def load(load_filename):
     x_min = min(mean_low_g, mean_low_e) - 5 * std
     x_max = max(mean_high_g, mean_high_e) + 5 * std
 
-    H_g, xedges = np.histogram(match_diff_g,
-                               bins=100,
-                               range=(x_min, x_max),
-                               density=True)
-    H_e, xedges = np.histogram(match_diff_e,
-                               bins=100,
-                               range=(x_min, x_max),
-                               density=True)
+    H_g, xedges = np.histogram(match_diff_g, bins=100, range=(x_min, x_max), density=True)
+    H_e, xedges = np.histogram(match_diff_e, bins=100, range=(x_min, x_max), density=True)
     xdata = 0.5 * (xedges[1:] + xedges[:-1])
 
-    init_g = np.array([
-        mean_low_g, std_low_g, weight_low_g, mean_high_g, std_high_g,
-        weight_high_g
-    ])
-    init_e = np.array([
-        mean_low_e, std_low_e, weight_low_e, mean_high_e, std_high_e,
-        weight_high_e
-    ])
+    init_g = np.array(
+        [mean_low_g, std_low_g, weight_low_g, mean_high_g, std_high_g, weight_high_g]
+    )
+    init_e = np.array(
+        [mean_low_e, std_low_e, weight_low_e, mean_high_e, std_high_e, weight_high_e]
+    )
     if FIXED:
         # skip second weight
         popt_g, pcov_g = curve_fit(double_gaussian_fixed, xdata, H_g, p0=init_g[:-1])
@@ -160,16 +152,12 @@ def load(load_filename):
     else:
         popt_g, pcov_g = curve_fit(double_gaussian, xdata, H_g, p0=init_g)
         popt_e, pcov_e = curve_fit(double_gaussian, xdata, H_e, p0=init_e)
-    fidelity_g = 0.5 * (1 + erf((0.0 - popt_g[0]) / np.sqrt(2 * popt_g[1]**2)))
-    fidelity_e = 1.0 - 0.5 * (1 + erf(
-        (0.0 - popt_e[3]) / np.sqrt(2 * popt_e[4]**2)))
+    fidelity_g = 0.5 * (1 + erf((0.0 - popt_g[0]) / np.sqrt(2 * popt_g[1] ** 2)))
+    fidelity_e = 1.0 - 0.5 * (1 + erf((0.0 - popt_e[3]) / np.sqrt(2 * popt_e[4] ** 2)))
 
-    fig2, ax2 = plt.subplots(1,
-                             2,
-                             sharex=True,
-                             sharey=True,
-                             tight_layout=True,
-                             figsize=(12.8, 4.8))
+    fig2, ax2 = plt.subplots(
+        1, 2, sharex=True, sharey=True, tight_layout=True, figsize=(12.8, 4.8)
+    )
     ax21, ax22 = ax2
     for ax_ in ax2:
         ax_.axvline(0.0, c="tab:gray", alpha=0.25)
@@ -177,14 +165,18 @@ def load(load_filename):
 
     hist_plot(ax21, H_g, xedges, lw=1)
     ax21.plot(xdata, double_gaussian(xdata, *popt_g), c="k")
-    ax21.plot(xdata,
-              single_gaussian(xdata, *popt_g[:3]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_g[2]:.1%}")
-    ax21.plot(xdata,
-              single_gaussian(xdata, *popt_g[3:]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_g[5]:.1%}")
+    ax21.plot(
+        xdata,
+        single_gaussian(xdata, *popt_g[:3]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_g[2]:.1%}",
+    )
+    ax21.plot(
+        xdata,
+        single_gaussian(xdata, *popt_g[3:]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_g[5]:.1%}",
+    )
     ax21.set_xlabel("Comparator result")
     ax21.set_title(
         f"Qubit prepared in $\\left|\\mathrm{{g}}\\right>$: $\\mathcal{{F}}$ = {fidelity_g:.1%}"
@@ -193,14 +185,18 @@ def load(load_filename):
 
     hist_plot(ax22, H_e, xedges, lw=1)
     ax22.plot(xdata, double_gaussian(xdata, *popt_e), c="k")
-    ax22.plot(xdata,
-              single_gaussian(xdata, *popt_e[:3]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_e[2]:.1%}")
-    ax22.plot(xdata,
-              single_gaussian(xdata, *popt_e[3:]),
-              ls="--",
-              label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_e[5]:.1%}")
+    ax22.plot(
+        xdata,
+        single_gaussian(xdata, *popt_e[:3]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{g}}\\right>$: {popt_e[2]:.1%}",
+    )
+    ax22.plot(
+        xdata,
+        single_gaussian(xdata, *popt_e[3:]),
+        ls="--",
+        label=f"$\\left|\\mathrm{{e}}\\right>$: {popt_e[5]:.1%}",
+    )
     ax22.set_xlabel("Comparator result")
     ax22.set_title(
         f"Qubit prepared in $\\left|\\mathrm{{e}}\\right>$: $\\mathcal{{F}}$ = {fidelity_e:.1%}"

@@ -7,7 +7,7 @@ from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -33,13 +33,13 @@ for data in [t1_arr_q1, t1_arr_q2, t2_arr_q1, t2_arr_q2]:
 fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
 ax11, ax12 = ax1
 
-ax11.semilogy(rel_time_arr / 3_600, 1e6 * t1_arr_q1, '.', c="tab:blue", label="qubit 1")
-ax11.semilogy(rel_time_arr / 3_600, 1e6 * t1_arr_q2, '.', c="tab:orange", label="qubit 2")
+ax11.semilogy(rel_time_arr / 3_600, 1e6 * t1_arr_q1, ".", c="tab:blue", label="qubit 1")
+ax11.semilogy(rel_time_arr / 3_600, 1e6 * t1_arr_q2, ".", c="tab:orange", label="qubit 2")
 ax11.set_ylabel("T1 [μs]")
 ax11.legend()
 
-ax12.semilogy(rel_time_arr / 3_600, 1e6 * t2_arr_q1, '.', c="tab:blue", label="qubit 1")
-ax12.semilogy(rel_time_arr / 3_600, 1e6 * t2_arr_q2, '.', c="tab:orange", label="qubit 2")
+ax12.semilogy(rel_time_arr / 3_600, 1e6 * t2_arr_q1, ".", c="tab:blue", label="qubit 1")
+ax12.semilogy(rel_time_arr / 3_600, 1e6 * t2_arr_q2, ".", c="tab:orange", label="qubit 2")
 ax12.set_ylabel("T2* [μs]")
 
 ax12.set_xlabel("Time since start [h]")

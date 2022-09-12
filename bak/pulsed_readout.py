@@ -13,7 +13,7 @@ from mla_server import set_dc_bias
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 # Presto's IP address or hostname
 ADDRESS = "130.237.35.90"
@@ -37,7 +37,9 @@ sample_port = 1
 
 num_averages = 100_000
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+readout_sample_delay = (
+    290 * 1e-9
+)  # s, delay between readout pulse and sample window to account for latency
 
 # Instantiate interface class
 if USE_JPA:
@@ -46,13 +48,13 @@ if USE_JPA:
     jpa_bias = +0.455  # V
     bias_port = 1
 with pulsed.Pulsed(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_REF_CLK,
-        adc_mode=AdcMode.Mixed,
-        adc_fsample=AdcFSample.G4,
-        dac_mode=DacMode.Mixed42,
-        dac_fsample=DacFSample.G10,
+    address=ADDRESS,
+    port=PORT,
+    ext_ref_clk=EXT_REF_CLK,
+    adc_mode=AdcMode.Mixed,
+    adc_fsample=AdcFSample.G4,
+    dac_mode=DacMode.Mixed42,
+    dac_fsample=DacFSample.G10,
 ) as pls:
     pls.hardware.set_adc_attenuation(sample_port, 0.0)
     pls.hardware.set_dac_current(readout_port, 32_000)
@@ -156,7 +158,7 @@ data_I_fft = np.fft.rfft(data_I[idx]) / len(t_arr[idx])
 data_Q_fft = np.fft.rfft(data_Q[idx]) / len(t_arr[idx])
 ax11.plot(1e9 * t_arr, np.abs(data), label="A", c="tab:blue")
 ax12.semilogy(1e-6 * f_arr, np.abs(data_fft), c="tab:blue", label="A")
-ax12.semilogy(1e-6 * f_arr[n_if], np.abs(data_fft[n_if]), '.', c="tab:green", ms=12)
+ax12.semilogy(1e-6 * f_arr[n_if], np.abs(data_fft[n_if]), ".", c="tab:green", ms=12)
 ax11.legend()
 ax12.legend()
 ax11.set_xlabel("Time [ns]")

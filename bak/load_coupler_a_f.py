@@ -10,7 +10,7 @@ from scipy.optimize import curve_fit
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -68,7 +68,7 @@ def load(load_filename):
     # choose limits for colorbar
     cutoff = 0.0  # %
     lowlim = np.percentile(plot_data, cutoff)
-    highlim = np.percentile(plot_data, 100. - cutoff)
+    highlim = np.percentile(plot_data, 100.0 - cutoff)
 
     # extent
     x_min = 1e-6 * coupler_ac_freq_arr[0]
@@ -81,9 +81,9 @@ def load(load_filename):
     fig1, ax1 = plt.subplots(tight_layout=True)
     im = ax1.imshow(
         plot_data,
-        origin='lower',
-        aspect='auto',
-        interpolation='none',
+        origin="lower",
+        aspect="auto",
+        interpolation="none",
         extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
         vmin=lowlim,
         vmax=highlim,

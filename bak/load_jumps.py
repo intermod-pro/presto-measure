@@ -7,7 +7,8 @@ from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import leastsq
-rcParams['figure.dpi'] = 108.8
+
+rcParams["figure.dpi"] = 108.8
 
 LOGSCALE = True  # plot amplitude histogram in logarithmic scale
 PHASE = False  # plot also phase time trace
@@ -16,12 +17,12 @@ load_filename = "data/jumps_20210302_075538.h5"
 
 
 def single_gaussian(x, m, s):
-    return np.exp(-(x - m)**2 / (2 * s**2)) / np.sqrt(2 * np.pi * s**2)
+    return np.exp(-((x - m) ** 2) / (2 * s**2)) / np.sqrt(2 * np.pi * s**2)
 
 
 def multi_gaussian(x, m_arr, s_arr, w_arr):
     xx = np.tile(x, (len(m_arr), 1)).T
-    res = w_arr * np.exp(-(xx - m_arr)**2 / (2 * s_arr**2)) / np.sqrt(2 * np.pi * s_arr**2)
+    res = w_arr * np.exp(-((xx - m_arr) ** 2) / (2 * s_arr**2)) / np.sqrt(2 * np.pi * s_arr**2)
     return np.sum(res, axis=-1)
 
 
@@ -95,10 +96,16 @@ def load(load_filename):
     data_middle = 0.5 * (data_min + data_max)
     data_low = amps[amps < data_middle]
     data_high = amps[amps >= data_middle]
-    init = np.array([
-        np.mean(data_low), np.std(data_low), len(data_low) / len(amps),
-        np.mean(data_high), np.std(data_high), len(data_high) / len(amps),
-    ])
+    init = np.array(
+        [
+            np.mean(data_low),
+            np.std(data_low),
+            len(data_low) / len(amps),
+            np.mean(data_high),
+            np.std(data_high),
+            len(data_high) / len(amps),
+        ]
+    )
 
     # Fit the histogram
     x_data = bins[:-1] + bin_width / 2  # centers of the bins
@@ -110,8 +117,16 @@ def load(load_filename):
     # Plot fit
     if LOGSCALE:
         ax3.autoscale(False)
-    ax3.plot(x_data, scale * w_fit[0] * single_gaussian(x_data, m_fit[0], s_fit[0]), label=f"{w_fit[0]:.1%}")
-    ax3.plot(x_data, scale * w_fit[1] * single_gaussian(x_data, m_fit[1], s_fit[1]), label=f"{w_fit[1]:.1%}")
+    ax3.plot(
+        x_data,
+        scale * w_fit[0] * single_gaussian(x_data, m_fit[0], s_fit[0]),
+        label=f"{w_fit[0]:.1%}",
+    )
+    ax3.plot(
+        x_data,
+        scale * w_fit[1] * single_gaussian(x_data, m_fit[1], s_fit[1]),
+        label=f"{w_fit[1]:.1%}",
+    )
     ax3.legend(title="Gaussian fit")
 
     fig.show()

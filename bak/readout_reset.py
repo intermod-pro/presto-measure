@@ -53,7 +53,9 @@ control_duration = 100 * 1e-9  # s, duration of the control pulse
 # cavity readout: sample
 sample_duration = 4 * 1e-6  # s, duration of the sampling window
 sample_port = 1
-readout_sample_delay = 290 * 1e-9 + 0 * 1e-6  # s, delay between readout pulse and sample window to account for latency
+readout_sample_delay = (
+    290 * 1e-9 + 0 * 1e-6
+)  # s, delay between readout pulse and sample window to account for latency
 
 # IQ readout experiment
 num_averages = 10_000
@@ -65,23 +67,18 @@ with h5py.File(template_filename, "r") as h5f:
     match_t_in_store = h5f.attrs["match_t_in_store"]
     template_g = h5f["template_g"][()]
     template_e = h5f["template_e"][()]
-    threshold = 0.5 * (np.sum(np.abs(template_e)**2) -
-                       np.sum(np.abs(template_g)**2))
+    threshold = 0.5 * (np.sum(np.abs(template_e) ** 2) - np.sum(np.abs(template_g) ** 2))
 
 # Instantiate interface class
 with pulsed.Pulsed(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_REF_CLK,
-        adc_mode=AdcMode.Mixed,
-        adc_fsample=AdcFSample.G2,
-        dac_mode=[
-            DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02
-        ],
-        dac_fsample=[
-            DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6
-        ],
-        dry_run=True,
+    address=ADDRESS,
+    port=PORT,
+    ext_ref_clk=EXT_REF_CLK,
+    adc_mode=AdcMode.Mixed,
+    adc_fsample=AdcFSample.G2,
+    dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+    dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+    dry_run=True,
 ) as pls:
     pls.hardware.set_adc_attenuation(sample_port, 0.0)
     pls.hardware.set_dac_current(readout_port, 32_000)
@@ -150,8 +147,8 @@ with pulsed.Pulsed(
         fall_time=0e-9,
     )
     control_ns = int(
-        round(control_duration *
-              pls.get_fs("dac")))  # number of samples in the control template
+        round(control_duration * pls.get_fs("dac"))
+    )  # number of samples in the control template
     control_envelope = sin2(control_ns)
     control_pulse = pls.setup_template(
         output_port=control_port,
@@ -233,8 +230,7 @@ with pulsed.Pulsed(
         pls.hardware.set_lmx(0.0, 0.0)
         set_dc_bias(jpa_bias_port, 0.0)
     t_arr, (data_I, data_Q) = pls.get_store_data()
-    match_g_data, match_e_data = pls.get_template_matching_data(
-        [match_g, match_e])
+    match_g_data, match_e_data = pls.get_template_matching_data([match_g, match_e])
 
 store_arr = data_I + 1j * data_Q
 
@@ -243,18 +239,16 @@ store_arr = data_I + 1j * data_Q
 # *************************
 script_path = os.path.realpath(__file__)  # full path of current script
 current_dir, script_basename = os.path.split(script_path)
-script_filename = os.path.splitext(script_basename)[
-    0]  # name of current script
-timestamp = time.strftime("%Y%m%d_%H%M%S",
-                          time.localtime())  # current date and time
+script_filename = os.path.splitext(script_basename)[0]  # name of current script
+timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
 save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
-save_path = os.path.join(current_dir, "data",
-                         save_basename)  # full path of save file
+save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
 source_code = get_sourcecode(
-    __file__)  # save also the sourcecode of the script for future reference
+    __file__
+)  # save also the sourcecode of the script for future reference
 with h5py.File(save_path, "w") as h5f:
-    dt = h5py.string_dtype(encoding='utf-8')
-    ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+    dt = h5py.string_dtype(encoding="utf-8")
+    ds = h5f.create_dataset("source_code", (len(source_code),), dt)
     for ii, line in enumerate(source_code):
         ds[ii] = line
     h5f.attrs["num_averages"] = num_averages

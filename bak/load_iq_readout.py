@@ -10,7 +10,7 @@ from scipy.optimize import curve_fit
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -75,8 +75,12 @@ def load(load_filename):
     x_max = max(x_g.mean(), x_e.mean()) + 5 * std
     y_min = min(y_g.mean(), y_e.mean()) - 5 * std
     y_max = max(y_g.mean(), y_e.mean()) + 5 * std
-    H_g, xedges, yedges = np.histogram2d(x_g, y_g, bins=100, range=[[x_min, x_max], [y_min, y_max]], density=True)
-    H_e, xedges, yedges = np.histogram2d(x_e, y_e, bins=100, range=[[x_min, x_max], [y_min, y_max]], density=True)
+    H_g, xedges, yedges = np.histogram2d(
+        x_g, y_g, bins=100, range=[[x_min, x_max], [y_min, y_max]], density=True
+    )
+    H_e, xedges, yedges = np.histogram2d(
+        x_e, y_e, bins=100, range=[[x_min, x_max], [y_min, y_max]], density=True
+    )
     H_g = H_g.T
     H_e = H_e.T
     z_max = max(H_g.max(), H_e.max())
@@ -92,14 +96,28 @@ def load(load_filename):
 
     fig3, ax3 = plt.subplots(1, 2, sharex=True, sharey=True, tight_layout=True, figsize=(9.6, 4.8))
     ax31, ax32 = ax3
-    ax31.imshow(H_g, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap="RdBu_r", vmin=-z_max, vmax=z_max)
-    ax32.imshow(H_e, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap="RdBu_r", vmin=-z_max, vmax=z_max)
+    ax31.imshow(
+        H_g,
+        origin="lower",
+        extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
+        cmap="RdBu_r",
+        vmin=-z_max,
+        vmax=z_max,
+    )
+    ax32.imshow(
+        H_e,
+        origin="lower",
+        extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
+        cmap="RdBu_r",
+        vmin=-z_max,
+        vmax=z_max,
+    )
     ax31.axhline(0.0, c="tab:gray", alpha=0.25)
     ax31.axvline(0.0, c="tab:gray", alpha=0.25)
     ax32.axhline(0.0, c="tab:gray", alpha=0.25)
     ax32.axvline(0.0, c="tab:gray", alpha=0.25)
-    ax31.set_aspect('equal')
-    ax32.set_aspect('equal')
+    ax31.set_aspect("equal")
+    ax32.set_aspect("equal")
     fig3.show()
 
     xdata = 0.5 * (xedges[1:] + xedges[:-1])

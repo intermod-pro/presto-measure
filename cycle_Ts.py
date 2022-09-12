@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import ast
 import os
+
 # https://github.com/ContinuumIO/anaconda-issues/issues/905#issuecomment-232498034
-os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
+os.environ["FOR_DISABLE_CONSOLE_CTRL_HANDLER"] = "1"
 import signal
 import time
 from typing import List, Optional
@@ -98,8 +99,8 @@ class CycleTs(Base):
 
         fig, ax = plt.subplots(constrained_layout=True)
 
-        line_t1, = ax.plot(self._time1_arr, self._t1_arr, '.', c="tab:blue", label="T1")
-        line_t2, = ax.plot(self._time2_arr, self._t2_arr, '.', c="tab:orange", label="T2")
+        (line_t1,) = ax.plot(self._time1_arr, self._t1_arr, ".", c="tab:blue", label="T1")
+        (line_t2,) = ax.plot(self._time2_arr, self._t2_arr, ".", c="tab:orange", label="T2")
 
         ax.set_ylabel("μs")
         ax.set_xlabel("Time since start [s]")
@@ -159,77 +160,109 @@ class CycleTs(Base):
         with h5py.File(self._save_filename, "a") as h5f:
             # h5f.create_dataset('data1', data=self._data1, compression="gzip", chunks=True, maxshape=(None, self._nr_delays))
             # h5f.create_dataset('data2', data=self._data2, compression="gzip", chunks=True, maxshape=(None, self._nr_delays))
-            h5f.create_dataset('data1',
-                               shape=(0, self._nr_delays),
-                               dtype=np.float64,
-                               compression="gzip",
-                               chunks=True,
-                               maxshape=(None, self._nr_delays))
-            h5f.create_dataset('data2',
-                               shape=(0, self._nr_delays),
-                               dtype=np.float64,
-                               compression="gzip",
-                               chunks=True,
-                               maxshape=(None, self._nr_delays))
-            h5f.create_dataset('time1_arr', data=self._time1_arr, compression="gzip", chunks=True, maxshape=(None, ))
-            h5f.create_dataset('time2_arr', data=self._time2_arr, compression="gzip", chunks=True, maxshape=(None, ))
-            h5f.create_dataset('t1_arr', data=self._t1_arr, compression="gzip", chunks=True, maxshape=(None, ))
-            h5f.create_dataset('t2_arr', data=self._t2_arr, compression="gzip", chunks=True, maxshape=(None, ))
-            h5f.create_dataset('t1_err_arr', data=self._t1_err_arr, compression="gzip", chunks=True, maxshape=(None, ))
-            h5f.create_dataset('t2_err_arr', data=self._t2_err_arr, compression="gzip", chunks=True, maxshape=(None, ))
+            h5f.create_dataset(
+                "data1",
+                shape=(0, self._nr_delays),
+                dtype=np.float64,
+                compression="gzip",
+                chunks=True,
+                maxshape=(None, self._nr_delays),
+            )
+            h5f.create_dataset(
+                "data2",
+                shape=(0, self._nr_delays),
+                dtype=np.float64,
+                compression="gzip",
+                chunks=True,
+                maxshape=(None, self._nr_delays),
+            )
+            h5f.create_dataset(
+                "time1_arr",
+                data=self._time1_arr,
+                compression="gzip",
+                chunks=True,
+                maxshape=(None,),
+            )
+            h5f.create_dataset(
+                "time2_arr",
+                data=self._time2_arr,
+                compression="gzip",
+                chunks=True,
+                maxshape=(None,),
+            )
+            h5f.create_dataset(
+                "t1_arr", data=self._t1_arr, compression="gzip", chunks=True, maxshape=(None,)
+            )
+            h5f.create_dataset(
+                "t2_arr", data=self._t2_arr, compression="gzip", chunks=True, maxshape=(None,)
+            )
+            h5f.create_dataset(
+                "t1_err_arr",
+                data=self._t1_err_arr,
+                compression="gzip",
+                chunks=True,
+                maxshape=(None,),
+            )
+            h5f.create_dataset(
+                "t2_err_arr",
+                data=self._t2_err_arr,
+                compression="gzip",
+                chunks=True,
+                maxshape=(None,),
+            )
         return self._save_filename
 
     @staticmethod
     def _append(h5f, ds, data):
         data = np.atleast_1d(data)
         h5f[ds].resize((h5f[ds].shape[0] + data.shape[0]), axis=0)
-        h5f[ds][-data.shape[0]:] = data
+        h5f[ds][-data.shape[0] :] = data
 
     def append(self, which: int = 3):
         with h5py.File(self._save_filename, "a") as h5f:
             if which & 0b01 > 0:
-                self._append(h5f, 'data1', self._data1)
-                self._append(h5f, 'time1_arr', self._time1_arr[-1])
-                self._append(h5f, 't1_arr', self._t1_arr[-1])
-                self._append(h5f, 't1_err_arr', self._t1_err_arr[-1])
+                self._append(h5f, "data1", self._data1)
+                self._append(h5f, "time1_arr", self._time1_arr[-1])
+                self._append(h5f, "t1_arr", self._t1_arr[-1])
+                self._append(h5f, "t1_err_arr", self._t1_err_arr[-1])
             if which & 0b10 > 0:
-                self._append(h5f, 'data2', self._data2)
-                self._append(h5f, 'time2_arr', self._time2_arr[-1])
-                self._append(h5f, 't2_arr', self._t2_arr[-1])
-                self._append(h5f, 't2_err_arr', self._t2_err_arr[-1])
+                self._append(h5f, "data2", self._data2)
+                self._append(h5f, "time2_arr", self._time2_arr[-1])
+                self._append(h5f, "t2_arr", self._t2_arr[-1])
+                self._append(h5f, "t2_err_arr", self._t2_err_arr[-1])
 
         print(f"Data appended to: {self._save_filename}")
 
     @classmethod
-    def load(cls, load_filename: str) -> 'CycleTs':
+    def load(cls, load_filename: str) -> "CycleTs":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = float(h5f.attrs['readout_freq'])
-            control_freq = float(h5f.attrs['control_freq'])
-            readout_amp = float(h5f.attrs['readout_amp'])
-            control_amp_90 = float(h5f.attrs['control_amp_90'])
-            control_amp_180 = float(h5f.attrs['control_amp_180'])
-            readout_duration = float(h5f.attrs['readout_duration'])
-            control_duration = float(h5f.attrs['control_duration'])
-            sample_duration = float(h5f.attrs['sample_duration'])
-            delay_arr = np.array(h5f['delay_arr'])
-            readout_port = int(h5f.attrs['readout_port'])
-            control_port = int(h5f.attrs['control_port'])
-            sample_port = int(h5f.attrs['sample_port'])
-            wait_delay = float(h5f.attrs['wait_delay'])
-            readout_sample_delay = float(h5f.attrs['readout_sample_delay'])
-            num_averages = int(h5f.attrs['num_averages'])
+            readout_freq = float(h5f.attrs["readout_freq"])
+            control_freq = float(h5f.attrs["control_freq"])
+            readout_amp = float(h5f.attrs["readout_amp"])
+            control_amp_90 = float(h5f.attrs["control_amp_90"])
+            control_amp_180 = float(h5f.attrs["control_amp_180"])
+            readout_duration = float(h5f.attrs["readout_duration"])
+            control_duration = float(h5f.attrs["control_duration"])
+            sample_duration = float(h5f.attrs["sample_duration"])
+            delay_arr = np.array(h5f["delay_arr"])
+            readout_port = int(h5f.attrs["readout_port"])
+            control_port = int(h5f.attrs["control_port"])
+            sample_port = int(h5f.attrs["sample_port"])
+            wait_delay = float(h5f.attrs["wait_delay"])
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])
+            num_averages = int(h5f.attrs["num_averages"])
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
-            drag = float(h5f.attrs['drag'])
+            drag = float(h5f.attrs["drag"])
             # ref_g = np.array(h5f['ref_g'])
             # ref_e = np.array(h5f['ref_e'])
 
-            time_start = float(h5f.attrs['time_start'])
-            time1_arr = np.array(h5f['time1_arr'])
-            time2_arr = np.array(h5f['time2_arr'])
-            t1_arr = np.array(h5f['t1_arr'])
-            t2_arr = np.array(h5f['t2_arr'])
-            t1_err_arr = np.array(h5f['t1_err_arr'])
-            t2_err_arr = np.array(h5f['t2_err_arr'])
+            time_start = float(h5f.attrs["time_start"])
+            time1_arr = np.array(h5f["time1_arr"])
+            time2_arr = np.array(h5f["time2_arr"])
+            t1_arr = np.array(h5f["t1_arr"])
+            t2_arr = np.array(h5f["t2_arr"])
+            t1_err_arr = np.array(h5f["t1_err_arr"])
+            t2_err_arr = np.array(h5f["t2_err_arr"])
             # data1 = np.array(h5f['data1'])
             # data2 = np.array(h5f['data2'])
 
@@ -286,8 +319,8 @@ class CycleTs(Base):
         # plot vs time
         fig1, ax1 = plt.subplots(constrained_layout=True)
 
-        ax1.plot(time1_arr, 1e6 * self._t1_arr, '.', c="tab:blue", label="$T_1$")
-        ax1.plot(time2_arr, 1e6 * self._t2_arr, '.', c="tab:orange", label="$T_2^\\mathrm{echo}$")
+        ax1.plot(time1_arr, 1e6 * self._t1_arr, ".", c="tab:blue", label="$T_1$")
+        ax1.plot(time2_arr, 1e6 * self._t2_arr, ".", c="tab:orange", label="$T_2^\\mathrm{echo}$")
 
         ax1.set_ylabel("Fitted Tx [μs]")
         ax1.set_xlabel(f"Time since start [{time_unit:s}]")
@@ -316,8 +349,8 @@ class CycleTs(Base):
                 _plot_histograms(self._t1_arr[idx1], self._t2_arr[idx2], ax21, ax22)
                 fig2.canvas.draw()
 
-            rectprops = dict(facecolor='tab:gray', alpha=0.5)
-            span = mwidgets.SpanSelector(ax1, onselect, 'horizontal', rectprops=rectprops)
+            rectprops = dict(facecolor="tab:gray", alpha=0.5)
+            span = mwidgets.SpanSelector(ax1, onselect, "horizontal", rectprops=rectprops)
             fig1._span = span  # keep references to span selector
 
         return ret_fig

@@ -59,10 +59,14 @@ sample_port = 1
 # other
 num_averages = 10_000
 wait_delay = 200e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+readout_sample_delay = (
+    290 * 1e-9
+)  # s, delay between readout pulse and sample window to account for latency
 
 # up/down conversion for multiplexed readout using upper sideband
-readout_nco = 0.5 * (readout_freq_1 + readout_freq_2) - 250e6  # equally spaced around middle of Nyquist band
+readout_nco = (
+    0.5 * (readout_freq_1 + readout_freq_2) - 250e6
+)  # equally spaced around middle of Nyquist band
 readout_if_1 = readout_freq_1 - readout_nco
 readout_if_2 = readout_freq_2 - readout_nco
 # NOTE!
@@ -72,13 +76,13 @@ readout_if_2 = readout_freq_2 - readout_nco
 
 # Instantiate interface class
 with pulsed.Pulsed(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_REF_CLK,
-        adc_mode=AdcMode.Mixed,
-        adc_fsample=AdcFSample.G2,
-        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+    address=ADDRESS,
+    port=PORT,
+    ext_ref_clk=EXT_REF_CLK,
+    adc_mode=AdcMode.Mixed,
+    adc_fsample=AdcFSample.G2,
+    dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+    dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
 ) as pls:
     pls.hardware.set_adc_attenuation(sample_port, 0.0)
     pls.hardware.set_dac_current(readout_port, 32_000)
@@ -194,7 +198,9 @@ with pulsed.Pulsed(
         group=1,
         duration=readout_duration,
     )
-    control_ns = int(round(control_duration * pls.get_fs("dac")))  # number of samples in the control template
+    control_ns = int(
+        round(control_duration * pls.get_fs("dac"))
+    )  # number of samples in the control template
     control_envelope = sin2(control_ns)
     control_pulse_1 = pls.setup_template(
         output_port=control_port_1,
@@ -271,10 +277,12 @@ script_filename = os.path.splitext(script_basename)[0]  # name of current script
 timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
 save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
 save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
+source_code = get_sourcecode(
+    __file__
+)  # save also the sourcecode of the script for future reference
 with h5py.File(save_path, "w") as h5f:
-    dt = h5py.string_dtype(encoding='utf-8')
-    ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+    dt = h5py.string_dtype(encoding="utf-8")
+    ds = h5f.create_dataset("source_code", (len(source_code),), dt)
     for ii, line in enumerate(source_code):
         ds[ii] = line
     h5f.attrs["num_averages"] = num_averages

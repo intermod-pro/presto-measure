@@ -13,6 +13,7 @@ from presto import lockin
 from presto.utils import format_sec, get_sourcecode
 
 from mla_server import set_dc_bias, set_amp
+
 # import load_sweep_coupler_bias
 
 # Presto's IP address or hostname
@@ -57,13 +58,13 @@ set_dc_bias(coupler_bias_port, coupler_bias_arr[0])
 time.sleep(1.0)
 
 with lockin.Lockin(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_CLK_REF,
-        adc_mode=AdcMode.Mixed,
-        adc_fsample=AdcFSample.G2,
-        dac_mode=DacMode.Mixed42,
-        dac_fsample=DacFSample.G10,
+    address=ADDRESS,
+    port=PORT,
+    ext_ref_clk=EXT_CLK_REF,
+    adc_mode=AdcMode.Mixed,
+    adc_fsample=AdcFSample.G2,
+    dac_mode=DacMode.Mixed42,
+    dac_fsample=DacFSample.G10,
 ) as lck:
     lck.hardware.set_adc_attenuation(input_port, 0.0)
     lck.hardware.set_dac_current(output_port, 32_000)
@@ -146,10 +147,12 @@ script_filename = os.path.splitext(script_basename)[0]  # name of current script
 timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
 save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
 save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
+source_code = get_sourcecode(
+    __file__
+)  # save also the sourcecode of the script for future reference
 with h5py.File(save_path, "w") as h5f:
-    dt = h5py.string_dtype(encoding='utf-8')
-    ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+    dt = h5py.string_dtype(encoding="utf-8")
+    ds = h5f.create_dataset("source_code", (len(source_code),), dt)
     for ii, line in enumerate(source_code):
         ds[ii] = line
     h5f.attrs["df"] = df

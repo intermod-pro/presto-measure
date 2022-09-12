@@ -56,14 +56,14 @@ def _handle_connection(sock):
             buf = sock.recv(16)
             if len(buf) == 0:
                 break
-            port, bias = struct.unpack('<Qd', buf)
+            port, bias = struct.unpack("<Qd", buf)
             print(f"--- setting dc bias on port {port} to {bias} V")
             mla.lockin.set_dc_offset(port, bias)
         elif msg == MSG_AMP:
             buf = sock.recv(16)
             if len(buf) == 0:
                 break
-            port, amp = struct.unpack('<QQ', buf)
+            port, amp = struct.unpack("<QQ", buf)
             print(f"--- setting amplification on port {port} to {amp}")
             mla.analog.set_output_range(port, amp)
         else:
@@ -84,9 +84,10 @@ def _receive(sock, N):
 
 
 if __name__ == "__main__":
-    if '/home/riccardo/IntermodulatorSuite' not in sys.path:
-        sys.path.append('/home/riccardo/IntermodulatorSuite')
+    if "/home/riccardo/IntermodulatorSuite" not in sys.path:
+        sys.path.append("/home/riccardo/IntermodulatorSuite")
     from mlaapi import mla_api, mla_globals
+
     settings = mla_globals.read_config()
     mla = mla_api.MLA(settings)
     mla.connect()

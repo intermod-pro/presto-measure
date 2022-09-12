@@ -59,10 +59,10 @@ class JpaSweepBias(Base):
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as lck:
             assert lck.hardware is not None
 
@@ -122,7 +122,7 @@ class JpaSweepBias(Base):
                     data_q = _d[self.input_port][2][:, 0]
                     data = data_i.real + 1j * data_q.real  # using zero IF
 
-                    self.resp_arr[jj, ii] = np.mean(data[-self.num_averages:])
+                    self.resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
 
                     pb.increment()
 
@@ -139,18 +139,18 @@ class JpaSweepBias(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'JpaSweepBias':
+    def load(cls, load_filename: str) -> "JpaSweepBias":
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = h5f.attrs['freq_center']
-            freq_span = h5f.attrs['freq_span']
-            df = h5f.attrs['df']
-            num_averages = h5f.attrs['num_averages']
-            amp = h5f.attrs['amp']
-            output_port = h5f.attrs['output_port']
-            input_port = h5f.attrs['input_port']
-            bias_port = h5f.attrs['bias_port']
-            dither = h5f.attrs['dither']
-            num_skip = h5f.attrs['num_skip']
+            freq_center = h5f.attrs["freq_center"]
+            freq_span = h5f.attrs["freq_span"]
+            df = h5f.attrs["df"]
+            num_averages = h5f.attrs["num_averages"]
+            amp = h5f.attrs["amp"]
+            output_port = h5f.attrs["output_port"]
+            input_port = h5f.attrs["input_port"]
+            bias_port = h5f.attrs["bias_port"]
+            dither = h5f.attrs["dither"]
+            num_skip = h5f.attrs["num_skip"]
 
             bias_arr = h5f["bias_arr"][()]
             freq_arr = h5f["freq_arr"][()]
@@ -215,9 +215,9 @@ class JpaSweepBias(Base):
             raise ValueError
 
         # choose limits for colorbar
-        cutoff = 10.  # %
+        cutoff = 10.0  # %
         lowlim = np.percentile(data, cutoff)
-        highlim = np.percentile(data, 100. - cutoff)
+        highlim = np.percentile(data, 100.0 - cutoff)
 
         # extent
         x_min = 1e-9 * self.freq_arr[0]
@@ -230,14 +230,14 @@ class JpaSweepBias(Base):
         fig1, ax1 = plt.subplots(tight_layout=True)
         im = ax1.imshow(
             data,
-            origin='lower',
-            aspect='auto',
+            origin="lower",
+            aspect="auto",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim,
             vmax=highlim,
         )
-        ax1.set_xlabel('Frequency [GHz]')
-        ax1.set_ylabel('Bias [V]')
+        ax1.set_xlabel("Frequency [GHz]")
+        ax1.set_ylabel("Bias [V]")
         cb = fig1.colorbar(im)
         cb.set_label(label)
         fig1.show()

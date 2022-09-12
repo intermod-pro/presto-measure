@@ -11,6 +11,7 @@ from mla_server import set_dc_bias
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
 from presto.utils import get_sourcecode, sin2
+
 """
 # import load_ramsey_single
 
@@ -137,13 +138,13 @@ class NumberPhotons:
 
         # Instantiate interface class
         with pulsed.Pulsed(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                adc_mode=AdcMode.Mixed,
-                adc_fsample=AdcFSample.G2,
-                dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-                dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            adc_mode=AdcMode.Mixed,
+            adc_fsample=AdcFSample.G2,
+            dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+            dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, 32_000)
@@ -162,8 +163,10 @@ class NumberPhotons:
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['jpa_pump_freq'], self.jpa_params['jpa_pump_pwr'])
-                set_dc_bias(self.jpa_params['jpa_bias_port'], self.jpa_params['jpa_bias'])
+                pls.hardware.set_lmx(
+                    self.jpa_params["jpa_pump_freq"], self.jpa_params["jpa_pump_pwr"]
+                )
+                set_dc_bias(self.jpa_params["jpa_bias_port"], self.jpa_params["jpa_bias"])
                 time.sleep(1.0)
 
             # ************************************
@@ -233,8 +236,9 @@ class NumberPhotons:
                 rise_time=0e-9,
                 fall_time=0e-9,
             )
-            control_ns = int(round(self.control_duration *
-                                   pls.get_fs("dac")))  # number of samples in the control template
+            control_ns = int(
+                round(self.control_duration * pls.get_fs("dac"))
+            )  # number of samples in the control template
             control_envelope = sin2(control_ns)
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
@@ -295,7 +299,7 @@ class NumberPhotons:
 
             if self.jpa_params is not None:
                 pls.hardware.set_lmx(0.0, 0.0)
-                set_dc_bias(self.jpa_params['jpa_bias_port'], 0.0)
+                set_dc_bias(self.jpa_params["jpa_bias_port"], 0.0)
 
         self.t_arr = t_arr
         self.store_arr = data_I + 1j * data_Q
@@ -316,10 +320,12 @@ class NumberPhotons:
         else:
             save_path = os.path.realpath(save_filename)
 
-        source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
+        source_code = get_sourcecode(
+            __file__
+        )  # save also the sourcecode of the script for future reference
         with h5py.File(save_path, "w") as h5f:
-            dt = h5py.string_dtype(encoding='utf-8')
-            ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+            dt = h5py.string_dtype(encoding="utf-8")
+            ds = h5f.create_dataset("source_code", (len(source_code),), dt)
             for ii, line in enumerate(source_code):
                 ds[ii] = line
 
@@ -340,25 +346,25 @@ class NumberPhotons:
     @classmethod
     def load(cls, load_filename):
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs['readout_freq']
-            control_freq = h5f.attrs['control_freq']
-            readout_port = h5f.attrs['readout_port']
-            control_port = h5f.attrs['control_port']
-            readout_amp = h5f.attrs['readout_amp']
-            readout_duration = h5f.attrs['readout_duration']
-            control_duration = h5f.attrs['control_duration']
-            sample_duration = h5f.attrs['sample_duration']
-            sample_port = h5f.attrs['sample_port']
-            control_amp = h5f.attrs['control_amp']
-            wait_delay = h5f.attrs['wait_delay']
-            readout_sample_delay = h5f.attrs['readout_sample_delay']
-            num_averages = h5f.attrs['num_averages']
-            ramsey_delay_arr = h5f['ramsey_delay_arr'][()]
-            first_pulse_amp_arr = h5f['first_pulse_amp_arr'][()]
-            buffer_time = h5f.attrs['buffer_time']
+            readout_freq = h5f.attrs["readout_freq"]
+            control_freq = h5f.attrs["control_freq"]
+            readout_port = h5f.attrs["readout_port"]
+            control_port = h5f.attrs["control_port"]
+            readout_amp = h5f.attrs["readout_amp"]
+            readout_duration = h5f.attrs["readout_duration"]
+            control_duration = h5f.attrs["control_duration"]
+            sample_duration = h5f.attrs["sample_duration"]
+            sample_port = h5f.attrs["sample_port"]
+            control_amp = h5f.attrs["control_amp"]
+            wait_delay = h5f.attrs["wait_delay"]
+            readout_sample_delay = h5f.attrs["readout_sample_delay"]
+            num_averages = h5f.attrs["num_averages"]
+            ramsey_delay_arr = h5f["ramsey_delay_arr"][()]
+            first_pulse_amp_arr = h5f["first_pulse_amp_arr"][()]
+            buffer_time = h5f.attrs["buffer_time"]
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
-            t_arr = h5f['t_arr'][()]
-            store_arr = h5f['store_arr'][()]
+            t_arr = h5f["t_arr"][()]
+            store_arr = h5f["store_arr"][()]
 
         self = cls(
             readout_freq,
@@ -436,7 +442,7 @@ class NumberPhotons:
         # choose limits for colorbar
         cutoff = 0.0  # %
         lowlim = np.percentile(data, cutoff)
-        highlim = np.percentile(data, 100. - cutoff)
+        highlim = np.percentile(data, 100.0 - cutoff)
 
         x_data = 1e9 * self.ramsey_delay_arr
         y_data = self.first_pulse_amp_arr**2 * 100
@@ -454,9 +460,9 @@ class NumberPhotons:
         ax11 = fig1.add_subplot(1, 2, 1)
         im = ax11.imshow(
             data,
-            origin='lower',
-            aspect='auto',
-            interpolation='none',
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim,
             vmax=highlim,
@@ -471,7 +477,9 @@ class NumberPhotons:
         ax12 = fig1.add_subplot(1, 2, 2)
         ax12.yaxis.set_label_position("right")
         ax12.yaxis.tick_right()
-        self._line_slice, = ax12.plot(x_data, data[self._amp_idx], '.', label="measured", animated=blit)
+        (self._line_slice,) = ax12.plot(
+            x_data, data[self._amp_idx], ".", label="measured", animated=blit
+        )
         try:
             if crazy:
                 popt, _ = _fit_simple(x_data, data[self._amp_idx])
@@ -479,9 +487,11 @@ class NumberPhotons:
             else:
                 popt, _ = _fit_simple(x_data, data[self._amp_idx])
                 fit_data = _func(x_data, *popt)
-            self._line_fit, = ax12.plot(x_data, fit_data, '--', label="fit", animated=blit)
+            (self._line_fit,) = ax12.plot(x_data, fit_data, "--", label="fit", animated=blit)
         except Exception:
-            self._line_fit, = ax12.plot(x_data, np.full_like(x_data, np.nan), '--', label="fit", animated=blit)
+            (self._line_fit,) = ax12.plot(
+                x_data, np.full_like(x_data, np.nan), "--", label="fit", animated=blit
+            )
         ax12.set_xlim(x_min - 0.05 * x_rng, x_max + 0.05 * x_rng)
         ax12.set_ylim(data_min - 0.05 * data_rng, data_max + 0.05 * data_rng)
         ax12.set_xlabel("Ramsey delay [ns]")
@@ -532,8 +542,8 @@ class NumberPhotons:
             else:
                 fig1.canvas.draw()
 
-        fig1.canvas.mpl_connect('button_press_event', onbuttonpress)
-        fig1.canvas.mpl_connect('key_press_event', onkeypress)
+        fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
+        fig1.canvas.mpl_connect("key_press_event", onkeypress)
 
         fig1.show()
         if blit:
@@ -558,7 +568,7 @@ class NumberPhotons:
             except Exception:
                 n_fit[ii] = np.nan
         fig2, ax2 = plt.subplots(tight_layout=True)
-        ax2.plot(pwr_fit, n_fit, '.')
+        ax2.plot(pwr_fit, n_fit, ".")
         ax2.grid()
         ax2.set_xlabel("First pulse power [%]")
         ax2.set_ylabel("Fitted number of photons")
@@ -584,7 +594,10 @@ def _func(t, n0, phase0, amplitude, offset, slope):
     # T = 512e-9 * 1e9  # ns
     # n_avg = n0 / (kappa * T) * (1.0 - np.exp(-kappa * T))
     n = n0 * np.exp(-kappa * t)
-    decay = np.exp(-gamma2 * t -16.0 * chi**2 / kappa**2 * n * (kappa / 2 * t - 1.0 + np.exp(-kappa / 2 * t)))
+    decay = np.exp(
+        -gamma2 * t
+        - 16.0 * chi**2 / kappa**2 * n * (kappa / 2 * t - 1.0 + np.exp(-kappa / 2 * t))
+    )
     return amplitude * decay * np.cos(phase) + offset + slope * t
 
 

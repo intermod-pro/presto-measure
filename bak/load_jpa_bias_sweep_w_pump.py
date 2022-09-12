@@ -6,7 +6,8 @@ import h5py
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
-rcParams['figure.dpi'] = 108.8
+
+rcParams["figure.dpi"] = 108.8
 
 DIVERGENT = False  # use a divergent color map
 CUTOFF = 0.5  # throw away 2*CUTOFF% of the data
@@ -78,8 +79,8 @@ def load(load_filename):
         ax1 = fig1.add_subplot(1, 1, 1)
     im = ax1.imshow(
         gain_db,
-        origin='lower',
-        aspect='auto',
+        origin="lower",
+        aspect="auto",
         extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
         vmin=vmin,
         vmax=vmax,
@@ -96,7 +97,7 @@ def load(load_filename):
     if LINECUT:
         ax2 = fig1.add_subplot(3, 1, 3)
 
-        line_a, = ax2.plot(freq_arr, gain_db[BIAS_IDX], animated=BLIT)
+        (line_a,) = ax2.plot(freq_arr, gain_db[BIAS_IDX], animated=BLIT)
 
         f_min = freq_arr.min()
         f_max = freq_arr.max()
@@ -145,8 +146,8 @@ def load(load_filename):
             else:
                 fig1.canvas.draw()
 
-        fig1.canvas.mpl_connect('button_press_event', onbuttonpress)
-        fig1.canvas.mpl_connect('key_press_event', onkeypress)
+        fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
+        fig1.canvas.mpl_connect("key_press_event", onkeypress)
 
     fig1.show()
     if LINECUT and BLIT:

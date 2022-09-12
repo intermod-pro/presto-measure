@@ -73,10 +73,10 @@ class T1(Base):
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
 
@@ -97,9 +97,12 @@ class T1(Base):
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
-                                     self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(
+                    self.jpa_params["pump_freq"],
+                    self.jpa_params["pump_pwr"],
+                    self.jpa_params["pump_port"],
+                )
+                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
                 pls.hardware.sleep(1.0, False)
 
             # ************************************
@@ -148,8 +151,9 @@ class T1(Base):
                 rise_time=0e-9,
                 fall_time=0e-9,
             )
-            control_ns = int(round(self.control_duration *
-                                   pls.get_fs("dac")))  # number of samples in the control template
+            control_ns = int(
+                round(self.control_duration * pls.get_fs("dac"))
+            )  # number of samples in the control template
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
@@ -184,7 +188,7 @@ class T1(Base):
 
             if self.jpa_params is not None:
                 # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params['pump_freq'] - self.readout_freq
+                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
                 idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
                 idler_period = 1 / idler_if
                 T_clk = int(round(T * pls.get_clk_f()))
@@ -208,8 +212,8 @@ class T1(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         if save:
             return self.save()
@@ -220,28 +224,28 @@ class T1(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'T1':
+    def load(cls, load_filename: str) -> "T1":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs['readout_freq']
-            control_freq = h5f.attrs['control_freq']
-            readout_amp = h5f.attrs['readout_amp']
-            control_amp = h5f.attrs['control_amp']
-            readout_duration = h5f.attrs['readout_duration']
-            control_duration = h5f.attrs['control_duration']
-            sample_duration = h5f.attrs['sample_duration']
-            delay_arr = h5f['delay_arr'][()]
-            readout_port = h5f.attrs['readout_port']
-            control_port = h5f.attrs['control_port']
-            sample_port = h5f.attrs['sample_port']
-            wait_delay = h5f.attrs['wait_delay']
-            readout_sample_delay = h5f.attrs['readout_sample_delay']
-            num_averages = h5f.attrs['num_averages']
-            drag = h5f.attrs['drag']
+            readout_freq = h5f.attrs["readout_freq"]
+            control_freq = h5f.attrs["control_freq"]
+            readout_amp = h5f.attrs["readout_amp"]
+            control_amp = h5f.attrs["control_amp"]
+            readout_duration = h5f.attrs["readout_duration"]
+            control_duration = h5f.attrs["control_duration"]
+            sample_duration = h5f.attrs["sample_duration"]
+            delay_arr = h5f["delay_arr"][()]
+            readout_port = h5f.attrs["readout_port"]
+            control_port = h5f.attrs["control_port"]
+            sample_port = h5f.attrs["sample_port"]
+            wait_delay = h5f.attrs["wait_delay"]
+            readout_sample_delay = h5f.attrs["readout_sample_delay"]
+            num_averages = h5f.attrs["num_averages"]
+            drag = h5f.attrs["drag"]
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            t_arr = h5f['t_arr'][()]
-            store_arr = h5f['store_arr'][()]
+            t_arr = h5f["t_arr"][()]
+            store_arr = h5f["store_arr"][()]
 
         self = cls(
             readout_freq=readout_freq,
@@ -327,7 +331,7 @@ class T1(Base):
             ax21.plot(1e6 * self.delay_arr, np.abs(resp_arr))
             ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(resp_arr)))
             ax23.plot(1e6 * self.delay_arr, np.real(resp_arr))
-            ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), '--')
+            ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), "--")
             ax24.plot(1e6 * self.delay_arr, np.imag(resp_arr))
 
             ax21.set_ylabel("Amplitude [FS]")
@@ -353,8 +357,8 @@ class T1(Base):
             mult = 1e3
 
         fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(1e6 * self.delay_arr, mult * np.real(resp_arr), '.')
-        ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), '--')
+        ax3.plot(1e6 * self.delay_arr, mult * np.real(resp_arr), ".")
+        ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), "--")
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel(r"Control-readout delay [μs]")
         ax3.set_title("T1 = {:s} μs".format(format_precision(1e6 * T1, 1e6 * T1_err)))

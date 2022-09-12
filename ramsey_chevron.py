@@ -76,10 +76,10 @@ class RamseyChevron(Base):
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
 
@@ -110,9 +110,12 @@ class RamseyChevron(Base):
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
-                                     self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(
+                    self.jpa_params["pump_freq"],
+                    self.jpa_params["pump_pwr"],
+                    self.jpa_params["pump_port"],
+                )
+                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
                 pls.hardware.sleep(1.0, False)
 
             # ************************************
@@ -212,7 +215,7 @@ class RamseyChevron(Base):
 
             if self.jpa_params is not None:
                 # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params['pump_freq'] - self.readout_freq
+                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
                 idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
                 idler_period = 1 / idler_if
                 T_clk = int(round(T * pls.get_clk_f()))
@@ -236,8 +239,8 @@ class RamseyChevron(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
@@ -245,33 +248,33 @@ class RamseyChevron(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'RamseyChevron':
+    def load(cls, load_filename: str) -> "RamseyChevron":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs['readout_freq']
-            control_freq_center = h5f.attrs['control_freq_center']
-            control_freq_span = h5f.attrs['control_freq_span']
-            control_freq_nr = h5f.attrs['control_freq_nr']
-            readout_amp = h5f.attrs['readout_amp']
-            control_amp = h5f.attrs['control_amp']
-            readout_duration = h5f.attrs['readout_duration']
-            control_duration = h5f.attrs['control_duration']
-            sample_duration = h5f.attrs['sample_duration']
-            delay_arr = h5f['delay_arr'][()]
-            readout_port = h5f.attrs['readout_port']
-            control_port = h5f.attrs['control_port']
-            sample_port = h5f.attrs['sample_port']
-            wait_delay = h5f.attrs['wait_delay']
-            readout_sample_delay = h5f.attrs['readout_sample_delay']
-            num_averages = h5f.attrs['num_averages']
+            readout_freq = h5f.attrs["readout_freq"]
+            control_freq_center = h5f.attrs["control_freq_center"]
+            control_freq_span = h5f.attrs["control_freq_span"]
+            control_freq_nr = h5f.attrs["control_freq_nr"]
+            readout_amp = h5f.attrs["readout_amp"]
+            control_amp = h5f.attrs["control_amp"]
+            readout_duration = h5f.attrs["readout_duration"]
+            control_duration = h5f.attrs["control_duration"]
+            sample_duration = h5f.attrs["sample_duration"]
+            delay_arr = h5f["delay_arr"][()]
+            readout_port = h5f.attrs["readout_port"]
+            control_port = h5f.attrs["control_port"]
+            sample_port = h5f.attrs["sample_port"]
+            wait_delay = h5f.attrs["wait_delay"]
+            readout_sample_delay = h5f.attrs["readout_sample_delay"]
+            num_averages = h5f.attrs["num_averages"]
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            control_freq_arr = h5f['control_freq_arr'][()]
-            t_arr = h5f['t_arr'][()]
-            store_arr = h5f['store_arr'][()]
+            control_freq_arr = h5f["control_freq_arr"][()]
+            t_arr = h5f["t_arr"][()]
+            store_arr = h5f["store_arr"][()]
 
             try:
-                drag = h5f.attrs['drag']
+                drag = h5f.attrs["drag"]
             except KeyError:
                 drag = 0.0
 
@@ -350,12 +353,12 @@ class RamseyChevron(Base):
         # choose limits for colorbar
         cutoff = 0.0  # %
         lowlim = np.percentile(plot_data, cutoff)
-        highlim = np.percentile(plot_data, 100. - cutoff)
+        highlim = np.percentile(plot_data, 100.0 - cutoff)
 
         # extent
-        x_min = 1e+6 * self.delay_arr[0]
-        x_max = 1e+6 * self.delay_arr[-1]
-        dx = 1e+6 * (self.delay_arr[1] - self.delay_arr[0])
+        x_min = 1e6 * self.delay_arr[0]
+        x_max = 1e6 * self.delay_arr[-1]
+        dx = 1e6 * (self.delay_arr[1] - self.delay_arr[0])
         y_min = 1e-9 * self.control_freq_arr[0]
         y_max = 1e-9 * self.control_freq_arr[-1]
         dy = 1e-9 * (self.control_freq_arr[1] - self.control_freq_arr[0])
@@ -363,9 +366,9 @@ class RamseyChevron(Base):
         fig2, ax2 = plt.subplots(tight_layout=True)
         im = ax2.imshow(
             plot_data,
-            origin='lower',
-            aspect='auto',
-            interpolation='none',
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim,
             vmax=highlim,
@@ -391,7 +394,7 @@ class RamseyChevron(Base):
         x0 = np.roots(pfit1 - pfit2)[0]
 
         fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(self.control_freq_arr, fit_freq, '.')
+        ax3.plot(self.control_freq_arr, fit_freq, ".")
         ax3.set_ylabel("Fitted detuning [Hz]")
         ax3.set_xlabel("Control frequency [Hz]$]")
         fig3.show()
@@ -399,17 +402,17 @@ class RamseyChevron(Base):
         ax3.plot(
             self.control_freq_arr,
             np.polyval(pfit1, self.control_freq_arr),
-            '--',
-            c='tab:orange',
+            "--",
+            c="tab:orange",
         )
         ax3.plot(
             self.control_freq_arr,
             np.polyval(pfit2, self.control_freq_arr),
-            '--',
-            c='tab:green',
+            "--",
+            c="tab:green",
         )
-        ax3.axhline(0.0, ls='--', c='tab:gray')
-        ax3.axvline(x0, ls='--', c='tab:gray')
+        ax3.axhline(0.0, ls="--", c="tab:gray")
+        ax3.axvline(x0, ls="--", c="tab:gray")
         ax3.axis(_lims)
         fig3.canvas.draw()
         print(f"Fitted qubit frequency: {x0} Hz")
@@ -419,7 +422,7 @@ class RamseyChevron(Base):
 
 
 def _func(t, offset, amplitude, T2, frequency, phase):
-    return offset + amplitude * np.exp(-t / T2) * np.cos(2. * np.pi * frequency * t + phase)
+    return offset + amplitude * np.exp(-t / T2) * np.cos(2.0 * np.pi * frequency * t + phase)
 
 
 def _fit_simple(x, y):

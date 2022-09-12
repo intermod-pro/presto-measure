@@ -61,10 +61,10 @@ class TwoTonePower(Base):
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as lck:
             assert lck.hardware is not None
 
@@ -132,7 +132,7 @@ class TwoTonePower(Base):
                     data_q = _d[self.input_port][2][:, 0]
                     data = data_i.real + 1j * data_q.real  # using zero IF
 
-                    self.resp_arr[jj, ii] = np.mean(data[-self.num_averages:])
+                    self.resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
 
                     pb.increment()
 
@@ -154,7 +154,7 @@ class TwoTonePower(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'TwoTonePower':
+    def load(cls, load_filename: str) -> "TwoTonePower":
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs["readout_freq"]
             control_freq_center = h5f.attrs["control_freq_center"]
@@ -200,12 +200,13 @@ class TwoTonePower(Base):
             raise ValueError
 
         import matplotlib.pyplot as plt
+
         nr_amps = len(self.control_amp_arr)
 
         self._AMP_IDX = nr_amps // 2
 
         if quantity == "dB":
-            data = 20. * np.log10(np.abs(self.resp_arr))
+            data = 20.0 * np.log10(np.abs(self.resp_arr))
             unit = "dBFS"
             title = "Response amplitude"
         elif quantity == "phase":
@@ -235,9 +236,9 @@ class TwoTonePower(Base):
         amp_dBFS = 20 * np.log10(self.control_amp_arr / 1.0)
 
         # choose limits for colorbar
-        cutoff = 1.  # %
+        cutoff = 1.0  # %
         lowlim = np.percentile(data, cutoff)
-        highlim = np.percentile(data, 100. - cutoff)
+        highlim = np.percentile(data, 100.0 - cutoff)
 
         # extent
         x_min = 1e-9 * self.control_freq_arr[0]
@@ -257,9 +258,9 @@ class TwoTonePower(Base):
             ax1 = fig1.add_subplot(gs[0, 0])
         im = ax1.imshow(
             data,
-            origin='lower',
-            aspect='auto',
-            interpolation='none',
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
             vmin=lowlim,
             vmax=highlim,
@@ -275,7 +276,7 @@ class TwoTonePower(Base):
         if linecut:
             ax2 = fig1.add_subplot(gs[-1, 0])
 
-            line_a, = ax2.plot(1e-9 * self.control_freq_arr, data[self._AMP_IDX], animated=blit)
+            (line_a,) = ax2.plot(1e-9 * self.control_freq_arr, data[self._AMP_IDX], animated=blit)
 
             f_min = 1e-9 * self.control_freq_arr.min()
             f_max = 1e-9 * self.control_freq_arr.max()
@@ -324,8 +325,8 @@ class TwoTonePower(Base):
                 else:
                     fig1.canvas.draw()
 
-            fig1.canvas.mpl_connect('button_press_event', onbuttonpress)
-            fig1.canvas.mpl_connect('key_press_event', onkeypress)
+            fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
+            fig1.canvas.mpl_connect("key_press_event", onkeypress)
 
         fig1.show()
         if linecut and blit:

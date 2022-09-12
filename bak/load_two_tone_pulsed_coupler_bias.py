@@ -12,7 +12,7 @@ import numpy as np
 
 from presto.utils import rotate_opt
 
-rcParams['figure.dpi'] = 108.8
+rcParams["figure.dpi"] = 108.8
 
 if len(sys.argv) == 2:
     load_filename = sys.argv[1]
@@ -24,6 +24,7 @@ LOGSCALE = False  # Plot response in logarithmic scale (dBFS), both in colormap 
 LINECUT = False  # Plot an horizontal line cut of the 2D sweep. Interactive.
 BLIT = True  # Use blitting when plotting. Faster if it works.
 BIAS_IDX = 0  # internal use
+
 
 def load(load_filename):
     with h5py.File(load_filename, "r") as h5f:
@@ -70,7 +71,7 @@ def load(load_filename):
     BIAS_IDX = nr_bias // 2
 
     if LOGSCALE:
-        data = 20. * np.log10(np.abs(resp_arr))
+        data = 20.0 * np.log10(np.abs(resp_arr))
     else:
         data = np.abs(resp_arr)
         data_max = data.max()
@@ -86,9 +87,9 @@ def load(load_filename):
             data *= 1e3
 
     # choose limits for colorbar
-    cutoff = 1.  # %
+    cutoff = 1.0  # %
     lowlim = np.percentile(data, cutoff)
-    highlim = np.percentile(data, 100. - cutoff)
+    highlim = np.percentile(data, 100.0 - cutoff)
 
     # extent
     x_min = 1e-9 * control_freq_arr[0]
@@ -106,9 +107,9 @@ def load(load_filename):
         ax1 = fig1.add_subplot(1, 1, 1)
     im = ax1.imshow(
         data,
-        origin='lower',
-        aspect='auto',
-        interpolation='none',
+        origin="lower",
+        aspect="auto",
+        interpolation="none",
         extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
         vmin=lowlim,
         vmax=highlim,
@@ -129,10 +130,14 @@ def load(load_filename):
         ax2 = fig1.add_subplot(4, 1, 3)
         ax3 = fig1.add_subplot(4, 1, 4, sharex=ax2)
 
-        line_a, = ax2.plot(1e-9 * control_freq_arr, data[BIAS_IDX], animated=BLIT)
-        line_fit_a, = ax2.plot(1e-9 * control_freq_arr, np.full_like(control_freq_arr, np.nan), ls="--", animated=BLIT)
-        line_p, = ax3.plot(1e-9 * control_freq_arr, np.angle(resp_arr[BIAS_IDX]), animated=BLIT)
-        line_fit_p, = ax3.plot(1e-9 * control_freq_arr, np.full_like(control_freq_arr, np.nan), ls="--", animated=BLIT)
+        (line_a,) = ax2.plot(1e-9 * control_freq_arr, data[BIAS_IDX], animated=BLIT)
+        (line_fit_a,) = ax2.plot(
+            1e-9 * control_freq_arr, np.full_like(control_freq_arr, np.nan), ls="--", animated=BLIT
+        )
+        (line_p,) = ax3.plot(1e-9 * control_freq_arr, np.angle(resp_arr[BIAS_IDX]), animated=BLIT)
+        (line_fit_p,) = ax3.plot(
+            1e-9 * control_freq_arr, np.full_like(control_freq_arr, np.nan), ls="--", animated=BLIT
+        )
 
         f_min = 1e-9 * control_freq_arr.min()
         f_max = 1e-9 * control_freq_arr.max()
@@ -179,7 +184,9 @@ def load(load_filename):
             global BIAS_IDX
             line_sel.set_ydata([coupler_bias_arr[BIAS_IDX], coupler_bias_arr[BIAS_IDX]])
             # ax1.set_title(f"amp = {amp_arr[BIAS_IDX]:.2e}")
-            print(f"drive amp {BIAS_IDX:d}: {qubit_amp_arr[BIAS_IDX]:.2e} FS = {coupler_bias_arr[BIAS_IDX]:.1f} dBFS")
+            print(
+                f"drive amp {BIAS_IDX:d}: {qubit_amp_arr[BIAS_IDX]:.2e} FS = {coupler_bias_arr[BIAS_IDX]:.1f} dBFS"
+            )
             line_a.set_ydata(data[BIAS_IDX])
             line_p.set_ydata(np.angle(resp_arr[BIAS_IDX]))
             line_fit_a.set_ydata(np.full_like(control_freq_arr, np.nan))
@@ -196,8 +203,8 @@ def load(load_filename):
             else:
                 fig1.canvas.draw()
 
-        fig1.canvas.mpl_connect('button_press_event', onbuttonpress)
-        fig1.canvas.mpl_connect('key_press_event', onkeypress)
+        fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
+        fig1.canvas.mpl_connect("key_press_event", onkeypress)
 
     fig1.show()
     if LINECUT and BLIT:

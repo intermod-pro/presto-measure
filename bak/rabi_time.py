@@ -58,17 +58,19 @@ num_averages = 10_000
 rabi_n = 200  # number of steps when changing duration of control pulse
 rabi_dt = 160 * 1e-9  # s, step size when changing duration of control pulse
 wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-readout_sample_delay = 290 * 1e-9  # s, delay between readout pulse and sample window to account for latency
+readout_sample_delay = (
+    290 * 1e-9
+)  # s, delay between readout pulse and sample window to account for latency
 
 # Instantiate interface class
 with pulsed.Pulsed(
-        address=ADDRESS,
-        port=PORT,
-        ext_ref_clk=EXT_REF_CLK,
-        adc_mode=AdcMode.Mixed,
-        adc_fsample=AdcFSample.G4,
-        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+    address=ADDRESS,
+    port=PORT,
+    ext_ref_clk=EXT_REF_CLK,
+    adc_mode=AdcMode.Mixed,
+    adc_fsample=AdcFSample.G4,
+    dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+    dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
 ) as pls:
     pls.hardware.set_adc_attenuation(sample_port, 0.0)
     pls.hardware.set_dac_current(readout_port, 32_000)
@@ -188,10 +190,12 @@ script_filename = os.path.splitext(script_basename)[0]  # name of current script
 timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
 save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
 save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-source_code = get_sourcecode(script_path)  # save also the sourcecode of the script for future reference
+source_code = get_sourcecode(
+    script_path
+)  # save also the sourcecode of the script for future reference
 with h5py.File(save_path, "w") as h5f:
-    dt = h5py.string_dtype(encoding='utf-8')
-    ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+    dt = h5py.string_dtype(encoding="utf-8")
+    ds = h5f.create_dataset("source_code", (len(source_code),), dt)
     for ii, line in enumerate(source_code):
         ds[ii] = line
     h5f.attrs["num_averages"] = num_averages

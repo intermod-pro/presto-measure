@@ -76,10 +76,10 @@ class ReadoutRef(Base):
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -98,9 +98,12 @@ class ReadoutRef(Base):
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
-                                     self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(
+                    self.jpa_params["pump_freq"],
+                    self.jpa_params["pump_pwr"],
+                    self.jpa_params["pump_port"],
+                )
+                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
                 pls.hardware.sleep(1.0, False)
 
             # ************************************
@@ -151,11 +154,13 @@ class ReadoutRef(Base):
                 )
             else:
                 from presto._clear import clear
+
                 lens, amps = clear(self.readout_duration * 1e9, **self.clear)
                 lens = [int(round(l * pls.get_fs("dac"))) for l in lens]
 
-                readout_ns = int(round(self.readout_duration *
-                                       pls.get_fs("dac")))  # number of samples in the control template
+                readout_ns = int(
+                    round(self.readout_duration * pls.get_fs("dac"))
+                )  # number of samples in the control template
                 readout_envelope = np.zeros(readout_ns)
                 start = 0
                 for l, a in zip(lens, amps):
@@ -172,8 +177,9 @@ class ReadoutRef(Base):
 
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
-            control_ns = int(round(self.control_duration *
-                                   pls.get_fs("dac")))  # number of samples in the control template
+            control_ns = int(
+                round(self.control_duration * pls.get_fs("dac"))
+            )  # number of samples in the control template
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
@@ -208,7 +214,7 @@ class ReadoutRef(Base):
 
             if self.jpa_params is not None:
                 # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params['pump_freq'] - self.readout_freq
+                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
                 idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
                 idler_period = 1 / idler_if
                 T_clk = int(round(T * pls.get_clk_f()))
@@ -232,8 +238,8 @@ class ReadoutRef(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
@@ -241,28 +247,28 @@ class ReadoutRef(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'ReadoutRef':
+    def load(cls, load_filename: str) -> "ReadoutRef":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs['readout_freq']
-            control_freq = h5f.attrs['control_freq']
-            readout_amp = h5f.attrs['readout_amp']
-            control_amp = h5f.attrs['control_amp']
-            readout_duration = h5f.attrs['readout_duration']
-            control_duration = h5f.attrs['control_duration']
-            sample_duration = h5f.attrs['sample_duration']
-            readout_port = h5f.attrs['readout_port']
-            control_port = h5f.attrs['control_port']
-            sample_port = h5f.attrs['sample_port']
-            wait_delay = h5f.attrs['wait_delay']
-            readout_sample_delay = h5f.attrs['readout_sample_delay']
-            num_averages = h5f.attrs['num_averages']
-            drag = h5f.attrs['drag']
+            readout_freq = h5f.attrs["readout_freq"]
+            control_freq = h5f.attrs["control_freq"]
+            readout_amp = h5f.attrs["readout_amp"]
+            control_amp = h5f.attrs["control_amp"]
+            readout_duration = h5f.attrs["readout_duration"]
+            control_duration = h5f.attrs["control_duration"]
+            sample_duration = h5f.attrs["sample_duration"]
+            readout_port = h5f.attrs["readout_port"]
+            control_port = h5f.attrs["control_port"]
+            sample_port = h5f.attrs["sample_port"]
+            wait_delay = h5f.attrs["wait_delay"]
+            readout_sample_delay = h5f.attrs["readout_sample_delay"]
+            num_averages = h5f.attrs["num_averages"]
+            drag = h5f.attrs["drag"]
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
             clear = ast.literal_eval(h5f.attrs["clear"])
 
-            t_arr = h5f['t_arr'][()]
-            store_arr = h5f['store_arr'][()]
+            t_arr = h5f["t_arr"][()]
+            store_arr = h5f["store_arr"][()]
 
         self = cls(
             readout_freq=readout_freq,
@@ -315,24 +321,24 @@ class ReadoutRef(Base):
         idx = -2
         while idx + 2 + match_len <= nr_samples:
             idx += 2  # next clock cycle
-            dist = np.sum(distance[idx:idx + match_len])
+            dist = np.sum(distance[idx : idx + match_len])
             if dist > max_dist:
                 max_dist = dist
                 max_idx = idx
 
-        ref_g = trace_g[max_idx:max_idx + match_len]
-        ref_e = trace_e[max_idx:max_idx + match_len]
+        ref_g = trace_g[max_idx : max_idx + match_len]
+        ref_e = trace_e[max_idx : max_idx + match_len]
         match_t_in_store = self.t_arr[max_idx]
         readout_match_delay = self.readout_sample_delay + match_t_in_store
         print(f"Match starts at {1e9 * match_t_in_store:.0f} ns in store")
         print(f"Readout-match delay: {1e9 * readout_match_delay:.0f} ns")
         ret_dict = {
-            'trace_g': trace_g,
-            'trace_e': trace_e,
-            'ref_g': ref_g,
-            'ref_e': ref_e,
-            'match_t_in_store': match_t_in_store,
-            'readout_match_delay': readout_match_delay,
+            "trace_g": trace_g,
+            "trace_e": trace_e,
+            "ref_g": ref_g,
+            "ref_e": ref_e,
+            "match_t_in_store": match_t_in_store,
+            "readout_match_delay": readout_match_delay,
         }
 
         # print(f"Saving templates back into: {load_filename}")
@@ -350,7 +356,11 @@ class ReadoutRef(Base):
 
             fig1, ax1 = plt.subplots(4, 1, sharex=True, tight_layout=True)
             for ax_ in ax1:
-                ax_.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
+                ax_.axvspan(
+                    1e9 * self.t_arr[max_idx],
+                    1e9 * self.t_arr[max_idx + match_len],
+                    facecolor="#dfdfdf",
+                )
             ax1[0].plot(1e9 * self.t_arr, np.abs(trace_g), label="|g>")
             ax1[0].plot(1e9 * self.t_arr, np.abs(trace_e), label="|e>")
             ax1[1].plot(1e9 * self.t_arr, np.angle(trace_g))
@@ -382,7 +392,11 @@ class ReadoutRef(Base):
                 mult = 1e3
 
             fig2, ax2 = plt.subplots(tight_layout=True)
-            ax2.axvspan(1e9 * self.t_arr[max_idx], 1e9 * self.t_arr[max_idx + match_len], facecolor="#dfdfdf")
+            ax2.axvspan(
+                1e9 * self.t_arr[max_idx],
+                1e9 * self.t_arr[max_idx + match_len],
+                facecolor="#dfdfdf",
+            )
             ax2.plot(1e9 * self.t_arr, mult * distance)
             ax2.set_xlabel("Time [ns]")
             ax2.set_ylabel(f"Distance [{unit}FS]")

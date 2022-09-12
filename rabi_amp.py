@@ -77,10 +77,10 @@ class RabiAmp(Base):
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
 
@@ -101,9 +101,12 @@ class RabiAmp(Base):
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
-                                     self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(
+                    self.jpa_params["pump_freq"],
+                    self.jpa_params["pump_pwr"],
+                    self.jpa_params["pump_port"],
+                )
+                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
                 pls.hardware.sleep(1.0, False)
 
             # ************************************
@@ -153,8 +156,9 @@ class RabiAmp(Base):
             )
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
-            control_ns = int(round(self.control_duration *
-                                   pls.get_fs("dac")))  # number of samples in the control template
+            control_ns = int(
+                round(self.control_duration * pls.get_fs("dac"))
+            )  # number of samples in the control template
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
@@ -189,7 +193,7 @@ class RabiAmp(Base):
 
             if self.jpa_params is not None:
                 # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params['pump_freq'] - self.readout_freq
+                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
                 idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
                 idler_period = 1 / idler_if
                 T_clk = int(round(T * pls.get_clk_f()))
@@ -217,8 +221,8 @@ class RabiAmp(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
@@ -226,30 +230,30 @@ class RabiAmp(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'RabiAmp':
+    def load(cls, load_filename: str) -> "RabiAmp":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs['readout_freq']
-            control_freq = h5f.attrs['control_freq']
-            readout_amp = h5f.attrs['readout_amp']
-            control_amp_arr = h5f['control_amp_arr'][()]
-            readout_duration = h5f.attrs['readout_duration']
-            control_duration = h5f.attrs['control_duration']
-            sample_duration = h5f.attrs['sample_duration']
-            readout_port = h5f.attrs['readout_port']
-            control_port = h5f.attrs['control_port']
-            sample_port = h5f.attrs['sample_port']
-            wait_delay = h5f.attrs['wait_delay']
-            readout_sample_delay = h5f.attrs['readout_sample_delay']
-            num_averages = h5f.attrs['num_averages']
-            num_pulses = h5f.attrs['num_pulses']
+            readout_freq = h5f.attrs["readout_freq"]
+            control_freq = h5f.attrs["control_freq"]
+            readout_amp = h5f.attrs["readout_amp"]
+            control_amp_arr = h5f["control_amp_arr"][()]
+            readout_duration = h5f.attrs["readout_duration"]
+            control_duration = h5f.attrs["control_duration"]
+            sample_duration = h5f.attrs["sample_duration"]
+            readout_port = h5f.attrs["readout_port"]
+            control_port = h5f.attrs["control_port"]
+            sample_port = h5f.attrs["sample_port"]
+            wait_delay = h5f.attrs["wait_delay"]
+            readout_sample_delay = h5f.attrs["readout_sample_delay"]
+            num_averages = h5f.attrs["num_averages"]
+            num_pulses = h5f.attrs["num_pulses"]
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            t_arr = h5f['t_arr'][()]
-            store_arr = h5f['store_arr'][()]
+            t_arr = h5f["t_arr"][()]
+            store_arr = h5f["store_arr"][()]
 
             try:
-                drag = h5f.attrs['drag']
+                drag = h5f.attrs["drag"]
             except KeyError:
                 drag = 0.0
 
@@ -314,9 +318,21 @@ class RabiAmp(Base):
         pi_2_amp = period / 4
         if self.num_pulses > 1:
             print(f"{self.num_pulses} pulses")
-        print("Tau pulse amplitude: {} +- {} FS".format(period * self.num_pulses, period_err * self.num_pulses))
-        print("Pi pulse amplitude: {} +- {} FS".format(pi_amp * self.num_pulses, period_err / 2 * self.num_pulses))
-        print("Pi/2 pulse amplitude: {} +- {} FS".format(pi_2_amp * self.num_pulses, period_err / 4 * self.num_pulses))
+        print(
+            "Tau pulse amplitude: {} +- {} FS".format(
+                period * self.num_pulses, period_err * self.num_pulses
+            )
+        )
+        print(
+            "Pi pulse amplitude: {} +- {} FS".format(
+                pi_amp * self.num_pulses, period_err / 2 * self.num_pulses
+            )
+        )
+        print(
+            "Pi/2 pulse amplitude: {} +- {} FS".format(
+                pi_2_amp * self.num_pulses, period_err / 4 * self.num_pulses
+            )
+        )
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
@@ -324,7 +340,7 @@ class RabiAmp(Base):
             ax21.plot(self.control_amp_arr, np.abs(data))
             ax22.plot(self.control_amp_arr, np.angle(data))
             ax23.plot(self.control_amp_arr, np.real(data))
-            ax23.plot(self.control_amp_arr, _func(self.control_amp_arr, *popt_x), '--')
+            ax23.plot(self.control_amp_arr, _func(self.control_amp_arr, *popt_x), "--")
             ax24.plot(self.control_amp_arr, np.imag(data))
 
             ax21.set_ylabel("Amplitude [FS]")
@@ -349,8 +365,8 @@ class RabiAmp(Base):
             mult = 1e3
 
         fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(self.control_amp_arr, mult * np.real(data), '.')
-        ax3.plot(self.control_amp_arr, mult * _func(self.control_amp_arr, *popt_x), '--')
+        ax3.plot(self.control_amp_arr, mult * np.real(data), ".")
+        ax3.plot(self.control_amp_arr, mult * _func(self.control_amp_arr, *popt_x), "--")
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel("Pulse amplitude [FS]")
         if self.num_pulses > 1:
@@ -378,10 +394,10 @@ def _fit_period(x: List[float], y: List[float]) -> Tuple[List[float], List[float
     frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
     period = 1 / frequency
     first = (y[0] - offset) / amplitude
-    if first > 1.:
-        first = 1.
-    elif first < -1.:
-        first = -1.
+    if first > 1.0:
+        first = 1.0
+    elif first < -1.0:
+        first = -1.0
     phase = np.arccos(first)
     p0 = (
         offset,

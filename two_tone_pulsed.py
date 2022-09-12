@@ -75,10 +75,10 @@ class TwoTonePulsed(Base):
         ext_ref_clk: bool = False,
     ) -> str:
         with pulsed.Pulsed(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
 
@@ -109,9 +109,12 @@ class TwoTonePulsed(Base):
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
-                                     self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(
+                    self.jpa_params["pump_freq"],
+                    self.jpa_params["pump_pwr"],
+                    self.jpa_params["pump_port"],
+                )
+                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
                 pls.hardware.sleep(1.0, False)
 
             # ************************************
@@ -161,8 +164,9 @@ class TwoTonePulsed(Base):
             )
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
-            control_ns = int(round(self.control_duration *
-                                   pls.get_fs("dac")))  # number of samples in the control template
+            control_ns = int(
+                round(self.control_duration * pls.get_fs("dac"))
+            )  # number of samples in the control template
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 output_port=self.control_port,
@@ -191,13 +195,15 @@ class TwoTonePulsed(Base):
             pls.store(T + self.readout_sample_delay)
             # Move to next Rabi amplitude
             T += self.readout_duration
-            pls.next_frequency(T, self.control_port)  # every iteration will have a different frequency
+            pls.next_frequency(
+                T, self.control_port
+            )  # every iteration will have a different frequency
             # Wait for decay
             T += self.wait_delay
 
             if self.jpa_params is not None:
                 # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params['pump_freq'] - self.readout_freq
+                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
                 idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
                 idler_period = 1 / idler_if
                 T_clk = int(round(T * pls.get_clk_f()))
@@ -223,8 +229,8 @@ class TwoTonePulsed(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
@@ -232,32 +238,32 @@ class TwoTonePulsed(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> 'TwoTonePulsed':
+    def load(cls, load_filename: str) -> "TwoTonePulsed":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs['readout_freq']
-            control_freq_center = h5f.attrs['control_freq_center']
-            control_freq_span = h5f.attrs['control_freq_span']
-            control_freq_nr = h5f.attrs['control_freq_nr']
-            readout_amp = h5f.attrs['readout_amp']
-            control_amp = h5f.attrs['control_amp']
-            readout_duration = h5f.attrs['readout_duration']
-            control_duration = h5f.attrs['control_duration']
-            sample_duration = h5f.attrs['sample_duration']
-            readout_port = h5f.attrs['readout_port']
-            control_port = h5f.attrs['control_port']
-            sample_port = h5f.attrs['sample_port']
-            wait_delay = h5f.attrs['wait_delay']
-            readout_sample_delay = h5f.attrs['readout_sample_delay']
-            num_averages = h5f.attrs['num_averages']
+            readout_freq = h5f.attrs["readout_freq"]
+            control_freq_center = h5f.attrs["control_freq_center"]
+            control_freq_span = h5f.attrs["control_freq_span"]
+            control_freq_nr = h5f.attrs["control_freq_nr"]
+            readout_amp = h5f.attrs["readout_amp"]
+            control_amp = h5f.attrs["control_amp"]
+            readout_duration = h5f.attrs["readout_duration"]
+            control_duration = h5f.attrs["control_duration"]
+            sample_duration = h5f.attrs["sample_duration"]
+            readout_port = h5f.attrs["readout_port"]
+            control_port = h5f.attrs["control_port"]
+            sample_port = h5f.attrs["sample_port"]
+            wait_delay = h5f.attrs["wait_delay"]
+            readout_sample_delay = h5f.attrs["readout_sample_delay"]
+            num_averages = h5f.attrs["num_averages"]
 
             jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            t_arr = h5f['t_arr'][()]
-            store_arr = h5f['store_arr'][()]
-            control_freq_arr = h5f['control_freq_arr'][()]
+            t_arr = h5f["t_arr"][()]
+            store_arr = h5f["store_arr"][()]
+            control_freq_arr = h5f["control_freq_arr"][()]
 
             try:
-                drag = h5f.attrs['drag']
+                drag = h5f.attrs["drag"]
             except KeyError:
                 drag = 0.0
 
@@ -293,6 +299,7 @@ class TwoTonePulsed(Base):
 
         import matplotlib.pyplot as plt
         from scipy.optimize import curve_fit
+
         ret_fig = []
 
         idx = np.arange(IDX_LOW, IDX_HIGH)
@@ -325,9 +332,8 @@ class TwoTonePulsed(Base):
             data_max = data.real.max()
             data_rng = data_max - data_min
             p0 = [self.control_freq_center, self.control_freq_span / 4, data_rng, data_min]
-            popt, pcov = curve_fit(_gaussian, self.control_freq_arr, data.real,
-                                   p0)
-            ax23.plot(1e-9 * self.control_freq_arr, _gaussian(self.control_freq_arr, *popt), '--')
+            popt, pcov = curve_fit(_gaussian, self.control_freq_arr, data.real, p0)
+            ax23.plot(1e-9 * self.control_freq_arr, _gaussian(self.control_freq_arr, *popt), "--")
             print(f"f0 = {popt[0]} Hz")
             print(f"sigma = {abs(popt[1])} Hz")
         except Exception:
@@ -346,7 +352,8 @@ class TwoTonePulsed(Base):
 
 
 def _lorentzian(x, x0, gamma, a, o):
-    return a * (gamma / 2)**2 / ((x - x0)**2 + (gamma / 2)**2) + o
+    return a * (gamma / 2) ** 2 / ((x - x0) ** 2 + (gamma / 2) ** 2) + o
+
 
 def _gaussian(x, x0, s, a, o):
-    return a * np.exp(-0.5 * ((x - x0) / s)**2) + o
+    return a * np.exp(-0.5 * ((x - x0) / s) ** 2) + o
