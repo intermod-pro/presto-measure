@@ -167,6 +167,8 @@ class ReadoutRef(Base):
                     stop = start + l
                     readout_envelope[start:stop] = a
                     start += l
+                readout_envelope *= self.readout_amp
+
                 readout_pulse = pls.setup_template(
                     output_port=self.readout_port,
                     group=0,
@@ -318,9 +320,7 @@ class ReadoutRef(Base):
 
         max_idx = 0
         max_dist = 0.0
-        idx = -2
-        while idx + 2 + match_len <= nr_samples:
-            idx += 2  # next clock cycle
+        for idx in range(0, nr_samples - match_len, 2):
             dist = np.sum(distance[idx : idx + match_len])
             if dist > max_dist:
                 max_dist = dist
@@ -340,16 +340,6 @@ class ReadoutRef(Base):
             "match_t_in_store": match_t_in_store,
             "readout_match_delay": readout_match_delay,
         }
-
-        # print(f"Saving templates back into: {load_filename}")
-        # with h5py.File(load_filename, "r+") as h5f:
-        #     h5f.attrs["match_t_in_store"] = match_t_in_store
-        #     try:
-        #         h5f.create_dataset("template_g", data=template_g)
-        #         h5f.create_dataset("template_e", data=template_e)
-        #     except OSError:
-        #         print("Warning: could not save templates, already there? Skipping...")
-        #         pass
 
         if plot:
             import matplotlib.pyplot as plt
