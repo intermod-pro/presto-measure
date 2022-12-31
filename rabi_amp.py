@@ -13,7 +13,7 @@ import numpy as np
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import format_precision, rotate_opt, sin2
 
 from _base import Base
 
@@ -312,27 +312,19 @@ class RabiAmp(Base):
 
         # Fit data
         popt_x, perr_x = _fit_period(self.control_amp_arr, np.real(data))
-        period = popt_x[3]
-        period_err = perr_x[3]
+        period = popt_x[3] * self.num_pulses
+        period_err = perr_x[3] * self.num_pulses
         pi_amp = period / 2
         pi_2_amp = period / 4
         if self.num_pulses > 1:
             print(f"{self.num_pulses} pulses")
-        print(
-            "Tau pulse amplitude: {} +- {} FS".format(
-                period * self.num_pulses, period_err * self.num_pulses
-            )
-        )
-        print(
-            "Pi pulse amplitude: {} +- {} FS".format(
-                pi_amp * self.num_pulses, period_err / 2 * self.num_pulses
-            )
-        )
-        print(
-            "Pi/2 pulse amplitude: {} +- {} FS".format(
-                pi_2_amp * self.num_pulses, period_err / 4 * self.num_pulses
-            )
-        )
+
+        print(f"Tau pulse amplitude: {format_precision(period, period_err)} FS")
+        print(f"Pi pulse amplitude: {format_precision(pi_amp, period_err / 2)} FS")
+        print(f"Pi/2 pulse amplitude: {format_precision(pi_2_amp, period_err / 4)} FS")
+
+        print(f"control_amp_180 = {pi_amp:.5f}")
+        print(f"control_amp_90 = {pi_2_amp:.5f}")
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
