@@ -12,8 +12,10 @@ import time
 from typing import List, Tuple
 
 import h5py
+
 # import matplotlib.pyplot as plt
 import numpy as np
+
 # from scipy.optimize import curve_fit
 # from scipy.signal import remez, freqz, filtfilt
 
@@ -40,7 +42,6 @@ IDX_HIGH = 2_000
 
 
 class Rb(Base):
-
     def __init__(
         self,
         readout_freq: float,
@@ -107,7 +108,9 @@ class Rb(Base):
                 cnt = cnt + 1
                 print()
                 print(f"****** {cnt}/{tot} ******")
-                t_arr, (data_i, data_q) = self._run_inner(seq, presto_address, presto_port, ext_ref_clk)
+                t_arr, (data_i, data_q) = self._run_inner(
+                    seq, presto_address, presto_port, ext_ref_clk
+                )
                 inner.append(data_i + 1j * data_q)
 
         result = np.array(outer)
@@ -121,10 +124,10 @@ class Rb(Base):
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
-                address=presto_address,
-                port=presto_port,
-                ext_ref_clk=ext_ref_clk,
-                **CONVERTER_CONFIGURATION,
+            address=presto_address,
+            port=presto_port,
+            ext_ref_clk=ext_ref_clk,
+            **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
 
@@ -145,9 +148,12 @@ class Rb(Base):
                 sync=True,  # sync here
             )
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(self.jpa_params['pump_freq'], self.jpa_params['pump_pwr'],
-                                     self.jpa_params['pump_port'])
-                pls.hardware.set_dc_bias(self.jpa_params['bias'], self.jpa_params['bias_port'])
+                pls.hardware.set_lmx(
+                    self.jpa_params["pump_freq"],
+                    self.jpa_params["pump_pwr"],
+                    self.jpa_params["pump_port"],
+                )
+                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
                 pls.hardware.sleep(1.0, False)
 
     def _rbgen(self):
@@ -169,7 +175,9 @@ class Rb(Base):
                 # circuit is QuantumCircuit
                 inner = list()
                 outer.append(inner)
-                circuit_t: QuantumCircuit = transpile(circuit, basis_gates=['rz', 'sx'], optimization_level=3)
+                circuit_t: QuantumCircuit = transpile(
+                    circuit, basis_gates=["rz", "sx"], optimization_level=3
+                )
                 for g in circuit_t.data:
                     instruction = g[0]
                     if isinstance(instruction, RZGate):
@@ -178,11 +186,11 @@ class Rb(Base):
                         if np.abs(iparam * np.pi / 2 - float(instruction.params[0])) > 1e-6:
                             print(param, iparam, iparam * np.pi / 2)
                             print("Rounding error!")
-                        inner.append(('Z', iparam))
+                        inner.append(("Z", iparam))
                         # print('Z', end='')
                         # print(instruction.params, end='')
                     elif isinstance(instruction, SXGate):
-                        inner.append(('X', ))
+                        inner.append(("X",))
                         # print('X', end='')
                     elif isinstance(instruction, Barrier):
                         pass
@@ -191,7 +199,7 @@ class Rb(Base):
                         pass
                         # print('Measure')
                     else:
-                        print('Unknown')
+                        print("Unknown")
         return result
 
 
@@ -202,7 +210,7 @@ def setup_template_matching():
         readout_sample_delay = h5f.attrs["readout_sample_delay"]
         template_g = h5f["template_g"][()]
         template_e = h5f["template_e"][()]
-        threshold = 0.5 * (np.sum(np.abs(template_e)**2) - np.sum(np.abs(template_g)**2))
+        threshold = 0.5 * (np.sum(np.abs(template_e) ** 2) - np.sum(np.abs(template_g) ** 2))
 
     # Setup template matching
     templ_g = np.zeros(len(template_g) * 2, np.float64)
@@ -225,8 +233,8 @@ def setup_template_matching():
 
 def read_template_from_file():
     with h5py.File("template.h5", "w") as h5f:
-        h5f.attrs["readout_sample_delay"] = .5e-6
-        h5f.attrs["match_t_in_store"] = .5e-6
+        h5f.attrs["readout_sample_delay"] = 0.5e-6
+        h5f.attrs["match_t_in_store"] = 0.5e-6
         h5f.create_dataset("template_g", data=np.ones(128))
         h5f.create_dataset("template_e", data=np.ones(128))
 
@@ -234,13 +242,13 @@ def read_template_from_file():
 def run_sequence(seq, settings):
 
     with pulsed.Pulsed(
-            dry_run=settings["dry_run"],
-            address="130.237.35.90",
-            port=42874,
-            adc_mode=AdcMode.Mixed,
-            adc_fsample=AdcFSample.G2,
-            dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-            dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+        dry_run=settings["dry_run"],
+        address="130.237.35.90",
+        port=42874,
+        adc_mode=AdcMode.Mixed,
+        adc_fsample=AdcFSample.G2,
+        dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
+        dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
     ) as pls:
 
         pls.hardware.set_adc_attenuation(settings["sample_port"], 0.0)
@@ -248,25 +256,49 @@ def run_sequence(seq, settings):
         pls.hardware.set_dac_current(settings["control_port"], 32_000)
         pls.hardware.set_inv_sinc(settings["readout_port"], 0)
         pls.hardware.set_inv_sinc(settings["control_port"], 0)
-        pls.hardware.configure_mixer(settings["qubit_frequency"][0], out_ports=settings["control_port"][0], sync=False)
-        pls.hardware.configure_mixer(settings["readout_frequency"][0],
-                                     out_ports=settings["readout_port"][0],
-                                     in_ports=settings["sample_port"])
+        pls.hardware.configure_mixer(
+            settings["qubit_frequency"][0], out_ports=settings["control_port"][0], sync=False
+        )
+        pls.hardware.configure_mixer(
+            settings["readout_frequency"][0],
+            out_ports=settings["readout_port"][0],
+            in_ports=settings["sample_port"],
+        )
 
         ReadoutPulse = [
-            pls.setup_template(settings["readout_port"][0], 0, settings["readout_envelope"],
-                               settings["readout_envelope"]),
+            pls.setup_template(
+                settings["readout_port"][0],
+                0,
+                settings["readout_envelope"],
+                settings["readout_envelope"],
+            ),
         ]
 
         XTemplates = [
-            pls.setup_template(settings["control_port"][0], 0, np.real(settings["control_envelope"]),
-                               np.imag(settings["control_envelope"])),
-            pls.setup_template(settings["control_port"][0], 0, np.imag(settings["control_envelope"]),
-                               -np.real(settings["control_envelope"])),
-            pls.setup_template(settings["control_port"][0], 0, -np.real(settings["control_envelope"]),
-                               -np.imag(settings["control_envelope"])),
-            pls.setup_template(settings["control_port"][0], 0, -np.imag(settings["control_envelope"]),
-                               np.real(settings["control_envelope"])),
+            pls.setup_template(
+                settings["control_port"][0],
+                0,
+                np.real(settings["control_envelope"]),
+                np.imag(settings["control_envelope"]),
+            ),
+            pls.setup_template(
+                settings["control_port"][0],
+                0,
+                np.imag(settings["control_envelope"]),
+                -np.real(settings["control_envelope"]),
+            ),
+            pls.setup_template(
+                settings["control_port"][0],
+                0,
+                -np.real(settings["control_envelope"]),
+                -np.imag(settings["control_envelope"]),
+            ),
+            pls.setup_template(
+                settings["control_port"][0],
+                0,
+                -np.imag(settings["control_envelope"]),
+                np.real(settings["control_envelope"]),
+            ),
             # pls.setup_template(settings["control_port"][0], 0, settings["control_envelope"], settings["control_envelope"]),
             # pls.setup_template(settings["control_port"][0], 0, settings["control_envelope"], -settings["control_envelope"]),
             # pls.setup_template(settings["control_port"][0], 0, -settings["control_envelope"], -settings["control_envelope"]),
@@ -288,9 +320,9 @@ def run_sequence(seq, settings):
 
         pulse_count = 0
         for g in seq:
-            if g[0] == 'Z':
+            if g[0] == "Z":
                 vphase = (vphase + g[1]) % 4
-            elif g[0] == 'X':
+            elif g[0] == "X":
                 # print(f"X({vphase}) at {T}")
                 if pulse_count < 500:
                     pls.output_pulse(T, XTemplates[vphase])
@@ -324,24 +356,36 @@ def run_rb():
     settings["control_envelope"] = drag.dragpulse(0.5)[1] * 0.446729
     # settings["control_envelope"] = drag.dragpulse(0.0)[1] * 0.446729
     settings["readout_envelope"] = np.ones(2000) * 0.4
-    settings["qubit_frequency"] = np.array([
-        4.087703443926388 * 1e9 + 98454,
-    ])
-    settings["readout_frequency"] = np.array([
-        6.028_100 * 1e9,
-    ])
-    settings["control_port"] = np.array([
-        4,
-    ])
-    settings["readout_port"] = np.array([
-        1,
-    ])
-    settings["sample_port"] = np.array([
-        1,
-    ])
+    settings["qubit_frequency"] = np.array(
+        [
+            4.087703443926388 * 1e9 + 98454,
+        ]
+    )
+    settings["readout_frequency"] = np.array(
+        [
+            6.028_100 * 1e9,
+        ]
+    )
+    settings["control_port"] = np.array(
+        [
+            4,
+        ]
+    )
+    settings["readout_port"] = np.array(
+        [
+            1,
+        ]
+    )
+    settings["sample_port"] = np.array(
+        [
+            1,
+        ]
+    )
     settings["store_duration"] = 4e-6
 
-    settings["rb_lengths"] = np.array([0, 1, 2, 5, 10, 20, 50, 70, 100, 150, 200, 250, 300, 350, 400, 450])
+    settings["rb_lengths"] = np.array(
+        [0, 1, 2, 5, 10, 20, 50, 70, 100, 150, 200, 250, 300, 350, 400, 450]
+    )
     settings["rb_iterations"] = 100
 
     USE_JPA = True
@@ -350,12 +394,16 @@ def run_rb():
     jpa_pump_freq = 2 * 6.031e9  # Hz
     jpa_pump_pwr = 9  # lmx units
     jpa_bias = +0.449  # V
-    jpa_params = {
-        'jpa_bias': jpa_bias,
-        'jpa_bias_port': jpa_bias_port,
-        'jpa_pump_freq': jpa_pump_freq,
-        'jpa_pump_pwr': jpa_pump_pwr,
-    } if USE_JPA else None
+    jpa_params = (
+        {
+            "jpa_bias": jpa_bias,
+            "jpa_bias_port": jpa_bias_port,
+            "jpa_pump_freq": jpa_pump_freq,
+            "jpa_pump_pwr": jpa_pump_pwr,
+        }
+        if USE_JPA
+        else None
+    )
 
     print("Generating gate sequences...")
     rb = rbgen(settings["rb_lengths"][1:], settings["rb_iterations"], [[0]])
@@ -367,8 +415,8 @@ def run_rb():
     if jpa_params is not None:
         with hardware.Hardware(address="130.237.35.90", port=42874) as pls:
             pls.init_clock(False)
-            pls.set_lmx(jpa_params['jpa_pump_freq'], jpa_params['jpa_pump_pwr'])
-            set_dc_bias(jpa_params['jpa_bias_port'], jpa_params['jpa_bias'])
+            pls.set_lmx(jpa_params["jpa_pump_freq"], jpa_params["jpa_pump_pwr"])
+            set_dc_bias(jpa_params["jpa_bias_port"], jpa_params["jpa_bias"])
             time.sleep(1.0)
 
     try:
@@ -395,7 +443,7 @@ def run_rb():
         if jpa_params is not None:
             with hardware.Hardware(address="130.237.35.90", port=42874) as pls:
                 pls.set_lmx(0.0, 0.0)
-                set_dc_bias(jpa_params['jpa_bias_port'], 0.0)
+                set_dc_bias(jpa_params["jpa_bias_port"], 0.0)
     # *************************
     # *** Save data to HDF5 ***
     # *************************
@@ -405,10 +453,12 @@ def run_rb():
     timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
     save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
     save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
-    source_code = get_sourcecode(__file__)  # save also the sourcecode of the script for future reference
+    source_code = get_sourcecode(
+        __file__
+    )  # save also the sourcecode of the script for future reference
     with h5py.File(save_path, "w") as h5f:
-        dt = h5py.string_dtype(encoding='utf-8')
-        ds = h5f.create_dataset("source_code", (len(source_code), ), dt)
+        dt = h5py.string_dtype(encoding="utf-8")
+        ds = h5f.create_dataset("source_code", (len(source_code),), dt)
         for ii, line in enumerate(source_code):
             ds[ii] = line
 
@@ -466,7 +516,9 @@ def load_rb(arg):
 
     result = lowpass(result)
     if False:
-        fig, ax = plt.subplots(result.shape[0], result.shape[1], sharex=True, sharey=True, squeeze=False)
+        fig, ax = plt.subplots(
+            result.shape[0], result.shape[1], sharex=True, sharey=True, squeeze=False
+        )
         for i, inner in enumerate(result):
             for j, d in enumerate(inner):
                 real = np.real(d[0, 0, :])
@@ -484,15 +536,17 @@ def load_rb(arg):
 
     fig, ax = plt.subplots(tight_layout=True)
     for d in rotated:
-        ax.plot(rb_lengths, 1e3 * d, '.', c="tab:gray", alpha=0.1)
-    ax.plot(rb_lengths, 1e3 * rotated_avg, '.', ms=9)
+        ax.plot(rb_lengths, 1e3 * d, ".", c="tab:gray", alpha=0.1)
+    ax.plot(rb_lengths, 1e3 * rotated_avg, ".", ms=9)
     # ax[1].plot(control_envelope.real)
     # ax[1].plot(control_envelope.imag)
 
     try:
-        popt, pcov = curve_fit(exp_fit_fn, rb_lengths, rotated_avg, p0=(rotated_avg[0], rotated_avg[-1], 0.99))
+        popt, pcov = curve_fit(
+            exp_fit_fn, rb_lengths, rotated_avg, p0=(rotated_avg[0], rotated_avg[-1], 0.99)
+        )
         perr = np.sqrt(np.diag(pcov))
-        ax.plot(rb_lengths, 1e3 * exp_fit_fn(rb_lengths, *popt), '--')
+        ax.plot(rb_lengths, 1e3 * exp_fit_fn(rb_lengths, *popt), "--")
         print(popt)
         alpha = popt[-1]
         alpha_std = perr[-1]
