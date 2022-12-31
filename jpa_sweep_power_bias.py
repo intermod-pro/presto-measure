@@ -2,7 +2,7 @@
 """
 3D sweep of pump power, DC bias and frequency of probe, to see where we get gain.
 """
-from typing import List
+from typing import List, Optional
 
 import h5py
 import numpy as np
@@ -216,7 +216,7 @@ class JpaSweepPowerBias(Base):
 
         return self
 
-    def analyze(self, quantity: str = "signal"):
+    def analyze(self, quantity: str = "signal", marker_freq: Optional[float] = None):
         assert self.freq_arr is not None
         assert self.ref_resp_arr is not None
         assert self.ref_pwr_arr is not None
@@ -279,6 +279,8 @@ class JpaSweepPowerBias(Base):
             ax.set_ylabel("DC bias [V]")
             cb = fig.colorbar(im)
             cb.set_label("Gain [dB]")
+            if marker_freq is not None:
+                ax.axvline(marker_freq / 1e9, color="tab:gray", alpha=0.2)
             fig.show()
             ret_fig.append(fig)
         else:
@@ -303,6 +305,8 @@ class JpaSweepPowerBias(Base):
                         cmap="RdBu_r",
                     )
                     _ax.set_title(str(self.pump_pwr_arr[jj * nr_plots + ii]))
+                    if marker_freq is not None:
+                        _ax.axvline(marker_freq / 1e9, color="tab:gray", alpha=0.2)
                 fig.show()
                 ret_fig.append(fig)
 
