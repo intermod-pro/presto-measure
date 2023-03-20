@@ -345,6 +345,7 @@ class ExcitedSweep(Base):
             0.0,
         ]
         popt, pcov = curve_fit(_gaussian, self.readout_freq_arr, separation, p0)
+        f_o = popt[0]
 
         print("----------------")
         if _has_resonator_tools:
@@ -360,7 +361,6 @@ class ExcitedSweep(Base):
             f_g = port_g.fitresults["fr"]
             f_e = port_e.fitresults["fr"]
             f_r = (f_e + f_g) / 2
-            f_o = popt[0]
             chi_hz = (f_e - f_g) / 2
             print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
             print(f"ω_e / 2π = {f_e * 1e-9:.6f} GHz")
