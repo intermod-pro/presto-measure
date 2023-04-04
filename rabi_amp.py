@@ -24,7 +24,7 @@ CONVERTER_CONFIGURATION = {
     "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
     "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
 }
-IDX_LOW = 1_500
+IDX_LOW = 0
 IDX_HIGH = 2_000
 
 
@@ -89,83 +89,48 @@ class RabiAmp(Base):
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
+
             pls.hardware.configure_mixer(
-                freq=self.readout_freq,
+                self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,  # sync in next call
-            )
+                sync=False,
+            )  # sync in next call
+
             pls.hardware.configure_mixer(
-                freq=self.control_freq,
-                out_ports=self.control_port,
-                sync=True,  # sync here
-            )
-            if self.jpa_params is not None:
-                pls.hardware.set_lmx(
-                    self.jpa_params["pump_freq"],
-                    self.jpa_params["pump_pwr"],
-                    self.jpa_params["pump_port"],
-                )
-                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
-                pls.hardware.sleep(1.0, False)
+                self.control_freq, out_ports=self.control_port, sync=True
+            )  # sync here
 
             # ************************************
             # *** Setup measurement parameters ***
             # ************************************
 
-            # Setup lookup tables for frequencies
-            pls.setup_freq_lut(
-                output_ports=self.readout_port,
-                group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
-            )
-            pls.setup_freq_lut(
-                output_ports=self.control_port,
-                group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
-            )
-
             # Setup lookup tables for amplitudes
-            pls.setup_scale_lut(
-                output_ports=self.readout_port,
-                group=0,
-                scales=self.readout_amp,
-            )
-            pls.setup_scale_lut(
-                output_ports=self.control_port,
-                group=0,
-                scales=self.control_amp_arr,
-            )
+            pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
+            pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp_arr)
 
             # Setup readout and control pulses
             # use setup_long_drive to create a pulse with square envelope
             # setup_long_drive supports smooth rise and fall transitions for the pulse,
             # but we keep it simple here
             readout_pulse = pls.setup_long_drive(
-                output_port=self.readout_port,
+                self.readout_port,
                 group=0,
                 duration=self.readout_duration,
-                amplitude=1.0,
-                amplitude_q=1.0,
-                rise_time=0e-9,
-                fall_time=0e-9,
+                amplitude=1.0 + 1j,
+                envelope=False,
             )
+
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
-            control_ns = int(
-                round(self.control_duration * pls.get_fs("dac"))
-            )  # number of samples in the control template
+            # number of samples in the control template
+            control_ns = int(round(self.control_duration * pls.get_fs("dac")))
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
-                output_port=self.control_port,
+                self.control_port,
                 group=0,
-                template=control_envelope,
-                template_q=control_envelope if self.drag == 0.0 else None,
-                envelope=True,
+                template=control_envelope + 1j * control_envelope,
+                envelope=False,
             )
 
             # Setup sampling window
@@ -176,34 +141,14 @@ class RabiAmp(Base):
             # *** Program pulse sequence ***
             # ******************************
             T = 0.0  # s, start at time zero ...
-            # Control pulse
-            pls.reset_phase(T, self.control_port)
             for _ in range(self.num_pulses):
-                pls.output_pulse(T, control_pulse)
+                pls.output_pulse(T, control_pulse)  # Control pulse
                 T += self.control_duration
-            # Readout
-            pls.reset_phase(T, self.readout_port)
-            pls.output_pulse(T, readout_pulse)
+            pls.output_pulse(T, readout_pulse)  # Readout
             pls.store(T + self.readout_sample_delay)
             T += self.readout_duration
-            # Move to next Rabi amplitude
-            pls.next_scale(T, self.control_port)  # every iteration will have a different amplitude
-            # Wait for decay
-            T += self.wait_delay
-
-            if self.jpa_params is not None:
-                # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
-                idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
-                idler_period = 1 / idler_if
-                T_clk = int(round(T * pls.get_clk_f()))
-                idler_period_clk = int(round(idler_period * pls.get_clk_f()))
-                # first make T a multiple of idler period
-                if T_clk % idler_period_clk > 0:
-                    T_clk += idler_period_clk - (T_clk % idler_period_clk)
-                # then make it off by one clock cycle
-                T_clk += 1
-                T = T_clk * pls.get_clk_T()
+            pls.next_scale(T, self.control_port)  # Move to next Rabi amplitude
+            T += self.wait_delay  # Wait for decay
 
             # **************************
             # *** Run the experiment ***
@@ -212,17 +157,8 @@ class RabiAmp(Base):
             # then average `num_averages` times
 
             nr_amps = len(self.control_amp_arr)
-            pls.run(
-                period=T,
-                repeat_count=nr_amps,
-                num_averages=self.num_averages,
-                print_time=True,
-            )
+            pls.run(period=T, repeat_count=nr_amps, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
-
-            if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
@@ -363,7 +299,7 @@ class RabiAmp(Base):
         ax3.set_xlabel("Pulse amplitude [FS]")
         if self.num_pulses > 1:
             ax3.set_title(f"{self.num_pulses} pulses")
-        fig3.show()
+        # fig3.show()
         ret_fig.append(fig3)
 
         return ret_fig

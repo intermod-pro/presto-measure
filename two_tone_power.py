@@ -80,6 +80,8 @@ class TwoTonePower(Base):
 
             # tune frequencies
             _, self.df = lck.tune(0.0, self.df)
+            lck.set_df(self.df)
+
             f_start = self.control_freq_center - self.control_freq_span / 2
             f_stop = self.control_freq_center + self.control_freq_span / 2
             n_start = int(round(f_start / self.df))
@@ -98,18 +100,19 @@ class TwoTonePower(Base):
                 freq=self.control_freq_arr[0],
                 out_ports=self.control_port,
             )
-            lck.set_df(self.df)
-            ogr = lck.add_output_group(self.readout_port, 1)
+
+            ogr = lck.add_output_group(self.readout_port, nr_freq=1)
             ogr.set_frequencies(0.0)
             ogr.set_amplitudes(self.readout_amp)
             ogr.set_phases(0.0, 0.0)
-            ogc = lck.add_output_group(self.control_port, 1)
+            ogc = lck.add_output_group(self.control_port, nr_freq=1)
             ogc.set_frequencies(0.0)
             ogc.set_amplitudes(self.control_amp_arr[0])
             ogc.set_phases(0.0, 0.0)
 
             lck.set_dither(self.dither, [self.readout_port, self.control_port])
-            ig = lck.add_input_group(self.input_port, 1)
+
+            ig = lck.add_input_group(self.input_port, nr_freq=1)
             ig.set_frequencies(0.0)
 
             lck.apply_settings()

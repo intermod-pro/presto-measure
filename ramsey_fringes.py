@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Measure a Ramsey chevron pattern by changing the delay between two π/2 pulses and their frequency."""
+"""Measure a Ramsey fringes pattern by changing the delay between two π/2 pulses and their frequency."""
 import ast
 from typing import List
 
@@ -23,7 +23,7 @@ IDX_LOW = 1_500
 IDX_HIGH = 2_000
 
 
-class RamseyChevron(Base):
+class RamseyFringes(Base):
     def __init__(
         self,
         readout_freq: float,
@@ -98,90 +98,54 @@ class RamseyChevron(Base):
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
+
             pls.hardware.configure_mixer(
-                freq=self.readout_freq,
+                self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,  # sync in next call
-            )
+                sync=False,
+            )  # sync in next call
             pls.hardware.configure_mixer(
-                freq=control_nco,
-                out_ports=self.control_port,
-                sync=True,  # sync here
-            )
-            if self.jpa_params is not None:
-                pls.hardware.set_lmx(
-                    self.jpa_params["pump_freq"],
-                    self.jpa_params["pump_pwr"],
-                    self.jpa_params["pump_port"],
-                )
-                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
-                pls.hardware.sleep(1.0, False)
+                freq=control_nco, out_ports=self.control_port, sync=True
+            )  # sync here
 
             # ************************************
             # *** Setup measurement parameters ***
             # ************************************
-
-            # Setup lookup tables for frequencies
-            # we only need to use carrier 1
+            # Setup lookup tables for frequencies we want to sweep
             pls.setup_freq_lut(
-                output_ports=self.readout_port,
-                group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
-            )
-            pls.setup_freq_lut(
-                output_ports=self.control_port,
+                self.control_port,
                 group=0,
                 frequencies=control_if_arr,
                 phases=np.full_like(control_if_arr, 0.0),
-                phases_q=np.full_like(control_if_arr, -np.pi / 2),  # HSB
-            )
+                phases_q=np.full_like(control_if_arr, -np.pi / 2),
+            )  # HSB
 
             # Setup lookup tables for amplitudes
-            pls.setup_scale_lut(
-                output_ports=self.readout_port,
-                group=0,
-                scales=self.readout_amp,
-            )
-            pls.setup_scale_lut(
-                output_ports=self.control_port,
-                group=0,
-                scales=1.0,  # set amplitude in template
-            )
+            pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
+            pls.setup_scale_lut(self.control_port, group=0, scales=1.0)
 
             # Setup readout and control pulses
             # use setup_long_drive to create a pulse with square envelope
             # setup_long_drive supports smooth rise and fall transitions for the pulse,
             # but we keep it simple here
             readout_pulse = pls.setup_long_drive(
-                output_port=self.readout_port,
+                self.readout_port,
                 group=0,
                 duration=self.readout_duration,
-                amplitude=1.0,
-                amplitude_q=1.0,
-                rise_time=0e-9,
-                fall_time=0e-9,
+                amplitude=1.0 + 1j,
+                envelope=False,
             )
+
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = self.control_amp * sin2(control_ns, drag=self.drag)
-
-            # we loose 3 dB by using a nonzero IF
-            # so multiply the envelope by sqrt(2)
-            if self.drag == 0.0:
-                control_envelope *= np.sqrt(2)
-            else:
-                # for DRAG we also rotate by 45 deg
-                # so that we don't saturate the output
-                control_envelope *= np.sqrt(2) * np.exp(1j * np.pi / 4)
-
+            control_envelope = self.control_amp * sin2(control_ns)
+            # we loose 3 dB by using a nonzero IF so multiply the envelope by sqrt(2)
+            control_envelope *= np.sqrt(2)
             control_pulse = pls.setup_template(
-                output_port=self.control_port,
+                self.control_port,
                 group=0,
-                template=control_envelope,
-                template_q=control_envelope if self.drag == 0.0 else None,
+                template=control_envelope + 1j * control_envelope,
                 envelope=True,
             )
 
@@ -194,53 +158,24 @@ class RamseyChevron(Base):
             # ******************************
             T = 0.0  # s, start at time zero ...
             for delay in self.delay_arr:
-                # first pi/2 pulse
                 pls.reset_phase(T, self.control_port)
-                pls.output_pulse(T, control_pulse)
+                pls.output_pulse(T, control_pulse)  # first pi/2 pulse
                 T += self.control_duration
-                # Ramsey delay
                 T += delay
-                # second pi/2 pulse
-                pls.output_pulse(T, control_pulse)
+                pls.output_pulse(T, control_pulse)  # second pi/2 pulse
                 T += self.control_duration
-                # Readout
-                pls.reset_phase(T, self.readout_port)
-                pls.output_pulse(T, readout_pulse)
+                pls.output_pulse(T, readout_pulse)  # Readout
                 pls.store(T + self.readout_sample_delay)
                 T += self.readout_duration
-                # Move to next iteration
-                T += self.wait_delay
+                T += self.wait_delay  # wait for decay
             pls.next_frequency(T, self.control_port)
             T += self.wait_delay
-
-            if self.jpa_params is not None:
-                # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
-                idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
-                idler_period = 1 / idler_if
-                T_clk = int(round(T * pls.get_clk_f()))
-                idler_period_clk = int(round(idler_period * pls.get_clk_f()))
-                # first make T a multiple of idler period
-                if T_clk % idler_period_clk > 0:
-                    T_clk += idler_period_clk - (T_clk % idler_period_clk)
-                # then make it off by one clock cycle
-                T_clk += 1
-                T = T_clk * pls.get_clk_T()
 
             # **************************
             # *** Run the experiment ***
             # **************************
-            pls.run(
-                period=T,
-                repeat_count=self.control_freq_nr,
-                num_averages=self.num_averages,
-                print_time=True,
-            )
+            pls.run(period=T, repeat_count=self.control_freq_nr, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
-
-            if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
@@ -248,7 +183,7 @@ class RamseyChevron(Base):
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RamseyChevron":
+    def load(cls, load_filename: str) -> "RamseyFringes":
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs["readout_freq"]
             control_freq_center = h5f.attrs["control_freq_center"]
@@ -377,7 +312,7 @@ class RamseyChevron(Base):
         ax2.set_ylabel("Control frequency [GHz]")
         cb = fig2.colorbar(im)
         cb.set_label(f"Response I quadrature [{unit:s}FS]")
-        fig2.show()
+        # fig2.show()
         ret_fig.append(fig2)
 
         fit_freq = np.zeros_like(self.control_freq_arr)
@@ -397,7 +332,7 @@ class RamseyChevron(Base):
         ax3.plot(self.control_freq_arr, fit_freq, ".")
         ax3.set_ylabel("Fitted detuning [Hz]")
         ax3.set_xlabel("Control frequency [Hz]$]")
-        fig3.show()
+        # fig3.show()
         _lims = ax3.axis()
         ax3.plot(
             self.control_freq_arr,
