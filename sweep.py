@@ -189,7 +189,6 @@ class Sweep(Base):
         if _do_fit:
 
             def onselect(xmin, xmax):
-                # port = circuit.reflection_port(self.freq_arr, self.resp_arr)
                 port = circuit.notch_port(self.freq_arr, self.resp_arr)
                 port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
                 sim_db = 20 * np.log10(np.abs(port.z_data_sim))

@@ -139,10 +139,6 @@ class SweepPulsed(Base):
             pls.run(period=T, repeat_count=self.readout_freq_nr, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
 
-            # if self.jpa_params is not None:
-            #     pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
-            #     pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
-
         return self.save()
 
     def save(self, save_filename: str = None) -> str:
