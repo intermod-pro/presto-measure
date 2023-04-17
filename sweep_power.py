@@ -205,8 +205,6 @@ class SweepPower(Base):
         if portrait:
             fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
             ax1 = fig1.add_subplot(2, 1, 1)
-            # fig1 = plt.figure(tight_layout=True)
-            # ax1 = fig1.add_subplot(1, 1, 1)
         else:
             fig1 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
             ax1 = fig1.add_subplot(1, 2, 1)
@@ -277,6 +275,7 @@ class SweepPower(Base):
         ax3.set_xlabel("Frequency [GHz]")
         ax2.set_ylabel("Response amplitude [dB]")
         ax3.set_ylabel("Response phase [rad]")
+        ax2.xaxis.set_tick_params(labelbottom=False)
 
         ax2.legend(loc="lower right")
 

@@ -239,7 +239,7 @@ class RamseyFringes(Base):
 
         return self
 
-    def analyze(self, all_plots: bool = False):
+    def analyze(self, all_plots: bool = False, portrait: bool = True):
         assert self.t_arr is not None
         assert self.store_arr is not None
         assert self.control_freq_arr is not None
@@ -265,7 +265,7 @@ class RamseyFringes(Base):
             fig1.show()
             ret_fig.append(fig1)
 
-        # Analyze T1
+        # Analyze
         resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
         resp_arr.shape = (self.control_freq_nr, len(self.delay_arr))
         data = rotate_opt(resp_arr)
@@ -298,7 +298,12 @@ class RamseyFringes(Base):
         y_max = 1e-9 * self.control_freq_arr[-1]
         dy = 1e-9 * (self.control_freq_arr[1] - self.control_freq_arr[0])
 
-        fig2, ax2 = plt.subplots(tight_layout=True)
+        if portrait:
+            fig2 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
+            ax2 = fig2.add_subplot(2, 1, 1)
+        else:
+            fig2 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
+            ax2 = fig2.add_subplot(1, 2, 1)
         im = ax2.imshow(
             plot_data,
             origin="lower",
@@ -311,9 +316,10 @@ class RamseyFringes(Base):
         ax2.set_xlabel("Ramsey delay [μs]")
         ax2.set_ylabel("Control frequency [GHz]")
         cb = fig2.colorbar(im)
-        cb.set_label(f"Response I quadrature [{unit:s}FS]")
-        # fig2.show()
-        ret_fig.append(fig2)
+        if portrait:
+            cb.set_label(f"Response I quadrature [{unit:s}FS]")
+        else:
+            ax1.set_title(f"Response I quadrature [{unit:s}FS]")
 
         fit_freq = np.zeros_like(self.control_freq_arr)
         for jj in range(self.control_freq_nr):
@@ -328,10 +334,16 @@ class RamseyFringes(Base):
         pfit2 = np.polyfit(self.control_freq_arr[-n_fit:], fit_freq[-n_fit:], 1)
         x0 = np.roots(pfit1 - pfit2)[0]
 
-        fig3, ax3 = plt.subplots(tight_layout=True)
+        if portrait:
+            ax3 = fig2.add_subplot(2, 1, 2)
+        else:
+            ax3 = fig1.add_subplot(1, 2, 2)
+            ax3.yaxis.set_label_position("right")
+            ax3.yaxis.tick_right()
+
         ax3.plot(self.control_freq_arr, fit_freq, ".")
         ax3.set_ylabel("Fitted detuning [Hz]")
-        ax3.set_xlabel("Control frequency [Hz]$]")
+        ax3.set_xlabel("Control frequency [Hz]")
         # fig3.show()
         _lims = ax3.axis()
         ax3.plot(
@@ -349,9 +361,9 @@ class RamseyFringes(Base):
         ax3.axhline(0.0, ls="--", c="tab:gray")
         ax3.axvline(x0, ls="--", c="tab:gray")
         ax3.axis(_lims)
-        fig3.canvas.draw()
+        fig2.canvas.draw()
         print(f"Fitted qubit frequency: {x0} Hz")
-        ret_fig.append(fig3)
+        ret_fig.append(fig2)
 
         return ret_fig
 

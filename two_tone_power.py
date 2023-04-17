@@ -257,8 +257,8 @@ class TwoTonePower(Base):
             ax1 = fig1.add_subplot(gs[:-1, 0])
         else:
             fig1 = plt.figure(tight_layout=True, figsize=(6.4, 4.8))
-            gs = fig1.add_gridspec(1, 1)
-            ax1 = fig1.add_subplot(gs[0, 0])
+            # gs = fig1.add_gridspec(1, 1)
+            ax1 = fig1.add_subplot(1, 1, 1)
         im = ax1.imshow(
             data,
             origin="lower",

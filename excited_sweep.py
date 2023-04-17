@@ -342,9 +342,9 @@ class ExcitedSweep(Base):
 
         for ax_ in ax2:
             if _has_resonator_tools:
-                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)
-                ax_.axvline(1e-9 * f_e, ls="--", c="tab:purple", alpha=0.5)
-            ax_.axvline(1e-9 * popt[0], ls="--", c="tab:brown", alpha=0.5)
+                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red")
+                ax_.axvline(1e-9 * f_e, ls="--", c="tab:purple")
+            ax_.axvline(1e-9 * popt[0], ls="--", c="tab:brown")
 
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="tab:blue", label="|g>")
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], c="tab:orange", label="|e>")

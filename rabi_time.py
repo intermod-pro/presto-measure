@@ -213,7 +213,7 @@ class RabiTime(Base):
 
         return self
 
-    def analyze(self, all_plots: bool = False):
+    def analyze(self, portrait: bool = True, all_plots: bool = False):
         if self.t_arr is None:
             raise RuntimeError
         if self.store_arr is None:
@@ -272,8 +272,16 @@ class RabiTime(Base):
         y_max = self.control_amp_arr[-1]
         dy = self.control_amp_arr[1] - self.control_amp_arr[0]
 
-        fig2, ax2 = plt.subplots(tight_layout=True)
-        im = ax2.imshow(
+        if portrait:
+            fig2 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
+            ax1 = fig2.add_subplot(2, 1, 1)
+            # fig1 = plt.figure(tight_layout=True)
+            # ax1 = fig1.add_subplot(1, 1, 1)
+        else:
+            fig2 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
+            ax1 = fig2.add_subplot(1, 2, 1)
+
+        im = ax1.imshow(
             plot_data,
             origin="lower",
             aspect="auto",
@@ -282,12 +290,20 @@ class RabiTime(Base):
             vmin=lowlim,
             vmax=highlim,
         )
-        ax2.set_xlabel("Control length [μs]")
-        ax2.set_ylabel("Control amplitude [FS]")
+        ax1.set_xlabel("Control length [μs]")
+        ax1.set_ylabel("Control amplitude [FS]")
         cb = fig2.colorbar(im)
-        cb.set_label(f"Response I quadrature [{unit:s}FS]")
-        # fig2.show()
-        ret_fig.append(fig2)
+        if portrait:
+            cb.set_label(f"Response I quadrature [{unit:s}FS]")
+        else:
+            ax1.set_title(f"Response I quadrature [{unit:s}FS]")
+
+        if portrait:
+            ax2 = fig2.add_subplot(2, 1, 2)
+        else:
+            ax2 = fig2.add_subplot(1, 2, 2)
+            ax2.yaxis.set_label_position("right")
+            ax2.yaxis.tick_right()
 
         # Fit data
         fit_freq = np.zeros_like(self.control_amp_arr)
@@ -300,22 +316,18 @@ class RabiTime(Base):
         # Fit Rabi rate
         pfit1 = np.polyfit(self.control_amp_arr, fit_freq, 1)
 
-        fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(self.control_amp_arr, fit_freq, ".")
-        ax3.set_ylabel("Fitted Rabi rate $\omega/2\pi$ [Hz]")
-        ax3.set_xlabel("Control amplitude [FS]")
-        ax3.plot(
+        ax2.plot(self.control_amp_arr, fit_freq, ".")
+        ax2.set_ylabel("Fitted Rabi rate $\omega/2\pi$ [Hz]")
+        ax2.set_xlabel("Control amplitude [FS]")
+        ax2.plot(
             self.control_amp_arr,
             np.polyval(pfit1, self.control_amp_arr),
             "--",
-            c="tab:orange",
         )
-        # fig3.show()
-        _lims = ax3.axis()
-        ax3.axis(_lims)
-        fig3.canvas.draw()
-        # print(f"Fitted qubit frequency: {} Hz")
-        ret_fig.append(fig3)
+        _lims = ax2.axis()
+        ax2.axis(_lims)
+        fig2.canvas.draw()
+        ret_fig.append(fig2)
 
         return ret_fig
 
