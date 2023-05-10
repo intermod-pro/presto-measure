@@ -8,7 +8,7 @@ import numpy as np
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import format_precision, rotate_opt, sin2, si_scale
 
 from _base import Base
 
@@ -311,6 +311,7 @@ class RamseyChevron(Base):
         assert len(self.control_freq_arr) == self.control_freq_nr
 
         import matplotlib.pyplot as plt
+        from scipy.optimize import curve_fit
 
         ret_fig = []
 
@@ -363,7 +364,12 @@ class RamseyChevron(Base):
         y_max = 1e-9 * self.control_freq_arr[-1]
         dy = 1e-9 * (self.control_freq_arr[1] - self.control_freq_arr[0])
 
-        fig2, ax2 = plt.subplots(tight_layout=True)
+        fig2 = plt.figure(figsize=(6.4, 9.6), constrained_layout=True)
+        gs = fig2.add_gridspec(2, 1)
+        gs1 = gs[0].subgridspec(1, 1)
+        ax2 = gs1.subplots()
+        ax3 = fig2.add_subplot(gs[1])
+
         im = ax2.imshow(
             plot_data,
             origin="lower",
@@ -375,48 +381,65 @@ class RamseyChevron(Base):
         )
         ax2.set_xlabel("Ramsey delay [μs]")
         ax2.set_ylabel("Control frequency [GHz]")
-        cb = fig2.colorbar(im)
+        cb = fig2.colorbar(im, ax=ax2)
         cb.set_label(f"Response I quadrature [{unit:s}FS]")
-        fig2.show()
-        ret_fig.append(fig2)
+        # fig2.show()
+        # ret_fig.append(fig2)
 
         fit_freq = np.zeros_like(self.control_freq_arr)
+        err_freq = np.zeros_like(self.control_freq_arr)
         for jj in range(self.control_freq_nr):
             try:
-                res, _err = _fit_simple(self.delay_arr, plot_data[jj])
+                res, err = _fit_simple(self.delay_arr, plot_data[jj])
                 fit_freq[jj] = np.abs(res[3])
+                err_freq[jj] = err[3]
             except Exception:
                 fit_freq[jj] = np.nan
 
-        n_fit = self.control_freq_nr // 4
-        pfit1 = np.polyfit(self.control_freq_arr[:n_fit], fit_freq[:n_fit], 1)
-        pfit2 = np.polyfit(self.control_freq_arr[-n_fit:], fit_freq[-n_fit:], 1)
-        x0 = np.roots(pfit1 - pfit2)[0]
+        # n_fit = self.control_freq_nr // 4
+        # pfit1 = np.polyfit(self.control_freq_arr[:n_fit], fit_freq[:n_fit], 1)
+        # pfit2 = np.polyfit(self.control_freq_arr[-n_fit:], fit_freq[-n_fit:], 1)
+        # x0 = np.roots(pfit1 - pfit2)[0]
+        def detuning(x, x0):
+            return np.abs(x - x0)
 
-        fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(self.control_freq_arr, fit_freq, ".")
-        ax3.set_ylabel("Fitted detuning [Hz]")
-        ax3.set_xlabel("Control frequency [Hz]$]")
-        fig3.show()
+        good_idx = np.isfinite(fit_freq)
+        guess = self.control_freq_arr[np.nanargmin(fit_freq)]
+        popt, pcov = curve_fit(
+            detuning,
+            self.control_freq_arr[good_idx],
+            fit_freq[good_idx],
+            p0=[guess],
+            sigma=err_freq[good_idx],
+        )
+        perr = np.sqrt(np.diag(pcov))
+        x0_opt = popt[0]
+        x0_err = perr[0]
+
+        unit_x, mult_x = si_scale(self.control_freq_arr)
+        unit_y, mult_y = si_scale(fit_freq)
+
+        gray = "0.25" if plt.rcParams["axes.facecolor"] == "black" else "0.75"
+
+        # fig3, ax3 = plt.subplots(tight_layout=True)
+        ax3.plot(mult_x * self.control_freq_arr, mult_y * fit_freq, ".", c=gray, ms=12)
+        ax3.set_ylabel(f"Fitted detuning [{unit_y}Hz]")
+        ax3.set_xlabel(f"Control frequency [{unit_x}Hz]")
+        fig2.show()
         _lims = ax3.axis()
+
         ax3.plot(
-            self.control_freq_arr,
-            np.polyval(pfit1, self.control_freq_arr),
+            mult_x * self.control_freq_arr,
+            mult_y * detuning(self.control_freq_arr, *popt),
             "--",
-            c="tab:orange",
+            c="C1",
         )
-        ax3.plot(
-            self.control_freq_arr,
-            np.polyval(pfit2, self.control_freq_arr),
-            "--",
-            c="tab:green",
-        )
-        ax3.axhline(0.0, ls="--", c="tab:gray")
-        ax3.axvline(x0, ls="--", c="tab:gray")
+        ax3.axhline(0.0, ls="--", c=gray)
+        ax3.axvline(mult_x * x0_opt, ls="--", c=gray)
         ax3.axis(_lims)
-        fig3.canvas.draw()
-        print(f"Fitted qubit frequency: {x0} Hz")
-        ret_fig.append(fig3)
+        fig2.canvas.draw()
+        print(f"Fitted qubit frequency: {format_precision(x0_opt, x0_err)} Hz")
+        ret_fig.append(fig2)
 
         return ret_fig
 

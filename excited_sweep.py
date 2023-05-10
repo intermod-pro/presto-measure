@@ -374,38 +374,36 @@ class ExcitedSweep(Base):
 
         for ax_ in ax2:
             if _has_resonator_tools:
-                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)
-                ax_.axvline(1e-9 * f_e, ls="--", c="tab:purple", alpha=0.5)
-            ax_.axvline(1e-9 * popt[0], ls="--", c="tab:brown", alpha=0.5)
+                ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)
+                ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)
+            ax_.axvline(1e-9 * popt[0], ls="--", c="C5", alpha=0.5)
 
-        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="tab:blue", label="|g>")
-        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], c="tab:orange", label="|e>")
-        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="tab:blue")
-        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[1, :], c="tab:orange")
-        ax23.plot(
-            1e-9 * self.readout_freq_arr, 1e3 * separation, c="tab:green", label="||e> - |g>|"
-        )
+        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="C0", label="|g>")
+        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], c="C1", label="|e>")
+        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="C0")
+        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[1, :], c="C1")
+        ax23.plot(1e-9 * self.readout_freq_arr, 1e3 * separation, c="C2", label="||e> - |g>|")
 
         if _has_resonator_tools:
             ax21.plot(
                 1e-9 * port_g.f_data,
                 20 * np.log10(np.abs(port_g.z_data_sim)),
-                c="tab:red",
+                c="C3",
                 ls="--",
             )
             ax21.plot(
                 1e-9 * port_e.f_data,
                 20 * np.log10(np.abs(port_e.z_data_sim)),
-                c="tab:purple",
+                c="C4",
                 ls="--",
             )
-            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="tab:red", ls="--")
-            ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="tab:purple", ls="--")
+            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="C3", ls="--")
+            ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="C4", ls="--")
 
         ax23.plot(
             1e-9 * self.readout_freq_arr,
             1e3 * _gaussian(self.readout_freq_arr, *popt),
-            c="tab:brown",
+            c="C5",
             ls="--",
         )
 

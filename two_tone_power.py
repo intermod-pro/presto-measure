@@ -191,7 +191,7 @@ class TwoTonePower(Base):
 
         return self
 
-    def analyze(self, quantity: str = "quadrature", linecut: bool = False, blit: bool = True):
+    def analyze(self, quantity: str = "quadrature", linecut: bool = False, blit: bool = False):
         if self.control_freq_arr is None:
             raise RuntimeError
         if self.resp_arr is None:
@@ -254,8 +254,9 @@ class TwoTonePower(Base):
             ax1 = fig1.add_subplot(gs[:-1, 0])
         else:
             fig1 = plt.figure(tight_layout=True, figsize=(6.4, 4.8))
-            gs = fig1.add_gridspec(1, 1)
-            ax1 = fig1.add_subplot(gs[0, 0])
+            # gs = fig1.add_gridspec(1, 1)
+            # ax1 = fig1.add_subplot(gs[0, 0])
+            ax1 = fig1.add_subplot(1, 1, 1)
         im = ax1.imshow(
             data,
             origin="lower",

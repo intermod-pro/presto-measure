@@ -176,18 +176,19 @@ class Sweep(Base):
 
         fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
         ax11, ax12 = ax1
-        ax11.plot(1e-9 * self.freq_arr, resp_dB)
+        ax11.plot(1e-9 * self.freq_arr, resp_dB, ".")
         # ax11.plot(1e-9 * freq_arr, np.abs(resp_arr))
         (line_fit_a,) = ax11.plot(
             1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
         )
-        ax12.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr))
+        ax12.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr), ".", label="data")
         (line_fit_p,) = ax12.plot(
-            1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
+            1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", label="fit"
         )
         ax12.set_xlabel("Frequency [GHz]")
-        ax11.set_ylabel("Response amplitude [dB]")
-        ax12.set_ylabel("Response phase [rad]")
+        ax11.set_ylabel("Amplitude [dB]")
+        ax12.set_ylabel("Phase [rad]")
+        ax12.legend()
 
         if _do_fit:
 
@@ -209,8 +210,8 @@ class Sweep(Base):
                 fig1.canvas.draw()
 
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", rectprops=rectprops)
-            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", rectprops=rectprops)
+            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)
+            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)
             # keep references to span selectors
             fig1._span_a = span_a
             fig1._span_p = span_p

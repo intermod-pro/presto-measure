@@ -322,28 +322,43 @@ class TwoTonePulsed(Base):
         resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
         data = rotate_opt(resp_arr)
 
+        data_max = np.abs(data).max()
+        unit = ""
+        mult = 1.0
+        if data_max < 1e-6:
+            unit = "n"
+            mult = 1e9
+        elif data_max < 1e-3:
+            unit = "μ"
+            mult = 1e6
+        elif data_max < 1e0:
+            unit = "m"
+            mult = 1e3
+
         fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
         ax21, ax22, ax23, ax24 = ax2
-        ax21.plot(1e-9 * self.control_freq_arr, np.abs(data))
+        ax21.plot(1e-9 * self.control_freq_arr, mult * np.abs(data))
         ax22.plot(1e-9 * self.control_freq_arr, np.angle(data))
-        ax23.plot(1e-9 * self.control_freq_arr, np.real(data))
+        ax23.plot(1e-9 * self.control_freq_arr, mult * np.real(data))
         try:
             data_min = data.real.min()
             data_max = data.real.max()
             data_rng = data_max - data_min
             p0 = [self.control_freq_center, self.control_freq_span / 4, data_rng, data_min]
             popt, pcov = curve_fit(_gaussian, self.control_freq_arr, data.real, p0)
-            ax23.plot(1e-9 * self.control_freq_arr, _gaussian(self.control_freq_arr, *popt), "--")
+            ax23.plot(
+                1e-9 * self.control_freq_arr, mult * _gaussian(self.control_freq_arr, *popt), "--"
+            )
             print(f"f0 = {popt[0]} Hz")
             print(f"sigma = {abs(popt[1])} Hz")
         except Exception:
             print("fit failed")
-        ax24.plot(1e-9 * self.control_freq_arr, np.imag(data))
+        ax24.plot(1e-9 * self.control_freq_arr, mult * np.imag(data))
 
-        ax21.set_ylabel("Amplitude [FS]")
+        ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
         ax22.set_ylabel("Phase [rad]")
-        ax23.set_ylabel("I [FS]")
-        ax24.set_ylabel("Q [FS]")
+        ax23.set_ylabel(f"I [{unit:s}FS]")
+        ax24.set_ylabel(f"Q [{unit:s}FS]")
         ax2[-1].set_xlabel("Control frequency [GHz]")
         fig2.show()
         ret_fig.append(fig2)

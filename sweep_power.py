@@ -245,10 +245,10 @@ class SweepPower(Base):
             ax3.yaxis.tick_right()
 
         (line_a,) = ax2.plot(
-            1e-9 * self.freq_arr, resp_dB[self._AMP_IDX], label="measured", animated=blit
+            1e-9 * self.freq_arr, resp_dB[self._AMP_IDX], ".", label="measured", animated=blit
         )
         (line_p,) = ax3.plot(
-            1e-9 * self.freq_arr, np.angle(self.resp_arr[self._AMP_IDX]), animated=blit
+            1e-9 * self.freq_arr, np.angle(self.resp_arr[self._AMP_IDX]), ".", animated=blit
         )
         if _do_fit:
             (line_fit_a,) = ax2.plot(
@@ -359,10 +359,10 @@ class SweepPower(Base):
 
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
             fig1._span_a = mwidgets.SpanSelector(
-                ax2, onselect, "horizontal", rectprops=rectprops, useblit=blit
+                ax2, onselect, "horizontal", props=rectprops, useblit=blit
             )
             fig1._span_p = mwidgets.SpanSelector(
-                ax3, onselect, "horizontal", rectprops=rectprops, useblit=blit
+                ax3, onselect, "horizontal", props=rectprops, useblit=blit
             )
 
         fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
