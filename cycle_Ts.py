@@ -92,7 +92,6 @@ class CycleTs(Base):
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ):
-
         self.time_start = time.time()
         # save initial parameters
         self.save()
@@ -350,7 +349,7 @@ class CycleTs(Base):
                 fig2.canvas.draw()
 
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            span = mwidgets.SpanSelector(ax1, onselect, "horizontal", rectprops=rectprops)
+            span = mwidgets.SpanSelector(ax1, onselect, "horizontal", props=rectprops)
             fig1._span = span  # keep references to span selector
 
         return ret_fig

@@ -135,7 +135,6 @@ class NumberPhotons:
         presto_port=None,
         ext_ref_clk=False,
     ):
-
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,

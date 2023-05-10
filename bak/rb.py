@@ -240,7 +240,6 @@ def read_template_from_file():
 
 
 def run_sequence(seq, settings):
-
     with pulsed.Pulsed(
         dry_run=settings["dry_run"],
         address="130.237.35.90",
@@ -250,7 +249,6 @@ def run_sequence(seq, settings):
         dac_mode=[DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
         dac_fsample=[DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
     ) as pls:
-
         pls.hardware.set_adc_attenuation(settings["sample_port"], 0.0)
         pls.hardware.set_dac_current(settings["readout_port"], 32_000)
         pls.hardware.set_dac_current(settings["control_port"], 32_000)
@@ -349,7 +347,6 @@ def run_sequence(seq, settings):
 
 
 def run_rb():
-
     settings = {}
     settings["dry_run"] = False
     settings["nr_averages"] = 1_000
@@ -504,7 +501,6 @@ def get_filename(s):
 
 
 def load_rb(arg):
-
     load_filename = get_filename(arg)
     print(load_filename)
 
