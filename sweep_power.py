@@ -70,6 +70,8 @@ class SweepPower(Base):
 
             # tune frequencies
             _, self.df = lck.tune(0.0, self.df)
+            lck.set_df(self.df)
+
             f_start = self.freq_center - self.freq_span / 2
             f_stop = self.freq_center + self.freq_span / 2
             n_start = int(round(f_start / self.df))
@@ -80,11 +82,9 @@ class SweepPower(Base):
             self.resp_arr = np.zeros((nr_amps, nr_freq), np.complex128)
 
             lck.hardware.configure_mixer(
-                freq=self.freq_arr[0],
-                in_ports=self.input_port,
-                out_ports=self.output_port,
+                freq=self.freq_arr[0], in_ports=self.input_port, out_ports=self.output_port
             )
-            lck.set_df(self.df)
+
             og = lck.add_output_group(self.output_port, 1)
             og.set_frequencies(0.0)
             og.set_amplitudes(self.amp_arr[0])
@@ -104,9 +104,7 @@ class SweepPower(Base):
 
                 for ii, freq in enumerate(self.freq_arr):
                     lck.hardware.configure_mixer(
-                        freq=freq,
-                        in_ports=self.input_port,
-                        out_ports=self.output_port,
+                        freq=freq, in_ports=self.input_port, out_ports=self.output_port
                     )
                     lck.hardware.sleep(1e-3, False)
 
@@ -207,8 +205,6 @@ class SweepPower(Base):
         if portrait:
             fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
             ax1 = fig1.add_subplot(2, 1, 1)
-            # fig1 = plt.figure(tight_layout=True)
-            # ax1 = fig1.add_subplot(1, 1, 1)
         else:
             fig1 = plt.figure(tight_layout=True, figsize=(12.8, 4.8))
             ax1 = fig1.add_subplot(1, 2, 1)
@@ -279,6 +275,7 @@ class SweepPower(Base):
         ax3.set_xlabel("Frequency [GHz]")
         ax2.set_ylabel("Response amplitude [dB]")
         ax3.set_ylabel("Response phase [rad]")
+        ax2.xaxis.set_tick_params(labelbottom=False)
 
         ax2.legend(loc="lower right")
 

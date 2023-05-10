@@ -76,10 +76,9 @@ class Sweep(Base):
             self.resp_arr = np.zeros(nr_freq, np.complex128)
 
             lck.hardware.configure_mixer(
-                freq=self.freq_arr[0],
-                in_ports=self.input_port,
-                out_ports=self.output_port,
+                freq=self.freq_arr[0], in_ports=self.input_port, out_ports=self.output_port
             )
+
             lck.set_df(self.df)
             og = lck.add_output_group(self.output_port, 1)
             og.set_frequencies(0.0)
@@ -87,6 +86,7 @@ class Sweep(Base):
             og.set_phases(0.0, 0.0)
 
             lck.set_dither(self.dither, self.output_port)
+
             ig = lck.add_input_group(self.input_port, 1)
             ig.set_frequencies(0.0)
 
@@ -96,11 +96,8 @@ class Sweep(Base):
             pb.start()
             for ii in range(len(n_arr)):
                 f = self.freq_arr[ii]
-
                 lck.hardware.configure_mixer(
-                    freq=f,
-                    in_ports=self.input_port,
-                    out_ports=self.output_port,
+                    freq=f, in_ports=self.input_port, out_ports=self.output_port
                 )
                 lck.hardware.sleep(1e-3, False)
 
