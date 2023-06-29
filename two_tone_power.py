@@ -6,19 +6,18 @@ from typing import List
 
 import h5py
 import numpy as np
+import warnings
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import lockin
-from presto.utils import ProgressBar, rotate_opt
+from presto.utils import ProgressBar, rotate_opt, recommended_dac_config
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
     "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+    "adc_fsample": AdcFSample.G2,
 }
 
 
@@ -60,10 +59,31 @@ class TwoTonePower(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
+        with lockin.Lockin(address=presto_address, ext_ref_clk=ext_ref_clk) as lck:
+            control_tile = lck.hardware._port_to_tile(self.control_port, "dac")
+            readout_tile = lck.hardware._port_to_tile(self.readout_port, "dac")
+        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
+        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq_center)
+        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
+            dac_mode = dac_mode_c
+            dac_fsample = dac_fsample_c
+        elif control_tile != readout_tile:
+            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
+            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
+            dac_mode[control_tile] = dac_mode_c
+            dac_fsample[control_tile] = dac_fsample_c
+        else:
+            warnings.warn(
+                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
+            )
+            dac_mode = dac_mode_c
+            dac_fsample = dac_fsample_c
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dac_fsample=dac_fsample,
+            dac_mode=dac_mode,
             **CONVERTER_CONFIGURATION,
         ) as lck:
             assert lck.hardware is not None

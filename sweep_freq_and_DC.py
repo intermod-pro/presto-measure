@@ -9,16 +9,14 @@ import numpy as np
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode, Hardware
 from presto import lockin
-from presto.utils import ProgressBar
+from presto.utils import ProgressBar, recommended_dac_config
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
     "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": DacMode.Mixed42,
-    "dac_fsample": DacFSample.G10,
+    "adc_fsample": AdcFSample.G2,
 }
 
 
@@ -60,10 +58,13 @@ class SweepFreqAndDC(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
+        dac_mode, dac_fsample = recommended_dac_config(self.freq_center)
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dac_mode=dac_mode,
+            dac_fsample=dac_fsample,
             **CONVERTER_CONFIGURATION,
         ) as lck:
             assert lck.hardware is not None

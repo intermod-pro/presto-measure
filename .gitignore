@@ -9,10 +9,6 @@ main.py
 data
 data/
 
-#frequency hopping
-spread-spectrum_frequency_hopping
-spread-spectrum_frequency_hopping/
-
 #Run scripts
 run_scripts
 run_scripts/

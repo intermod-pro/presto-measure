@@ -7,25 +7,24 @@ The control pulse has a sin^2 envelope, while the readout pulse is square.
 import ast
 import math
 from typing import List, Tuple
+import warnings
 
 import h5py
 import numpy as np
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import format_precision, rotate_opt, sin2, recommended_dac_config
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
     "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+    "adc_fsample": AdcFSample.G2,
 }
 IDX_LOW = 0
-IDX_HIGH = 2_000
+IDX_HIGH = -1
 
 
 class RabiAmp(Base):
@@ -75,11 +74,32 @@ class RabiAmp(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
+        with pulsed.Pulsed(address=presto_address, ext_ref_clk=ext_ref_clk) as pls:
+            control_tile = pls.hardware._port_to_tile(self.control_port, "dac")
+            readout_tile = pls.hardware._port_to_tile(self.readout_port, "dac")
+        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
+        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq)
+        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
+            dac_mode = dac_mode_c
+            dac_fsample = dac_fsample_c
+        elif control_tile != readout_tile:
+            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
+            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
+            dac_mode[control_tile] = dac_mode_c
+            dac_fsample[control_tile] = dac_fsample_c
+        else:
+            warnings.warn(
+                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
+            )
+            dac_mode = dac_mode_c
+            dac_fsample = dac_fsample_c
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dac_fsample=dac_fsample,
+            dac_mode=dac_mode,
             **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
@@ -225,8 +245,6 @@ class RabiAmp(Base):
         import matplotlib.pyplot as plt
 
         ret_fig = []
-
-        idx = np.arange(IDX_LOW, IDX_HIGH)
         t_low = self.t_arr[IDX_LOW]
         t_high = self.t_arr[IDX_HIGH]
 
@@ -243,7 +261,7 @@ class RabiAmp(Base):
             ret_fig.append(fig1)
 
         # Analyze Rabi
-        resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
+        resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
         data = rotate_opt(resp_arr)
 
         # Fit data

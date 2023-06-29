@@ -5,18 +5,16 @@ import numpy as np
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import sin2, untwist_downconversion
+from presto.utils import sin2, untwist_downconversion, recommended_dac_config
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
     "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
+    "adc_fsample": AdcFSample.G2,
 }
-IDX_LOW = 263
+IDX_LOW = 0
 IDX_HIGH = 750
 
 
@@ -59,11 +57,14 @@ class SweepPulsed(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
+        dac_mode, dac_fsample = recommended_dac_config(self.readout_freq_center)
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dac_mode=dac_mode,
+            dac_fsample=dac_fsample,
             **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
