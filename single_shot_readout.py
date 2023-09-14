@@ -7,13 +7,13 @@ The control pulse has a sin^2 envelope, while the readout pulse is square.
 import ast
 import math
 from typing import List, Tuple
-
 import h5py
 import numpy as np
+import warnings
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import format_precision, rotate_opt, sin2, recommended_dac_config
 
 from _base import Base
 
@@ -21,8 +21,6 @@ DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
     "adc_mode": AdcMode.Mixed,
     "adc_fsample": AdcFSample.G2,
-    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Direct, DacMode.Mixed02],
-    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G2, DacFSample.G6],
 }
 
 
@@ -78,11 +76,21 @@ class SingleShotReadout(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
+        list_of_ports = [self.readout_port, self.control_port]
+        list_of_freq = [self.readout_freq, self.control_freq]
+        dac_mode, dac_fsample = recommended_dac_config_all_tiles(
+            presto_address,
+            list_of_ports=list_of_ports,
+            list_of_freq=list_of_freq,
+            ext_ref_clk=ext_ref_clk,
+        )
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dac_fsample=dac_fsample,
+            dac_mode=dac_mode,
             **CONVERTER_CONFIGURATION,
         ) as pls:
             assert pls.hardware is not None
@@ -143,23 +151,22 @@ class SingleShotReadout(Base):
             shape = np.ones(int(round(self.template_match_duration * pls.get_fs("dac"))))
             match_events = pls.setup_template_matching_pair(
                 input_port=self.sample_port,
-                template1=shape,
-                template2=1j * shape,
+                template1=shape * np.exp(self.template_match_phase),
+                template2=1j * shape * np.exp(self.template_match_phase),
             )
 
             # ******************************
             # *** Program pulse sequence ***
             # ******************************
             T = 0.0  # s, start at time zero ...
-            for ii in range(2):
-                pls.select_scale(T, ii, self.control_port, group=0)
+            for i in range(2):
+                pls.select_scale(T, i, self.control_port, group=0)
                 pls.output_pulse(T, [control_pulse])
                 T += self.control_duration
 
-                pls.reset_phase(T, self.readout_port)
                 pls.output_pulse(T, [readout_pulse])
                 pls.store(T + self.readout_sample_delay)
-                pls.match(T + self.readout_sample_delay, [match_events])
+                pls.match(T + self.template_match_start, [match_events])
                 T += self.readout_duration + self.wait_delay
 
             # **************************
@@ -227,7 +234,9 @@ class SingleShotReadout(Base):
 
         return self
 
-    def analyze(self, portrait: bool = True, all_plots: bool = False):
+    def analyze(
+        self, rotate_optimally: bool = True, portrait: bool = True, all_plots: bool = False
+    ):
         if self.t_arr is None:
             raise RuntimeError
         if self.store_arr is None:
@@ -259,18 +268,31 @@ class SingleShotReadout(Base):
         fig2 = plt.figure(tight_layout=True)
         ax1 = fig2.add_subplot(1, 1, 1)
 
-        i_data = self.match_arr[0]
-        q_data = self.match_arr[1]
-        angle = 0
-        ground_data = (i_data[::2] + 1j * q_data[::2]) * np.exp(1j * angle)
-        excited_data = (i_data[1::2] + 1j * q_data[1::2]) * np.exp(1j * angle)
-        ground_avg_data = np.sum(self.store_arr[0, 0, IDX_LOW:IDX_HIGH])
-        excited_avg_data = np.sum(self.store_arr[1, 0, IDX_LOW:IDX_HIGH])
+        complex_match_data = self.match_arr[0] + 1j * self.match_arr[1]
+        avg_data = np.array(
+            [
+                np.sum(self.store_arr[0, 0, IDX_LOW:IDX_HIGH]),
+                np.sum(self.store_arr[1, 0, IDX_LOW:IDX_HIGH]),
+            ]
+        )
+        if rotate_optimally:
+            avg_data, angle = rotate_opt(avg_data, True)
+        else:
+            angle = 0
+        print("Angle of rotationg the data in post-processing: ", angle)
+        ground_data = complex_match_data[::2] * np.exp(1j * angle)
+        excited_data = complex_match_data[1::2] * np.exp(1j * angle)
+        ground_avg_data = avg_data[0]
+        excited_avg_data = avg_data[1]
 
         ax1.plot(ground_data.real, ground_data.imag, ".", alpha=0.2, label="ground")
         ax1.plot(excited_data.real, excited_data.imag, ".", alpha=0.2, label="excited")
-        ax1.plot(ground_avg_data.real, ground_avg_data.imag, ".", alpha=1)
-        ax1.plot(excited_avg_data.real, excited_avg_data.imag, ".", alpha=1)
+        ax1.plot(
+            ground_avg_data.real, ground_avg_data.imag, "C0o", alpha=1, markeredgecolor="white"
+        )
+        ax1.plot(
+            excited_avg_data.real, excited_avg_data.imag, "C1o", alpha=1, markeredgecolor="white"
+        )
         ax1.legend()
         ax1.set_aspect("equal", adjustable="box")
         ax1.set_xlabel("In phase [FS]")
@@ -278,3 +300,49 @@ class SingleShotReadout(Base):
         ret_fig.append(fig2)
 
         return ret_fig
+
+
+def recommended_dac_config_all_tiles(
+    presto_address: str,
+    list_of_ports: List[int],
+    list_of_freq: List[float],
+    ext_ref_clk: bool = False,
+):
+    if len(list_of_ports) != len(list_of_freq):
+        raise ValueError("list_of_ports and list_of_freq must have the same len")
+    dac_mode = []
+    dac_fsample = []
+    with pulsed.Pulsed(address=presto_address, ext_ref_clk=ext_ref_clk) as pls:
+        list_of_tiles = [pls.hardware._port_to_tile(port, "dac") for port in list_of_ports]
+    for tile in range(4):
+        nr_occurances = list_of_tiles.count(tile)
+        if nr_occurances < 1:
+            dac_mode.append(DacMode.Mixed02)
+            dac_fsample.append(DacFSample.G6)
+        elif nr_occurances == 1:
+            index = list_of_tiles.index(tile)
+            dac_mode_temp, dac_fsample_temp = recommended_dac_config(list_of_freq[index])
+            dac_mode.append(dac_mode_temp)
+            dac_fsample.append(dac_fsample_temp)
+        else:
+            indices = np.where(np.array(list_of_tiles) == tile)[0]
+            dac_mode_list = []
+            dac_fsample_list = []
+            for i in indices:
+                dac_mode_temp, dac_fsample_temp = recommended_dac_config(list_of_freq[i])
+                dac_mode_list.append(dac_mode_temp)
+                dac_fsample_list.append(dac_fsample_temp)
+            if dac_mode_list.count(dac_mode_list[0]) == len(
+                dac_mode_list
+            ) and dac_fsample_list.count(dac_fsample_list[0]) == len(dac_fsample_list):
+
+                dac_mode.append(dac_mode_list[0])
+                dac_fsample.append(dac_fsample_list[0])
+            # elif: add option if it is not recommended
+            else:
+                dac_mode.append(dac_mode_list[0])
+                dac_fsample.append(dac_fsample_list[0])
+                warnings.warn(
+                    f"Warning: It might not be possible to output all desired frequencies on tile {tile}. Consider outputting some frequencies on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
+                )
+    return dac_mode, dac_fsample
