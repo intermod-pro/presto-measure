@@ -5,83 +5,21 @@ Perform pulsed readout starting from ground and excited state using template mat
 reference traces. Use feedback to correct the state of the qubit.
 """
 import ast
-from typing import List
+from typing import Optional
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import sin2
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
-}
-IDX_LOW = 1_500
-IDX_HIGH = 2_000
-
-
-# WHICH_QUBIT = 2  # 1 (higher resonator) or 2 (lower resonator)
-# USE_JPA = False
-#
-# # Presto's IP address or hostname
-# ADDRESS = "130.237.35.90"
-# PORT = 42874
-# EXT_REF_CLK = False  # set to True to lock to an external reference clock
-# jpa_bias_port = 1
-#
-# if WHICH_QUBIT == 1:
-#     readout_freq = 6.166_600 * 1e9  # Hz, frequency for resonator readout
-#     control_freq = 3.557_866 * 1e9  # Hz
-#     control_amp = 0.1026  # FS <-- pi pulse
-#     control_port = 3
-#     jpa_pump_freq = 2 * 6.169e9  # Hz
-#     jpa_pump_pwr = 11  # lmx units
-#     jpa_bias = +0.437  # V
-#     template_filename = None
-# elif WHICH_QUBIT == 2:
-#     readout_freq = 6.028_448 * 1e9  # Hz, frequency for resonator readout
-#     control_freq = 4.091_777 * 1e9  # Hz
-#     control_amp = 0.1537  # FS <-- pi pulse
-#     control_port = 4
-#     jpa_pump_freq = 2 * 6.031e9  # Hz
-#     jpa_pump_pwr = 9  # lmx units
-#     jpa_bias = +0.449  # V
-#     template_filename = "data/readout_avg_20210610_140856.h5"
-# else:
-#     raise ValueError
-#
-# # cavity drive: readout
-# readout_amp = 0.3  # FS
-# readout_duration = 2 * 1e-6  # s, duration of the readout pulse
-# readout_port = 1
-#
-# # qubit drive: control
-# control_duration = 100 * 1e-9  # s, duration of the control pulse
-#
-# # cavity readout: sample
-# sample_duration = 4 * 1e-6  # s, duration of the sampling window
-# sample_port = 1
-# readout_sample_delay = 290 * 1e-9 + 0 * 1e-6  # s, delay between readout pulse and sample window to account for latency
-#
-# # IQ readout experiment
-# num_averages = 10_000
-# wait_delay = 500e-6  # s, delay between repetitions to allow the qubit to decay
-# readout_decay = 2e-6  # s, delay between the two readouts to allow photons to decay
-#
-# # template matching
-# with h5py.File(template_filename, "r") as h5f:
-#     match_t_in_store = h5f.attrs["match_t_in_store"]
-#     template_g = h5f["template_g"][()]
-#     template_e = h5f["template_e"][()]
-#     threshold = 0.5 * (np.sum(np.abs(template_e)**2) -
-#                        np.sum(np.abs(template_g)**2))
+IDX_LOW = 0
+IDX_HIGH = -1
 
 
 class ReadoutReset(Base):
@@ -100,13 +38,13 @@ class ReadoutReset(Base):
         wait_delay: float,
         readout_sample_delay: float,
         readout_match_delay: float,
-        ref_g: List[complex],
-        ref_e: List[complex],
+        ref_g: npt.NDArray[np.complex128],
+        ref_e: npt.NDArray[np.complex128],
         num_averages: int,
         extra_wait: float = 0.0,
-        jpa_params: dict = None,
+        jpa_params: Optional[dict] = None,
         drag: float = 0.0,
-        clear: dict = None,
+        clear: Optional[dict] = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -140,7 +78,7 @@ class ReadoutReset(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -148,7 +86,8 @@ class ReadoutReset(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -225,17 +164,17 @@ class ReadoutReset(Base):
                 from presto._clear import clear
 
                 lens, amps = clear(self.readout_duration * 1e9, **self.clear)
-                lens = [int(round(l * pls.get_fs("dac"))) for l in lens]
+                lens = [int(round(d * pls.get_fs("dac"))) for d in lens]
 
                 readout_ns = int(
                     round(self.readout_duration * pls.get_fs("dac"))
                 )  # number of samples in the control template
                 readout_envelope = np.zeros(readout_ns)
                 start = 0
-                for l, a in zip(lens, amps):
-                    stop = start + l
+                for d, a in zip(lens, amps):
+                    stop = start + d
                     readout_envelope[start:stop] = a
-                    start += l
+                    start += d
                 readout_envelope *= self.readout_amp
 
                 readout_pulse = pls.setup_template(
@@ -376,43 +315,43 @@ class ReadoutReset(Base):
             )
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_lmx(0.0, 0, self.jpa_params["pump_port"])
                 pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "ReadoutReset":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            readout_match_delay = h5f.attrs["readout_match_delay"]
-            num_averages = h5f.attrs["num_averages"]
-            extra_wait = h5f.attrs["extra_wait"]
-            drag = h5f.attrs["drag"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            readout_match_delay = float(h5f.attrs["readout_match_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            extra_wait = float(h5f.attrs["extra_wait"])  # type: ignore
+            drag = float(h5f.attrs["drag"])  # type: ignore
 
-            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
-            clear = ast.literal_eval(h5f.attrs["clear"])
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
+            clear: dict = ast.literal_eval(h5f.attrs["clear"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
-            ref_g = h5f["ref_g"][()]
-            ref_e = h5f["ref_e"][()]
-            match_g_arr = h5f["match_g_arr"][()]
-            match_e_arr = h5f["match_e_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
+            ref_g: npt.NDArray[np.complex128] = h5f["ref_g"][()]  # type: ignore
+            ref_e: npt.NDArray[np.complex128] = h5f["ref_e"][()]  # type: ignore
+            match_g_arr: npt.NDArray[np.float64] = h5f["match_g_arr"][()]  # type: ignore
+            match_e_arr: npt.NDArray[np.float64] = h5f["match_e_arr"][()]  # type: ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -524,14 +463,14 @@ class ReadoutReset(Base):
             )
             if fix_sum:
                 # skip second weight
-                popt_1, pcov_1 = curve_fit(double_gaussian_fixed, xdata, H_1, p0=init_1[:-1])
+                popt_1, _ = curve_fit(double_gaussian_fixed, xdata, H_1, p0=init_1[:-1])
 
                 def double_gaussian_fixed_no_ms(x, w0):
                     w1 = 1.0 - w0
                     return double_gaussian(x, popt_1[0], popt_1[1], w0, popt_1[3], popt_1[4], w1)
 
                 # popt_2, pcov_2 = curve_fit(double_gaussian_fixed, xdata, H_2, p0=init_2[:-1])
-                _popt_2, pcov_2 = curve_fit(double_gaussian_fixed_no_ms, xdata, H_2, p0=init_2[2])
+                _popt_2, _ = curve_fit(double_gaussian_fixed_no_ms, xdata, H_2, p0=init_2[2])
                 # add back second weight for ease of use
                 popt_1 = np.r_[popt_1, 1.0 - popt_1[2]]
                 # popt_2 = np.r_[popt_2, 1.0 - popt_2[2]]
@@ -539,8 +478,8 @@ class ReadoutReset(Base):
                 popt_2[2] = _popt_2[0]
                 popt_2[5] = 1 - _popt_2[0]
             else:
-                popt_1, pcov_1 = curve_fit(double_gaussian, xdata, H_1, p0=init_1)
-                popt_2, pcov_2 = curve_fit(double_gaussian, xdata, H_2, p0=init_2)
+                popt_1, _ = curve_fit(double_gaussian, xdata, H_1, p0=init_1)
+                popt_2, _ = curve_fit(double_gaussian, xdata, H_2, p0=init_2)
 
             # *** Effective temperature ***
             # Teff_1 = Planck * control_freq / (Boltzmann * np.log(1 / popt_1[5] - 1))

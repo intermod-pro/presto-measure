@@ -1,28 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-Measure Rabi oscillation by changing the amplitude of the control pulse.
+Measure Rabi oscillation by changing the amplitude and the duration of the control pulse.
 
-The control pulse has a sin^2 envelope, while the readout pulse is square.
+Both control pulse and readout pulse have a square envelope.
 """
-import ast
 import math
-from typing import List, Tuple
-import warnings
+from typing import List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2, recommended_dac_config
+from presto.utils import rotate_opt
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -33,9 +28,9 @@ class RabiTime(Base):
         readout_freq: float,
         control_freq: float,
         readout_amp: float,
-        control_amp_arr: List[float],
+        control_amp_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_duration: float,
-        control_duration_arr: List[float],
+        control_duration_arr: Union[List[float], npt.NDArray[np.float64]],
         sample_duration: float,
         readout_port: int,
         control_port: int,
@@ -66,39 +61,17 @@ class RabiTime(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        with pulsed.Pulsed(address=presto_address, ext_ref_clk=ext_ref_clk) as pls:
-            control_tile = pls.hardware._port_to_tile(self.control_port, "dac")
-            readout_tile = pls.hardware._port_to_tile(self.readout_port, "dac")
-        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
-        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq)
-        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
-        elif control_tile != readout_tile:
-            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
-            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
-            dac_mode[control_tile] = dac_mode_c
-            dac_fsample[control_tile] = dac_fsample_c
-        else:
-            warnings.warn(
-                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-            )
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
-            assert pls.hardware is not None
-
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -178,31 +151,31 @@ class RabiTime(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RabiTime":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp_arr = h5f["control_amp_arr"][()]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration_arr = h5f["control_duration_arr"][()]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp_arr: npt.NDArray[np.float64] = h5f["control_amp_arr"][()]  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration_arr: npt.NDArray[np.float64] = h5f["control_duration_arr"][()]  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
 
             try:
-                drag = h5f.attrs["drag"]
+                drag = float(h5f.attrs["drag"])  # type: ignore
             except KeyError:
                 drag = 0.0
 
@@ -255,7 +228,7 @@ class RabiTime(Base):
         # Analyze Rabi
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
         resp_arr.shape = (len(self.control_amp_arr), len(self.control_duration_arr))
-        data = rotate_opt(resp_arr)
+        data = rotate_opt(resp_arr, False)
         plot_data = data.real
 
         data_max = np.abs(plot_data).max()
@@ -300,8 +273,8 @@ class RabiTime(Base):
             aspect="auto",
             interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-            vmin=lowlim,
-            vmax=highlim,
+            vmin=lowlim,  # type: ignore
+            vmax=highlim,  # type: ignore
         )
         ax1.set_xlabel("Control length [μs]")
         ax1.set_ylabel("Control amplitude [FS]")
@@ -322,7 +295,7 @@ class RabiTime(Base):
         fit_freq = np.zeros_like(self.control_amp_arr)
         for jj in range(len(self.control_amp_arr)):
             try:
-                res, _err = _fit_period(self.control_duration_arr, plot_data[jj])
+                res, _ = _fit_period(self.control_duration_arr, plot_data[jj])
                 fit_freq[jj] = 1 / np.abs(res[3])
             except Exception:
                 fit_freq[jj] = np.nan
@@ -330,7 +303,7 @@ class RabiTime(Base):
         pfit1 = np.polyfit(self.control_amp_arr, fit_freq, 1)
 
         ax2.plot(self.control_amp_arr, fit_freq, ".")
-        ax2.set_ylabel("Fitted Rabi rate $\omega/2\pi$ [Hz]")
+        ax2.set_ylabel(r"Fitted Rabi rate $\omega/2\pi$ [Hz]")
         ax2.set_xlabel("Control amplitude [FS]")
         ax2.plot(
             self.control_amp_arr,
@@ -350,7 +323,9 @@ def _func(t, offset, amplitude, T2, period, phase):
     return offset + amplitude * np.exp(-t / T2) * np.cos(math.tau * frequency * t + phase)
 
 
-def _fit_period(x: List[float], y: List[float]) -> Tuple[List[float], List[float]]:
+def _fit_period(
+    x: npt.NDArray[np.float64], y: npt.NDArray[np.float64]
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     from scipy.optimize import curve_fit
 
     pkpk = np.max(y) - np.min(y)

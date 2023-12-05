@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Pulsed frequency sweep on the resonator with and without a π/2 control pulse."""
+"""Pulsed frequency sweep on the resonator."""
+from typing import Optional
+
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import sin2, untwist_downconversion, recommended_dac_config
+from presto.utils import untwist_downconversion
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 IDX_LOW = 0
-IDX_HIGH = 750
+IDX_HIGH = -1
 
 
 class SweepPulsed(Base):
@@ -54,21 +53,17 @@ class SweepPulsed(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        dac_mode, dac_fsample = recommended_dac_config(self.readout_freq_center)
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_mode=dac_mode,
-            dac_fsample=dac_fsample,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
-            assert pls.hardware is not None
-
             # figure out frequencies
             assert self.readout_freq_center > (self.readout_freq_span / 2)
             assert self.readout_freq_span < pls.get_fs("dac") / 2  # fits in HSB
@@ -142,29 +137,29 @@ class SweepPulsed(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super().save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "SweepPulsed":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq_center = h5f.attrs["readout_freq_center"]
-            readout_freq_span = h5f.attrs["readout_freq_span"]
-            readout_freq_nr = h5f.attrs["readout_freq_nr"]
-            readout_amp = h5f.attrs["readout_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
-            readout_nco = h5f.attrs["readout_nco"]
+            readout_freq_center = float(h5f.attrs["readout_freq_center"])  # type: ignore
+            readout_freq_span = float(h5f.attrs["readout_freq_span"])  # type: ignore
+            readout_freq_nr = int(h5f.attrs["readout_freq_nr"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            readout_nco = float(h5f.attrs["readout_nco"])  # type: ignore
 
-            readout_freq_arr = h5f["readout_freq_arr"][()]
-            readout_if_arr = h5f["readout_if_arr"][()]
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            readout_freq_arr: npt.NDArray[np.float64] = h5f["readout_freq_arr"][()]  # type: ignore
+            readout_if_arr: npt.NDArray[np.float64] = h5f["readout_if_arr"][()]  # type: ignore
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
 
         self = cls(
             readout_freq_center=readout_freq_center,
@@ -197,7 +192,6 @@ class SweepPulsed(Base):
         assert len(self.readout_if_arr) == self.readout_freq_nr
 
         import matplotlib.pyplot as plt
-        from scipy.optimize import curve_fit
 
         try:
             from resonator_tools import circuit
@@ -267,7 +261,7 @@ class SweepPulsed(Base):
             # port_g = circuit.reflection_port(
             #    self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
             # )
-            port_g = circuit.notch_port(
+            port_g = circuit.notch_port(  # pyright: ignore [reportUnboundVariable]
                 self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
             )
             port_g.autofit(electric_delay=-6.1e-9)
@@ -282,19 +276,19 @@ class SweepPulsed(Base):
 
         for ax_ in ax2:
             if _has_resonator_tools:
-                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)
+                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)  # pyright: ignore [reportUnboundVariable]
 
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="tab:blue", label="|g>")
         ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="tab:blue")
 
         if _has_resonator_tools:
             ax21.plot(
-                1e-9 * port_g.f_data,
-                20 * np.log10(np.abs(port_g.z_data_sim)),
+                1e-9 * port_g.f_data,  # pyright: ignore
+                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportUnboundVariable]
                 c="tab:red",
                 ls="--",
             )
-            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="tab:red", ls="--")
+            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="tab:red", ls="--")  # pyright: ignore
 
         ax21.set_ylabel("Amplitude [dBFS]")
         ax22.set_ylabel("Phase [rad]")
@@ -304,7 +298,3 @@ class SweepPulsed(Base):
         ret_fig.append(fig2)
 
         return ret_fig
-
-
-def _gaussian(x, x0, s, a, o):
-    return a * np.exp(-0.5 * ((x - x0) / s) ** 2) + o
