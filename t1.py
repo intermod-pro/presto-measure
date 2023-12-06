@@ -150,7 +150,7 @@ class T1(Base):
             return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "T1":
@@ -205,7 +205,7 @@ class T1(Base):
 
         if reference_templates is None:
             resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-            data = np.real(rotate_opt(resp_arr, False))
+            data = np.real(rotate_opt(resp_arr))
         else:
             resp_arr = self.store_arr[:, 0, :]
             data = project(resp_arr, reference_templates)
@@ -242,7 +242,7 @@ class T1(Base):
 
         # Analyze T1
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        resp_arr = rotate_opt(resp_arr, False)
+        resp_arr = rotate_opt(resp_arr)
 
         # Fit data
         popt, perr = _fit_simple(self.delay_arr, np.real(resp_arr))

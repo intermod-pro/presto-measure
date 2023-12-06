@@ -149,7 +149,7 @@ class RamseySingle(Base):
         return self.save()
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RamseySingle":
@@ -229,7 +229,7 @@ class RamseySingle(Base):
 
         # Analyze T2
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        data = rotate_opt(resp_arr, False)
+        data = rotate_opt(resp_arr)
 
         # Fit data to I quadrature
         try:

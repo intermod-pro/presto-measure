@@ -242,7 +242,7 @@ class AcStarkShift(Base):
         return self.save()
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "AcStarkShift":
@@ -323,7 +323,7 @@ class AcStarkShift(Base):
 
         # analyze and reshape data
         resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
-        data = rotate_opt(resp_arr, False).real
+        data = rotate_opt(resp_arr).real
         nr_amps = len(self.ringup_amp_arr)
         nr_delays = len(self.delay_arr)
         data.shape = (nr_amps, nr_delays)

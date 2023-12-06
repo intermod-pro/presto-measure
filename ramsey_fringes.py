@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Measure a Ramsey fringes pattern by changing the frequency of two π/2 pulses and their delay."""
 import ast
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import h5py
 import numpy as np
@@ -174,7 +174,7 @@ class RamseyFringes(Base):
         return self.save()
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RamseyFringes":
@@ -262,7 +262,7 @@ class RamseyFringes(Base):
         # Analyze
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
         resp_arr.shape = (self.control_freq_nr, len(self.delay_arr))
-        data = rotate_opt(resp_arr, False)
+        data = rotate_opt(resp_arr)
         plot_data = data.real
 
         data_max = np.abs(plot_data).max()
@@ -295,7 +295,7 @@ class RamseyFringes(Base):
         fig2 = plt.figure(figsize=(6.4, 9.6), constrained_layout=True)
         gs = fig2.add_gridspec(2, 1)
         gs1 = gs[0].subgridspec(1, 1)
-        ax2 = gs1.subplots()  # type: plt.axes.Axes
+        ax2: Any = gs1.subplots()
         ax3 = fig2.add_subplot(gs[1])
 
         im = ax2.imshow(

@@ -14,7 +14,7 @@ class Base:
     Base class for measurements
     """
 
-    def save(self, script_path: str, save_filename: Optional[str] = None) -> str:
+    def _save(self, script_path: str, save_filename: Optional[str] = None) -> str:
         script_path = os.path.realpath(script_path)  # full path of current script
 
         if save_filename is None:

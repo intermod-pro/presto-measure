@@ -160,7 +160,7 @@ class RamseyEcho(Base):
             return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RamseyEcho":
@@ -218,7 +218,7 @@ class RamseyEcho(Base):
         if reference_templates is None:
             idx = np.arange(IDX_LOW, IDX_HIGH)
             resp_arr = np.mean(self.store_arr[:, 0, idx], axis=-1)
-            data = np.real(rotate_opt(resp_arr, False))
+            data = np.real(rotate_opt(resp_arr))
         else:
             resp_arr = self.store_arr[:, 0, :]
             data = project(resp_arr, reference_templates)
@@ -256,7 +256,7 @@ class RamseyEcho(Base):
 
         # Analyze T2
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        data = rotate_opt(resp_arr, False)
+        data = rotate_opt(resp_arr)
 
         # Fit data to I quadrature
         try:

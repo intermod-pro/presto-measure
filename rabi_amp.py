@@ -157,7 +157,7 @@ class RabiAmp(Base):
         return self.save()
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RabiAmp":
@@ -236,7 +236,7 @@ class RabiAmp(Base):
 
         # Analyze Rabi
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        data = rotate_opt(resp_arr, False)
+        data = rotate_opt(resp_arr)
 
         # Fit data
         popt_x, perr_x = _fit_period(self.control_amp_arr, np.real(data))

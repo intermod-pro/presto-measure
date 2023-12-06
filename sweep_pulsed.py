@@ -138,7 +138,7 @@ class SweepPulsed(Base):
         return self.save()
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "SweepPulsed":

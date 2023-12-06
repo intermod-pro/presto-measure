@@ -2,10 +2,11 @@
 """
 3D sweep of pump power, DC bias and frequency of probe, to see where we get gain.
 """
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
 from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
 from presto import lockin
@@ -30,13 +31,13 @@ class JpaSweepPowerBias(Base):
         df: float,
         num_averages: int,
         amp: float,
-        bias_arr: List[float],
-        pump_pwr_arr: List[int],
+        bias_arr: Union[List[float], npt.NDArray[np.float64]],
+        pump_pwr_arr: Union[List[int], npt.NDArray[np.int64]],
         output_port: int,
         input_port: int,
         bias_port: int,
         pump_port: int,
-        pump_freq: float = None,
+        pump_freq: Optional[float] = None,
         dither: bool = True,
         num_skip: int = 0,
     ) -> None:
@@ -64,7 +65,7 @@ class JpaSweepPowerBias(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
@@ -165,32 +166,32 @@ class JpaSweepPowerBias(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "JpaSweepPowerBias":
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = h5f.attrs["freq_center"]
-            freq_span = h5f.attrs["freq_span"]
-            df = h5f.attrs["df"]
-            num_averages = h5f.attrs["num_averages"]
-            amp = h5f.attrs["amp"]
-            output_port = h5f.attrs["output_port"]
-            input_port = h5f.attrs["input_port"]
-            bias_port = h5f.attrs["bias_port"]
-            pump_port = h5f.attrs["pump_port"]
-            pump_freq = h5f.attrs["pump_freq"]
-            dither = h5f.attrs["dither"]
-            num_skip = h5f.attrs["num_skip"]
+            freq_center = float(h5f.attrs["freq_center"])  # type: ignore
+            freq_span = float(h5f.attrs["freq_span"])  # type: ignore
+            df = float(h5f.attrs["df"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            amp = float(h5f.attrs["amp"])  # type: ignore
+            output_port = int(h5f.attrs["output_port"])  # type: ignore
+            input_port = int(h5f.attrs["input_port"])  # type: ignore
+            bias_port = int(h5f.attrs["bias_port"])  # type: ignore
+            pump_port = int(h5f.attrs["pump_port"])  # type: ignore
+            pump_freq = float(h5f.attrs["pump_freq"])  # type: ignore
+            dither = bool(h5f.attrs["dither"])  # type: ignore
+            num_skip = int(h5f.attrs["num_skip"])  # type: ignore
 
-            bias_arr = h5f["bias_arr"][()]
-            pump_pwr_arr = h5f["pump_pwr_arr"][()]
-            freq_arr = h5f["freq_arr"][()]
-            ref_resp_arr = h5f["ref_resp_arr"][()]
-            ref_pwr_arr = h5f["ref_pwr_arr"][()]
-            resp_arr = h5f["resp_arr"][()]
-            pwr_arr = h5f["pwr_arr"][()]
+            bias_arr: npt.NDArray[np.float64] = h5f["bias_arr"][()]  # type: ignore
+            pump_pwr_arr: npt.NDArray[np.int64] = h5f["pump_pwr_arr"][()]  # type: ignore
+            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]  # type: ignore
+            ref_resp_arr: npt.NDArray[np.complex128] = h5f["ref_resp_arr"][()]  # type: ignore
+            ref_pwr_arr: npt.NDArray[np.float64] = h5f["ref_pwr_arr"][()]  # type: ignore
+            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]  # type: ignore
+            pwr_arr: npt.NDArray[np.float64] = h5f["pwr_arr"][()]  # type: ignore
 
         self = cls(
             freq_center=freq_center,

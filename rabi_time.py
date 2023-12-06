@@ -152,7 +152,7 @@ class RabiTime(Base):
         return self.save()
 
     def save(self, save_filename: Optional[str] = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RabiTime":
@@ -228,7 +228,7 @@ class RabiTime(Base):
         # Analyze Rabi
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
         resp_arr.shape = (len(self.control_amp_arr), len(self.control_duration_arr))
-        data = rotate_opt(resp_arr, False)
+        data = rotate_opt(resp_arr)
         plot_data = data.real
 
         data_max = np.abs(plot_data).max()

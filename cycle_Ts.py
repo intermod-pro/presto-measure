@@ -152,7 +152,7 @@ class CycleTs(Base):
 
     def save(self, save_filename: Optional[str] = None) -> str:
         # save parameters
-        self._save_filename = super().save(__file__, save_filename=save_filename)
+        self._save_filename = super()._save(__file__, save_filename=save_filename)
         # add growable arrays
         with h5py.File(self._save_filename, "a") as h5f:
             # h5f.create_dataset('data1', data=self._data1, compression="gzip", chunks=True, maxshape=(None, self._nr_delays))
