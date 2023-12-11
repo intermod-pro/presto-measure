@@ -5,11 +5,11 @@ line-length = 99
 max-line-length = 99
 
 [tool.pyright]
-ignore = ["bak/"]
+ignore = ["bak/", "data/"]
 reportMissingImports = false
 
 [tool.ruff]
-extend-exclude = ["bak/"]
+extend-exclude = ["bak/", "data/"]
 line-length = 99
 
 [tool.yapf]

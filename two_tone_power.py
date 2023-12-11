@@ -3,23 +3,18 @@
 Two-tone spectroscopy in Lockin mode: 2D sweep of pump power and frequency, with fixed probe.
 """
 from typing import List, Optional, Union
-import warnings
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode
+from presto.hardware import AdcMode, DacMode
 from presto import lockin
-from presto.utils import ProgressBar, rotate_opt, recommended_dac_config
+from presto.utils import ProgressBar, rotate_opt
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 
 
 class TwoTonePower(Base):
@@ -60,35 +55,13 @@ class TwoTonePower(Base):
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        with lockin.Lockin(address=presto_address, ext_ref_clk=ext_ref_clk) as lck:
-            control_tile = lck.hardware._port_to_tile(self.control_port, "dac")
-            readout_tile = lck.hardware._port_to_tile(self.readout_port, "dac")
-        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
-        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq_center)
-        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
-        elif control_tile != readout_tile:
-            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
-            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
-            dac_mode[control_tile] = dac_mode_c
-            dac_fsample[control_tile] = dac_fsample_c
-        else:
-            warnings.warn(
-                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-            )
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as lck:
-            assert lck.hardware is not None
-
             lck.hardware.set_adc_attenuation(self.input_port, 0.0)
             lck.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             lck.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -149,7 +122,7 @@ class TwoTonePower(Base):
                         freq=control_freq,
                         out_ports=self.control_port,
                     )
-                    lck.hardware.sleep(1e-3, False)
+                    lck.apply_settings()
 
                     _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                     data_i = _d[self.input_port][1][:, 0]

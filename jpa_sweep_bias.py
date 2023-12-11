@@ -8,19 +8,13 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import lockin
 from presto.utils import ProgressBar
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": DacMode.Mixed42,
-    "dac_fsample": DacFSample.G10,
-}
 
 
 class JpaSweepBias(Base):
@@ -63,10 +57,9 @@ class JpaSweepBias(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as lck:
-            assert lck.hardware is not None
-
             lck.hardware.set_adc_attenuation(self.input_port, 0.0)
             lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
@@ -116,7 +109,7 @@ class JpaSweepBias(Base):
                         in_ports=self.input_port,
                         out_ports=self.output_port,
                     )
-                    lck.hardware.sleep(1e-3, False)
+                    lck.apply_settings()
 
                     _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                     data_i = _d[self.input_port][1][:, 0]
