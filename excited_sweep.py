@@ -69,7 +69,9 @@ class ExcitedSweep(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        with pulsed.Pulsed(address=presto_address, ext_ref_clk=ext_ref_clk) as pls:
+        with pulsed.Pulsed(
+            address=presto_address, port=presto_port, ext_ref_clk=ext_ref_clk, dry_run=True
+        ) as pls:
             control_tile = pls.hardware._port_to_tile(self.control_port, "dac")
             readout_tile = pls.hardware._port_to_tile(self.readout_port, "dac")
         dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq_center)

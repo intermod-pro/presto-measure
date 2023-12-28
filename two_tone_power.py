@@ -59,7 +59,9 @@ class TwoTonePower(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        with lockin.Lockin(address=presto_address, ext_ref_clk=ext_ref_clk) as lck:
+        with lockin.Lockin(
+            address=presto_address, port=presto_port, ext_ref_clk=ext_ref_clk
+        ) as lck:
             control_tile = lck.hardware._port_to_tile(self.control_port, "dac")
             readout_tile = lck.hardware._port_to_tile(self.readout_port, "dac")
         dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
