@@ -120,7 +120,7 @@ class SweepFreqAndDC(Base):
 
             lck.apply_settings()
 
-            pb = ProgressBar(nr_bias * nr_freq)
+            pb = ProgressBar(nr_bias)
             pb.start()
             for jj, bias in enumerate(self.bias_arr):
                 lck.hardware.ramp_dc_bias(bias, self.bias_port, self.bias_ramp_rate)
@@ -139,8 +139,7 @@ class SweepFreqAndDC(Base):
                     data = data_i.real + 1j * data_q.real  # using zero IF
 
                     self.resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
-
-                    pb.increment()
+                pb.increment()
 
             pb.done()
 
@@ -187,6 +186,7 @@ class SweepFreqAndDC(Base):
             dither=dither,
             num_skip=num_skip,
         )
+        self.bias_arr = bias_arr
         self.freq_arr = freq_arr
         self.resp_arr = resp_arr
 
