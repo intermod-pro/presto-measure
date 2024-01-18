@@ -79,13 +79,13 @@ class DisplacementCalibration(Base):
             ext_ref_clk=ext_ref_clk,
             **CONVERTER_CONFIGURATION,
         ) as pls:
-            assert pls.hardware is not None
-
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_dac_current(self.cavity_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
+            pls.hardware.set_inv_sinc(self.cavity_port, 0)
 
             pls.hardware.configure_mixer(
                 self.readout_freq,
