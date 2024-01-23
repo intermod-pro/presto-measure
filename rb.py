@@ -225,15 +225,13 @@ class Rb(Base):
             pls.set_store_ports(self.sample_port)
             pls.set_store_duration(self.sample_duration)
 
-            pls.setup_scale_lut(self.control_port, 0, 1.0)
-            pls.setup_scale_lut(self.control_port, 1, 1.0)
-            pls.setup_scale_lut(self.readout_port, 0, 1.0)
+            pls.setup_scale_lut(self.control_port, 0, self.control_amp)
+            pls.setup_scale_lut(self.readout_port, 0, self.readout_amp)
 
             T = 0
             vphase: int = 0
 
-            # reset phase here if using IF
-
+            # reset phase on control_port here if using IF
             pulse_count = 0
             for gate in sequence:
                 if gate[0] == "rz":
@@ -247,13 +245,14 @@ class Rb(Base):
 
             print(f"{pulse_count = }")
 
-            # reset phase here if using IF
+            # reset phase on readout_port here if using IF
             pls.output_pulse(T, readout_pulse)
-            pls.store(T)
+            pls.store(T + self.readout_sample_delay)
 
-            period = T + 501e-6 * 2
-            pls.run(period, 1, self.num_averages)
+            # wait for qubit decay
+            T += self.wait_delay
 
+            pls.run(T, 1, self.num_averages)
             return pls.get_store_data()
 
     def _rbgen(self) -> List[List[GateSeq]]:
@@ -350,7 +349,7 @@ class Rb(Base):
         fig, ax = plt.subplots()
         for d in rotated:
             (line,) = ax.plot(self.rb_len_arr, _rescale(d, xe, xg), ".", c="0.75")
-        line.set_label("single realizations")  # pyright: ignore[reportUnboundVariable]
+        line.set_label("single realizations")  # pyright: ignore[reportPossiblyUnboundVariable]
 
         ax.semilogx(self.rb_len_arr, _rescale(rotated_avg, xe, xg), ".", ms=9, label="average")
         ax.semilogx(X, _rescale(_exp_fit_fn(X, *popt), xe, xg), "--", label=fid_label)
