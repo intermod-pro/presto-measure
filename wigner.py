@@ -25,19 +25,19 @@ class Wigner(Base):
         self,
         readout_freq: float,
         control_freq: float,
-        cavity_freq: float,
+        memory_freq: float,
         readout_amp: float,
         control_amp: float,
-        cavity_amp_arr_x: List[float],
-        cavity_amp_arr_y: List[float],
+        memory_amp_arr_x: List[float],
+        memory_amp_arr_y: List[float],
         dt_wigner: float,
         readout_duration: float,
         control_duration: float,
-        cavity_duration: float,
+        memory_duration: float,
         sample_duration: float,
         readout_port: int,
         control_port: int,
-        cavity_port: int,
+        memory_port: int,
         sample_port: int,
         wait_delay: float,
         readout_sample_delay: float,
@@ -45,19 +45,19 @@ class Wigner(Base):
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
-        self.cavity_freq = cavity_freq
+        self.memory_freq = memory_freq
         self.readout_amp = readout_amp
         self.control_amp = control_amp
-        self.cavity_amp_arr_x = np.atleast_1d(cavity_amp_arr_x).astype(np.float64)
-        self.cavity_amp_arr_y = np.atleast_1d(cavity_amp_arr_y).astype(np.float64)
+        self.memory_amp_arr_x = np.atleast_1d(memory_amp_arr_x).astype(np.float64)
+        self.memory_amp_arr_y = np.atleast_1d(memory_amp_arr_y).astype(np.float64)
         self.dt_wigner = dt_wigner
         self.readout_duration = readout_duration
         self.control_duration = control_duration
-        self.cavity_duration = cavity_duration
+        self.memory_duration = memory_duration
         self.sample_duration = sample_duration
         self.readout_port = readout_port
         self.control_port = control_port
-        self.cavity_port = cavity_port
+        self.memory_port = memory_port
         self.sample_port = sample_port
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
@@ -83,10 +83,10 @@ class Wigner(Base):
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.cavity_port, DAC_CURRENT)
+            pls.hardware.set_dac_current(self.memory_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
-            pls.hardware.set_inv_sinc(self.cavity_port, 0)
+            pls.hardware.set_inv_sinc(self.memory_port, 0)
 
             pls.hardware.configure_mixer(
                 self.readout_freq,
@@ -99,7 +99,7 @@ class Wigner(Base):
                 self.control_freq, out_ports=self.control_port, sync=False
             )
             pls.hardware.configure_mixer(
-                self.cavity_freq, out_ports=self.cavity_port, sync=True
+                self.memory_freq, out_ports=self.memory_port, sync=True
             )  # sync here
 
             # ************************************
@@ -110,17 +110,17 @@ class Wigner(Base):
             pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
             pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp)
             pls.setup_scale_lut(
-                self.cavity_port, group=0, scales=self.cavity_amp_arr_x * np.sqrt(2), axis=1
+                self.memory_port, group=0, scales=self.memory_amp_arr_x * np.sqrt(2), axis=1
             )
             pls.setup_scale_lut(
-                self.cavity_port, group=1, scales=self.cavity_amp_arr_y * np.sqrt(2), axis=0
+                self.memory_port, group=1, scales=self.memory_amp_arr_y * np.sqrt(2), axis=0
             )
             # Setup lookup tables for frequencies
             pls.setup_freq_lut(
-                self.cavity_port, group=0, frequencies=0, phases=0, phases_q=-np.pi / 2
+                self.memory_port, group=0, frequencies=0, phases=0, phases_q=-np.pi / 2
             )  # x displacement
             pls.setup_freq_lut(
-                self.cavity_port, group=1, frequencies=0, phases=np.pi / 2, phases_q=0
+                self.memory_port, group=1, frequencies=0, phases=np.pi / 2, phases_q=0
             )  # y displacement
 
             # Setup readout and control pulses
@@ -145,18 +145,18 @@ class Wigner(Base):
                 envelope=False,
             )
 
-            cavity_ns = int(round(self.cavity_duration * pls.get_fs("dac")))
-            cavity_envelope = sin2(cavity_ns)
-            cavity_pulse_x = pls.setup_template(
-                self.cavity_port,
+            memory_ns = int(round(self.memory_duration * pls.get_fs("dac")))
+            memory_envelope = sin2(memory_ns)
+            memory_pulse_x = pls.setup_template(
+                self.memory_port,
                 group=0,
-                template=cavity_envelope + 1j * cavity_envelope,
+                template=memory_envelope + 1j * memory_envelope,
                 envelope=True,
             )
-            cavity_pulse_y = pls.setup_template(
-                self.cavity_port,
+            memory_pulse_y = pls.setup_template(
+                self.memory_port,
                 group=1,
-                template=cavity_envelope + 1j * cavity_envelope,
+                template=memory_envelope + 1j * memory_envelope,
                 envelope=True,
             )
 
@@ -168,9 +168,9 @@ class Wigner(Base):
             # *** Program pulse sequence ***
             # ******************************
             T = 0.0  # s, start at time zero ...
-            pls.reset_phase(T, output_ports=self.cavity_port, group=[0, 1])
-            pls.output_pulse(T, [cavity_pulse_x, cavity_pulse_y])  # displace cavity
-            T += self.cavity_duration
+            pls.reset_phase(T, output_ports=self.memory_port, group=[0, 1])
+            pls.output_pulse(T, [memory_pulse_x, memory_pulse_y])  # displace memory
+            T += self.memory_duration
             pls.output_pulse(T, control_pulse)  # pi/2 pulse
             T += self.control_duration + self.dt_wigner
             pls.output_pulse(T, control_pulse)  # pi/2 pulse
@@ -179,7 +179,7 @@ class Wigner(Base):
             pls.store(T + self.readout_sample_delay)
             T += self.readout_duration
             T += self.wait_delay  # Wait for decay
-            pls.next_scale(T, self.cavity_port, group=[0, 1])
+            pls.next_scale(T, self.memory_port, group=[0, 1])
             T += self.wait_delay
 
             # **************************
@@ -187,7 +187,7 @@ class Wigner(Base):
             # **************************
             pls.run(
                 period=T,
-                repeat_count=(len(self.cavity_amp_arr_y), len(self.cavity_amp_arr_x)),
+                repeat_count=(len(self.memory_amp_arr_y), len(self.memory_amp_arr_x)),
                 num_averages=self.num_averages,
             )
             self.t_arr, self.store_arr = pls.get_store_data()
@@ -202,19 +202,19 @@ class Wigner(Base):
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs["readout_freq"]
             control_freq = h5f.attrs["control_freq"]
-            cavity_freq = h5f.attrs["cavity_freq"]
+            memory_freq = h5f.attrs["memory_freq"]
             readout_amp = h5f.attrs["readout_amp"]
             control_amp = h5f.attrs["control_amp"]
-            cavity_amp_arr_x = h5f["cavity_amp_arr_x"][()]
-            cavity_amp_arr_y = h5f["cavity_amp_arr_y"][()]
+            memory_amp_arr_x = h5f["memory_amp_arr_x"][()]
+            memory_amp_arr_y = h5f["memory_amp_arr_y"][()]
             dt_wigner = h5f.attrs["dt_wigner"]
             readout_duration = h5f.attrs["readout_duration"]
             control_duration = h5f.attrs["control_duration"]
-            cavity_duration = h5f.attrs["cavity_duration"]
+            memory_duration = h5f.attrs["memory_duration"]
             sample_duration = h5f.attrs["sample_duration"]
             readout_port = h5f.attrs["readout_port"]
             control_port = h5f.attrs["control_port"]
-            cavity_port = h5f.attrs["cavity_port"]
+            memory_port = h5f.attrs["memory_port"]
             sample_port = h5f.attrs["sample_port"]
             wait_delay = h5f.attrs["wait_delay"]
             readout_sample_delay = h5f.attrs["readout_sample_delay"]
@@ -226,19 +226,19 @@ class Wigner(Base):
         self = cls(
             readout_freq=readout_freq,
             control_freq=control_freq,
-            cavity_freq=cavity_freq,
+            memory_freq=memory_freq,
             readout_amp=readout_amp,
             control_amp=control_amp,
-            cavity_amp_arr_x=cavity_amp_arr_x,
-            cavity_amp_arr_y=cavity_amp_arr_y,
+            memory_amp_arr_x=memory_amp_arr_x,
+            memory_amp_arr_y=memory_amp_arr_y,
             dt_wigner=dt_wigner,
             readout_duration=readout_duration,
             control_duration=control_duration,
-            cavity_duration=cavity_duration,
+            memory_duration=memory_duration,
             sample_duration=sample_duration,
             readout_port=readout_port,
             control_port=control_port,
-            cavity_port=cavity_port,
+            memory_port=memory_port,
             sample_port=sample_port,
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
@@ -297,7 +297,7 @@ class Wigner(Base):
 
         # Analyze
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        resp_arr.shape = (len(self.cavity_amp_arr_y), len(self.cavity_amp_arr_x))
+        resp_arr.shape = (len(self.memory_amp_arr_y), len(self.memory_amp_arr_x))
         resp_arr = rotate_opt(resp_arr) * np.exp(1j * np.pi)
         resp_arr = resp_arr.real
 
@@ -321,12 +321,12 @@ class Wigner(Base):
         highlim = np.percentile(resp_arr, 100.0 - cutoff)
 
         # extent
-        x_min = self.cavity_amp_arr_x[0]
-        x_max = self.cavity_amp_arr_x[-1]
-        dx = self.cavity_amp_arr_x[1] - self.cavity_amp_arr_x[0]
-        y_min = self.cavity_amp_arr_y[0]
-        y_max = self.cavity_amp_arr_y[-1]
-        dy = self.cavity_amp_arr_y[1] - self.cavity_amp_arr_y[0]
+        x_min = self.memory_amp_arr_x[0]
+        x_max = self.memory_amp_arr_x[-1]
+        dx = self.memory_amp_arr_x[1] - self.memory_amp_arr_x[0]
+        y_min = self.memory_amp_arr_y[0]
+        y_max = self.memory_amp_arr_y[-1]
+        dy = self.memory_amp_arr_y[1] - self.memory_amp_arr_y[0]
 
         fig1 = plt.figure(tight_layout=True)
         ax1 = fig1.add_subplot(1, 1, 1)

@@ -20,23 +20,23 @@ IDX_LOW = 0
 IDX_HIGH = -1
 
 
-class T1_cavity_coherent(Base):
+class T2_memory_coherent(Base):
     def __init__(
         self,
         readout_freq: float,
         control_freq: float,
-        cavity_freq: float,
+        memory_freq: float,
         readout_amp: float,
         control_amp: float,
-        cavity_amp: float,
+        memory_amp: float,
         readout_duration: float,
         control_duration: float,
-        cavity_duration: float,
+        memory_duration: float,
         sample_duration: float,
         delay_arr: List[float],
         readout_port: int,
         control_port: int,
-        cavity_port: int,
+        memory_port: int,
         sample_port: int,
         wait_delay: float,
         readout_sample_delay: float,
@@ -44,18 +44,18 @@ class T1_cavity_coherent(Base):
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
-        self.cavity_freq = cavity_freq
+        self.memory_freq = memory_freq
         self.readout_amp = readout_amp
         self.control_amp = control_amp
-        self.cavity_amp = cavity_amp
+        self.memory_amp = memory_amp
         self.readout_duration = readout_duration
         self.control_duration = control_duration
-        self.cavity_duration = cavity_duration
+        self.memory_duration = memory_duration
         self.sample_duration = sample_duration
         self.delay_arr = np.atleast_1d(delay_arr).astype(np.float64)
         self.readout_port = readout_port
         self.control_port = control_port
-        self.cavity_port = cavity_port
+        self.memory_port = memory_port
         self.sample_port = sample_port
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
@@ -81,10 +81,10 @@ class T1_cavity_coherent(Base):
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.cavity_port, DAC_CURRENT)
+            pls.hardware.set_dac_current(self.memory_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
-            pls.hardware.set_inv_sinc(self.cavity_port, 0)
+            pls.hardware.set_inv_sinc(self.memory_port, 0)
 
             pls.hardware.configure_mixer(
                 self.readout_freq,
@@ -97,7 +97,7 @@ class T1_cavity_coherent(Base):
                 self.control_freq, out_ports=self.control_port, sync=False
             )
             pls.hardware.configure_mixer(
-                self.cavity_freq, out_ports=self.cavity_port, sync=True
+                self.memory_freq, out_ports=self.memory_port, sync=True
             )  # sync here
 
             # ************************************
@@ -107,7 +107,9 @@ class T1_cavity_coherent(Base):
             # Setup lookup tables for amplitudes
             pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
             pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp)
-            pls.setup_scale_lut(self.cavity_port, group=0, scales=self.cavity_amp)
+            pls.setup_scale_lut(
+                self.memory_port, group=0, scales=[self.memory_amp, -self.memory_amp]
+            )
 
             # Setup readout and control pulses
             # use setup_long_drive to create a pulse with square envelope
@@ -131,12 +133,12 @@ class T1_cavity_coherent(Base):
                 envelope=False,
             )
 
-            cavity_ns = int(round(self.cavity_duration * pls.get_fs("dac")))
-            cavity_envelope = sin2(cavity_ns)
-            cavity_pulse = pls.setup_template(
-                self.cavity_port,
+            memory_ns = int(round(self.memory_duration * pls.get_fs("dac")))
+            memory_envelope = sin2(memory_ns)
+            memory_pulse = pls.setup_template(
+                self.memory_port,
                 group=0,
-                template=cavity_envelope + 1j * cavity_envelope,
+                template=memory_envelope + 1j * memory_envelope,
                 envelope=False,
             )
 
@@ -149,10 +151,14 @@ class T1_cavity_coherent(Base):
             # ******************************
             T = 0.0  # s, start at time zero ...
             for delay in self.delay_arr:
-                pls.output_pulse(T, cavity_pulse)  # displace cavity
-                T += self.cavity_duration
+                pls.select_scale(T, 0, self.memory_port, group=0)
+                pls.output_pulse(T, memory_pulse)  # displace memory
+                T += self.memory_duration
                 T += delay  # increasing delay
-                pls.output_pulse(T, control_pulse)  # pi pulse conditioned on cavity in |0>
+                pls.select_scale(T, 1, self.memory_port, group=0)
+                pls.output_pulse(T, memory_pulse)  # displace memory back
+                T += self.memory_duration
+                pls.output_pulse(T, control_pulse)  # pi pulse conditioned on memory in |0>
                 T += self.control_duration
                 pls.output_pulse(T, readout_pulse)  # Readout
                 pls.store(T + self.readout_sample_delay)
@@ -171,22 +177,22 @@ class T1_cavity_coherent(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "T1_cavity_coherent":
+    def load(cls, load_filename: str) -> "T2_memory_coherent":
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = h5f.attrs["readout_freq"]
             control_freq = h5f.attrs["control_freq"]
-            cavity_freq = h5f.attrs["cavity_freq"]
+            memory_freq = h5f.attrs["memory_freq"]
             readout_amp = h5f.attrs["readout_amp"]
             control_amp = h5f.attrs["control_amp"]
-            cavity_amp = h5f.attrs["cavity_amp"]
+            memory_amp = h5f.attrs["memory_amp"]
             readout_duration = h5f.attrs["readout_duration"]
             control_duration = h5f.attrs["control_duration"]
-            cavity_duration = h5f.attrs["cavity_duration"]
+            memory_duration = h5f.attrs["memory_duration"]
             sample_duration = h5f.attrs["sample_duration"]
             delay_arr = h5f["delay_arr"][()]
             readout_port = h5f.attrs["readout_port"]
             control_port = h5f.attrs["control_port"]
-            cavity_port = h5f.attrs["cavity_port"]
+            memory_port = h5f.attrs["memory_port"]
             sample_port = h5f.attrs["sample_port"]
             wait_delay = h5f.attrs["wait_delay"]
             readout_sample_delay = h5f.attrs["readout_sample_delay"]
@@ -198,18 +204,18 @@ class T1_cavity_coherent(Base):
         self = cls(
             readout_freq=readout_freq,
             control_freq=control_freq,
-            cavity_freq=cavity_freq,
+            memory_freq=memory_freq,
             readout_amp=readout_amp,
             control_amp=control_amp,
-            cavity_amp=cavity_amp,
+            memory_amp=memory_amp,
             readout_duration=readout_duration,
             control_duration=control_duration,
-            cavity_duration=cavity_duration,
+            memory_duration=memory_duration,
             sample_duration=sample_duration,
             delay_arr=delay_arr,
             readout_port=readout_port,
             control_port=control_port,
-            cavity_port=cavity_port,
+            memory_port=memory_port,
             sample_port=sample_port,
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
@@ -239,7 +245,7 @@ class T1_cavity_coherent(Base):
 
         return data, (popt, perr)
 
-    def analyze(self, beta: float, all_plots: bool = False):
+    def analyze(self, all_plots: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
 
@@ -261,16 +267,23 @@ class T1_cavity_coherent(Base):
             fig1.show()
             ret_fig.append(fig1)
 
-        # Analyze T1
+        # Analyze T2
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        resp_arr = rotate_opt(resp_arr)
+        data = rotate_opt(resp_arr)
 
-        # Fit data
-        popt, perr = _fit_simple(self.delay_arr, np.real(resp_arr), beta)
+        # Fit data to I quadrature
+        try:
+            popt, perr = _fit_simple(self.delay_arr, np.real(data))
 
-        T1 = popt[0]
-        T1_err = perr[0]
-        print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+            T2 = popt[2]
+            T2_err = perr[2]
+            print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+            det = popt[3]
+            det_err = perr[3]
+            print("detuning: {} +- {} Hz".format(det, det_err))
+        except Exception as err:
+            print("Unable to fit data!")
+            print(err)
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
@@ -278,7 +291,7 @@ class T1_cavity_coherent(Base):
             ax21.plot(1e6 * self.delay_arr, np.abs(resp_arr))
             ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(resp_arr)))
             ax23.plot(1e6 * self.delay_arr, np.real(resp_arr))
-            ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), "--")
+            ax23.plot(1e6 * self.delay_arr, _func(self.delay_arr, *popt), "--")
             ax24.plot(1e6 * self.delay_arr, np.imag(resp_arr))
 
             ax21.set_ylabel("Amplitude [FS]")
@@ -305,30 +318,45 @@ class T1_cavity_coherent(Base):
 
         fig3, ax3 = plt.subplots(tight_layout=True)
         ax3.plot(1e6 * self.delay_arr, mult * np.real(resp_arr), ".")
-        ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, beta, *popt), "--")
+        ax3.plot(1e6 * self.delay_arr, mult * _func(self.delay_arr, *popt), "--")
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel(r"Delay [μs]")
-        ax3.set_title("T1 = {:s} μs".format(format_precision(1e6 * T1, 1e6 * T1_err)))
+        ax3.set_title("T2 = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))
         fig3.show()
         ret_fig.append(fig3)
 
         return ret_fig
 
 
-def _decay(t, beta, *p):
-    T1, xe, xg = p
-    return xg + (xe - xg) * np.exp(-(np.abs(beta) ** 2) * np.exp(-t / T1))
+def _func(t, offset, amplitude, T2, frequency, phase):
+    return offset + amplitude * np.exp(-t / T2) * np.cos(2.0 * np.pi * frequency * t + phase)
 
 
-def _fit_simple(t, x, beta):
+def _fit_simple(x, y):
     from scipy.optimize import curve_fit
 
-    def my_decay(t, *p):
-        return _decay(t, beta, *p)
-
-    T1 = 0.25 * (t[-1] - t[0])
-    xe, xg = x[0], x[-1]
-    p0 = (T1, xe, xg)
-    popt, pcov = curve_fit(my_decay, t, x, p0)
+    pkpk = np.max(y) - np.min(y)
+    offset = np.min(y) + pkpk / 2
+    amplitude = 0.5 * pkpk
+    T2 = 0.5 * (np.max(x) - np.min(x))
+    freqs = np.fft.rfftfreq(len(x), x[1] - x[0])
+    fft = np.fft.rfft(y)
+    fft[0] = 0
+    idx_max = np.argmax(np.abs(fft))
+    frequency = freqs[idx_max]
+    phase = np.angle(fft[idx_max])
+    p0 = (
+        offset,
+        amplitude,
+        T2,
+        frequency,
+        phase,
+    )
+    popt, pcov = curve_fit(
+        _func,
+        x,
+        y,
+        p0=p0,
+    )
     perr = np.sqrt(np.diag(pcov))
     return popt, perr

@@ -26,17 +26,17 @@ class DisplacementCalibration(Base):
         readout_freq: float,
         control_freq: float,
         control_df_arr: List[float],
-        cavity_freq: float,
+        memory_freq: float,
         readout_amp: float,
         control_amp: float,
-        cavity_amp_arr: List[float],
+        memory_amp_arr: List[float],
         readout_duration: float,
         control_duration: float,
-        cavity_duration: float,
+        memory_duration: float,
         sample_duration: float,
         readout_port: int,
         control_port: int,
-        cavity_port: int,
+        memory_port: int,
         sample_port: int,
         wait_delay: float,
         readout_sample_delay: float,
@@ -45,17 +45,17 @@ class DisplacementCalibration(Base):
         self.readout_freq = readout_freq
         self.control_freq = control_freq
         self.control_df_arr = control_df_arr
-        self.cavity_freq = cavity_freq
+        self.memory_freq = memory_freq
         self.readout_amp = readout_amp
         self.control_amp = control_amp
-        self.cavity_amp_arr = np.atleast_1d(cavity_amp_arr).astype(np.float64)
+        self.memory_amp_arr = np.atleast_1d(memory_amp_arr).astype(np.float64)
         self.readout_duration = readout_duration
         self.control_duration = control_duration
-        self.cavity_duration = cavity_duration
+        self.memory_duration = memory_duration
         self.sample_duration = sample_duration
         self.readout_port = readout_port
         self.control_port = control_port
-        self.cavity_port = cavity_port
+        self.memory_port = memory_port
         self.sample_port = sample_port
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
@@ -82,10 +82,10 @@ class DisplacementCalibration(Base):
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.cavity_port, DAC_CURRENT)
+            pls.hardware.set_dac_current(self.memory_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
-            pls.hardware.set_inv_sinc(self.cavity_port, 0)
+            pls.hardware.set_inv_sinc(self.memory_port, 0)
 
             pls.hardware.configure_mixer(
                 self.readout_freq,
@@ -98,7 +98,7 @@ class DisplacementCalibration(Base):
                 self.control_freq, out_ports=self.control_port, sync=False
             )
             pls.hardware.configure_mixer(
-                self.cavity_freq, out_ports=self.cavity_port, sync=True
+                self.memory_freq, out_ports=self.memory_port, sync=True
             )  # sync here
 
             # ************************************
@@ -108,7 +108,7 @@ class DisplacementCalibration(Base):
             # Setup lookup tables for amplitudes
             pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
             pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp * np.sqrt(2))
-            pls.setup_scale_lut(self.cavity_port, group=0, scales=self.cavity_amp_arr)
+            pls.setup_scale_lut(self.memory_port, group=0, scales=self.memory_amp_arr)
 
             # Setup lookup tables for frequencies
             # intermediate frequency
@@ -156,12 +156,12 @@ class DisplacementCalibration(Base):
                 envelope=True,
             )
 
-            cavity_ns = int(round(self.cavity_duration * pls.get_fs("dac")))
-            cavity_envelope = sin2(cavity_ns)
-            cavity_pulse = pls.setup_template(
-                self.cavity_port,
+            memory_ns = int(round(self.memory_duration * pls.get_fs("dac")))
+            memory_envelope = sin2(memory_ns)
+            memory_pulse = pls.setup_template(
+                self.memory_port,
                 group=0,
-                template=cavity_envelope + 1j * cavity_envelope,
+                template=memory_envelope + 1j * memory_envelope,
                 envelope=False,
             )
 
@@ -174,8 +174,8 @@ class DisplacementCalibration(Base):
             # ******************************
             T = 0.0  # s, start at time zero ...
             for i in range(len(self.control_freq_arr)):
-                pls.output_pulse(T, cavity_pulse)  # displace cavity
-                T += self.cavity_duration
+                pls.output_pulse(T, memory_pulse)  # displace memory
+                T += self.memory_duration
                 pls.select_frequency(T, i, self.control_port, group=0)
                 pls.output_pulse(T, control_pulse)  # pi pulse
                 T += self.control_duration
@@ -183,14 +183,14 @@ class DisplacementCalibration(Base):
                 pls.store(T + self.readout_sample_delay)
                 T += self.readout_duration
                 T += self.wait_delay  # Wait for decay
-            pls.next_scale(T, self.cavity_port)
+            pls.next_scale(T, self.memory_port)
             T += self.wait_delay
 
             # **************************
             # *** Run the experiment ***
             # **************************
             pls.run(
-                period=T, repeat_count=len(self.cavity_amp_arr), num_averages=self.num_averages
+                period=T, repeat_count=len(self.memory_amp_arr), num_averages=self.num_averages
             )
             self.t_arr, self.store_arr = pls.get_store_data()
 
@@ -205,17 +205,17 @@ class DisplacementCalibration(Base):
             readout_freq = h5f.attrs["readout_freq"]
             control_freq = h5f.attrs["control_freq"]
             control_df_arr = h5f["control_df_arr"][()]
-            cavity_freq = h5f.attrs["cavity_freq"]
+            memory_freq = h5f.attrs["memory_freq"]
             readout_amp = h5f.attrs["readout_amp"]
             control_amp = h5f.attrs["control_amp"]
-            cavity_amp_arr = h5f["cavity_amp_arr"][()]
+            memory_amp_arr = h5f["memory_amp_arr"][()]
             readout_duration = h5f.attrs["readout_duration"]
             control_duration = h5f.attrs["control_duration"]
-            cavity_duration = h5f.attrs["cavity_duration"]
+            memory_duration = h5f.attrs["memory_duration"]
             sample_duration = h5f.attrs["sample_duration"]
             readout_port = h5f.attrs["readout_port"]
             control_port = h5f.attrs["control_port"]
-            cavity_port = h5f.attrs["cavity_port"]
+            memory_port = h5f.attrs["memory_port"]
             sample_port = h5f.attrs["sample_port"]
             wait_delay = h5f.attrs["wait_delay"]
             readout_sample_delay = h5f.attrs["readout_sample_delay"]
@@ -229,17 +229,17 @@ class DisplacementCalibration(Base):
             readout_freq=readout_freq,
             control_freq=control_freq,
             control_df_arr=control_df_arr,
-            cavity_freq=cavity_freq,
+            memory_freq=memory_freq,
             readout_amp=readout_amp,
             control_amp=control_amp,
-            cavity_amp_arr=cavity_amp_arr,
+            memory_amp_arr=memory_amp_arr,
             readout_duration=readout_duration,
             control_duration=control_duration,
-            cavity_duration=cavity_duration,
+            memory_duration=memory_duration,
             sample_duration=sample_duration,
             readout_port=readout_port,
             control_port=control_port,
-            cavity_port=cavity_port,
+            memory_port=memory_port,
             sample_port=sample_port,
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
@@ -285,7 +285,7 @@ class DisplacementCalibration(Base):
         t_low = self.t_arr[IDX_LOW]
         t_high = self.t_arr[IDX_HIGH]
 
-        nr_amps = len(self.cavity_amp_arr)
+        nr_amps = len(self.memory_amp_arr)
         self._AMP_IDX = nr_amps // 2
 
         if all_plots:
@@ -302,15 +302,9 @@ class DisplacementCalibration(Base):
 
         # Analyze
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        resp_arr.shape = (len(self.cavity_amp_arr), len(self.control_df_arr))
+        resp_arr.shape = (len(self.memory_amp_arr), len(self.control_df_arr))
         resp_arr = rotate_opt(resp_arr) * np.exp(1j * np.pi)
         resp_arr = resp_arr.real
-
-        # Fit data
-        if _do_fit:
-            popt, perr, M, N = _fit_simple(
-                self.control_freq_arr, resp_arr[self._AMP_IDX], self.control_freq
-            )
 
         # bigger plot just for I quadrature
         data_max = np.abs(resp_arr).max()
@@ -326,6 +320,12 @@ class DisplacementCalibration(Base):
             unit = "m"
             mult = 1e3
 
+        resp_arr *= mult
+        # Fit data
+        if _do_fit:
+            popt, perr, M, N = _fit_simple(
+                self.control_freq_arr, resp_arr[self._AMP_IDX], self.control_freq
+            )
         # choose limits for colorbar
         cutoff = 1.0  # %
         lowlim = np.percentile(resp_arr, cutoff)
@@ -335,11 +335,17 @@ class DisplacementCalibration(Base):
         x_min = 1e-9 * self.control_freq_arr[0]
         x_max = 1e-9 * self.control_freq_arr[-1]
         dx = 1e-9 * (self.control_freq_arr[1] - self.control_freq_arr[0])
-        y_min = self.cavity_amp_arr[0]
-        y_max = self.cavity_amp_arr[-1]
-        dy = self.cavity_amp_arr[1] - self.cavity_amp_arr[0]
+        y_min = self.memory_amp_arr[0]
+        y_max = self.memory_amp_arr[-1]
+        dy = self.memory_amp_arr[1] - self.memory_amp_arr[0]
 
         fig1 = plt.figure(tight_layout=True, figsize=(6.4, 9.6))
+        if _do_fit:
+            cc = 4
+            aa = 3
+        else:
+            cc = 2
+            aa = 2
         ax1 = fig1.add_subplot(2, 1, 1)
         im = ax1.imshow(
             resp_arr,
@@ -351,15 +357,15 @@ class DisplacementCalibration(Base):
             vmax=highlim,
         )
         line_sel = ax1.axhline(
-            self.cavity_amp_arr[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit
+            self.memory_amp_arr[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit
         )
         # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
         ax1.set_xlabel("Frequency [GHz]")
-        ax1.set_ylabel("Cavity drive amplitude [FS]")
+        ax1.set_ylabel("Memory drive amplitude [FS]")
         cb = fig1.colorbar(im)
         cb.set_label(f"I quadrature [{unit:s}FS]")
 
-        ax2 = fig1.add_subplot(2, 1, 2)
+        ax2 = fig1.add_subplot(cc, 1, aa)
 
         (line_a,) = ax2.plot(
             1e-9 * self.control_freq_arr,
@@ -384,18 +390,48 @@ class DisplacementCalibration(Base):
                 label="fit",
                 animated=blit,
             )
+            ax3 = fig1.add_subplot(4, 1, 4)
+            # ax3.set_ylim([np.min(self.memory_amp_arr), np.max(self.memory_amp_arr)])
+            fitted_alpha = []
+            presto_amp = []
+            for i in range(len(resp_arr)):
+                try:
+                    popt, perr, M, N = _fit_simple(
+                        self.control_freq_arr, resp_arr[i], self.control_freq
+                    )
+                    presto_amp.append(self.memory_amp_arr[i])
+                    fitted_alpha.append(np.sqrt(popt[4]))
+                except:
+                    pass
+            ax3.plot(presto_amp, fitted_alpha, ".")
+            try:
+                ind = presto_amp.index(0.0)
+            except ValueError:
+                ind = -1
+            if ind >= 0:
+                p = np.polyfit(
+                    presto_amp[:ind] + presto_amp[ind + 1 :],
+                    fitted_alpha[:ind] + fitted_alpha[ind + 1 :],
+                    1,
+                )  # skip the fitting for 0 amplitude that usually doesn't fit well
+            else:
+                p = np.polyfit(presto_amp, fitted_alpha, 1)
+            print(r"Fitted dispacement conversion factor: alpha = %.4f*x[FS]+%.4f" % (p[0], p[1]))
+            ax3.plot(presto_amp, np.polyval(p, presto_amp), "--")
+            ax3.set_xlabel("Memory drive amplitude [FS]")
+            ax3.set_ylabel(r"Displacement amplitude $\alpha$")
 
         def onbuttonpress(event):
             if event.inaxes == ax1:
-                self._AMP_IDX = np.argmin(np.abs(self.cavity_amp_arr - event.ydata))
+                self._AMP_IDX = np.argmin(np.abs(self.memory_amp_arr - event.ydata))
                 update()
 
         def onkeypress(event):
             if event.inaxes == ax1:
                 if event.key == "up":
                     self._AMP_IDX += 1
-                    if self._AMP_IDX >= len(self.cavity_amp_arr):
-                        self._AMP_IDX = len(self.cavity_amp_arr) - 1
+                    if self._AMP_IDX >= len(self.memory_amp_arr):
+                        self._AMP_IDX = len(self.memory_amp_arr) - 1
                     update()
                 elif event.key == "down":
                     self._AMP_IDX -= 1
@@ -405,7 +441,7 @@ class DisplacementCalibration(Base):
 
         def update():
             line_sel.set_ydata(
-                [self.cavity_amp_arr[self._AMP_IDX], self.cavity_amp_arr[self._AMP_IDX]]
+                [self.memory_amp_arr[self._AMP_IDX], self.memory_amp_arr[self._AMP_IDX]]
             )
             # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
             line_a.set_ydata(resp_arr[self._AMP_IDX])
@@ -424,26 +460,6 @@ class DisplacementCalibration(Base):
             else:
                 fig1.canvas.draw()
 
-        def onselect(xmin, xmax):
-            # fit data here
-            line_fit_a.set_data(
-                1e-9 * self.control_freq_arr, np.full_like(self.control_freq_arr, np.nan)
-            )
-            if blit:
-                fig1.canvas.restore_region(self._bg)
-                ax1.draw_artist(line_sel)
-                ax2.draw_artist(line_a)
-                ax2.draw_artist(line_fit_a)
-                fig1.canvas.blit(fig1.bbox)
-                fig1.canvas.flush_events()
-            else:
-                fig1.canvas.draw()
-
-        rectprops = dict(facecolor="tab:gray", alpha=0.5)
-        fig1._span_a = mwidgets.SpanSelector(
-            ax2, onselect, "horizontal", props=rectprops, useblit=blit
-        )
-
         fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
         fig1.canvas.mpl_connect("key_press_event", onkeypress)
         fig1.show()
@@ -454,7 +470,7 @@ class DisplacementCalibration(Base):
             ax1.draw_artist(line_sel)
             ax2.draw_artist(line_a)
             fig1.canvas.blit(fig1.bbox)
-
+        ret_fig.append(fig1)
         return ret_fig
 
 
@@ -498,15 +514,17 @@ def _fit_simple(f, x, control_freq):
     else:
         back_t_min = 0.01 * back_t
         back_t_max = 3 * back_t
-    if N < 3:
+    if N == 1:
+        b2_t = 0.0
+    elif N < 3:
         b2_t = 0.5
     else:
         b2_t = (N - M) / 2 + M
     df = control_freq - f[peaks[::-1]]
     p0 = (control_freq, chi_t / 10, back_t, max(x) - min(x), b2_t, *df)
     bounds = (
-        [control_freq - chi_t / 4, 1e3, back_t_min, 0, 0, *df - chi_t / 4],
-        [control_freq + chi_t / 4, 1e7, back_t_max, np.Inf, 20, *df + chi_t / 4],
+        [control_freq - chi_t / 4, -np.Inf, -np.Inf, -np.Inf, 0, *df - chi_t / 4],
+        [control_freq + chi_t / 4, np.Inf, np.Inf, np.Inf, np.Inf, *df + chi_t / 4],
     )
     popt, pcov = curve_fit(my_fit_n_gauss, f, x, p0=p0)  # , bounds=bounds)
     perr = np.sqrt(np.diag(pcov))
