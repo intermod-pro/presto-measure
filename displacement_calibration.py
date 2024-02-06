@@ -87,29 +87,6 @@ class DisplacementCalibration(Base):
             pls.hardware.set_inv_sinc(self.control_port, 0)
             pls.hardware.set_inv_sinc(self.memory_port, 0)
 
-            pls.hardware.configure_mixer(
-                self.readout_freq,
-                in_ports=self.sample_port,
-                out_ports=self.readout_port,
-                sync=False,
-            )  # sync in next call
-
-            pls.hardware.configure_mixer(
-                self.control_freq, out_ports=self.control_port, sync=False
-            )
-            pls.hardware.configure_mixer(
-                self.memory_freq, out_ports=self.memory_port, sync=True
-            )  # sync here
-
-            # ************************************
-            # *** Setup measurement parameters ***
-            # ************************************
-
-            # Setup lookup tables for amplitudes
-            pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
-            pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp * np.sqrt(2))
-            pls.setup_scale_lut(self.memory_port, group=0, scales=self.memory_amp_arr)
-
             # Setup lookup tables for frequencies
             # intermediate frequency
             control_if_center = pls.get_fs("dac") / 4  # 250 MHz, middle of USB
@@ -123,9 +100,29 @@ class DisplacementCalibration(Base):
             # up-conversion carrier
             control_nco = self.control_freq - control_if_center
 
+            pls.hardware.configure_mixer(
+                self.readout_freq,
+                in_ports=self.sample_port,
+                out_ports=self.readout_port,
+                sync=False,
+            )  # sync in next call
+
+            pls.hardware.configure_mixer(control_nco, out_ports=self.control_port, sync=False)
+            pls.hardware.configure_mixer(
+                self.memory_freq, out_ports=self.memory_port, sync=True
+            )  # sync here
+
+            # ************************************
+            # *** Setup measurement parameters ***
+            # ************************************
+
+            # Setup lookup tables for amplitudes
+            pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
+            pls.setup_scale_lut(self.control_port, group=0, scales=1)
+            pls.setup_scale_lut(self.memory_port, group=0, scales=self.memory_amp_arr)
+
             # final frequency array
             self.control_freq_arr = control_nco + control_if_arr
-
             pls.setup_freq_lut(
                 self.control_port,
                 group=0,
@@ -148,7 +145,9 @@ class DisplacementCalibration(Base):
 
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = sin2(control_ns)
+            control_envelope = self.control_amp * sin2(control_ns)
+            # we loose 3 dB by using a nonzero IF so multiply the envelope by sqrt(2)
+            control_envelope *= np.sqrt(2)
             control_pulse = pls.setup_template(
                 self.control_port,
                 group=0,
@@ -189,6 +188,7 @@ class DisplacementCalibration(Base):
             # **************************
             # *** Run the experiment ***
             # **************************
+
             pls.run(
                 period=T, repeat_count=len(self.memory_amp_arr), num_averages=self.num_averages
             )
@@ -303,7 +303,7 @@ class DisplacementCalibration(Base):
         # Analyze
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
         resp_arr.shape = (len(self.memory_amp_arr), len(self.control_df_arr))
-        resp_arr = rotate_opt(resp_arr) * np.exp(1j * np.pi)
+        resp_arr = rotate_opt(resp_arr)
         resp_arr = resp_arr.real
 
         # bigger plot just for I quadrature
@@ -381,7 +381,7 @@ class DisplacementCalibration(Base):
                 np.max(resp_arr) + 0.05 * (np.max(resp_arr) - np.min(resp_arr)),
             ]
         )
-
+        ax2.set_ylabel(f"I quadrature [{unit:s}FS]")
         if _do_fit:
             (line_fit_a,) = ax2.plot(
                 1e-9 * self.control_freq_arr,

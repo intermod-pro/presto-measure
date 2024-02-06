@@ -124,7 +124,6 @@ class Sweep_memory(Base):
             pls.setup_freq_lut(
                 self.memory_port, group=0, frequencies=memory_if_arr, phases=ph_i, phases_q=ph_q
             )
-
             # Setup readout and control pulses
             # use setup_long_drive to create a pulse with square envelope
             # setup_long_drive supports smooth rise and fall transitions for the pulse,
@@ -280,8 +279,10 @@ class Sweep_memory(Base):
             unit = "m"
             mult = 1e3
 
-        fig2, ax2 = plt.subplots(2, 1, sharex=True, figsize=(6.4, 3.2), tight_layout=True)
-        ax23, ax24 = ax2
+        fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
+        ax21, ax22, ax23, ax24 = ax2
+        ax21.plot(1e-9 * self.memory_freq_arr, mult * np.abs(data))
+        ax22.plot(1e-9 * self.memory_freq_arr, np.angle(data))
         ax23.plot(1e-9 * self.memory_freq_arr, mult * np.real(data))
         try:
             data_min = data.real.min()
@@ -292,6 +293,8 @@ class Sweep_memory(Base):
             ax23.plot(
                 1e-9 * self.memory_freq_arr, mult * _gaussian(self.memory_freq_arr, *popt), "--"
             )
+            ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
+            ax22.set_ylabel("Phase [rad]")
             print(f"f0 = {popt[0]} Hz")
             print(f"sigma = {abs(popt[1])} Hz")
         except Exception:
