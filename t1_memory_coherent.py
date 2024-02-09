@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import format_precision, rotate_opt, sin2
 
-from _base import Base, project
+from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "dac_mode": DacMode.Mixed,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -33,7 +30,7 @@ class T1_memory_coherent(Base):
         control_duration: float,
         memory_duration: float,
         sample_duration: float,
-        delay_arr: List[float],
+        delay_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_port: int,
         control_port: int,
         memory_port: int,
@@ -67,16 +64,16 @@ class T1_memory_coherent(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
-        save: bool = True,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -167,33 +164,33 @@ class T1_memory_coherent(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "T1_memory_coherent":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            memory_freq = h5f.attrs["memory_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            memory_amp = h5f.attrs["memory_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            memory_duration = h5f.attrs["memory_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            delay_arr = h5f["delay_arr"][()]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            memory_port = h5f.attrs["memory_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            memory_freq = float(h5f.attrs["memory_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            memory_amp = float(h5f.attrs["memory_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            memory_duration = float(h5f.attrs["memory_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            delay_arr: npt.NDArray[np.float64] = h5f["delay_arr"][()]  # type:ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            memory_port = int(h5f.attrs["memory_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type:ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type:ignore
 
         self = cls(
             readout_freq=readout_freq,

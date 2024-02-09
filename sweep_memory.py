@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """Measure the frequency of the memory."""
+from typing import Optional
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto import pulsed
@@ -11,10 +13,6 @@ from presto.utils import rotate_opt, sin2
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "dac_mode": DacMode.Mixed,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -69,9 +67,8 @@ class Sweep_memory(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
-        save: bool = True,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
@@ -79,7 +76,8 @@ class Sweep_memory(Base):
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
             dry_run=False,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -93,15 +91,9 @@ class Sweep_memory(Base):
                 self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,
-            )  # sync in next call
-
-            pls.hardware.configure_mixer(
-                self.control_freq, out_ports=self.control_port, sync=False
             )
-            pls.hardware.configure_mixer(
-                self.memory_freq_center, out_ports=self.memory_port, sync=True
-            )  # sync here
+            pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
+            pls.hardware.configure_mixer(self.memory_freq_center, out_ports=self.memory_port)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -117,7 +109,7 @@ class Sweep_memory(Base):
                 -self.memory_freq_span / 2, self.memory_freq_span / 2, self.memory_freq_nr
             )
             memory_if_arr = self.memory_freq_arr - self.memory_freq_center
-            mask = np.ma.masked_less(memory_if_arr, 0).mask
+            mask = memory_if_arr < 0
             memory_if_arr = np.abs(memory_if_arr)
             ph_i = np.zeros_like(memory_if_arr)
             ph_q = ph_i - np.pi / 2 + mask * np.pi  # +-np.pi/2 for low/high sideband
@@ -165,12 +157,12 @@ class Sweep_memory(Base):
             T = 0.0  # s, start at time zero ...
             pls.reset_phase(T, self.memory_port, group=0)
             pls.output_pulse(T, memory_pulse)  # displace memory
-            T += self.memory_duration
+            T += memory_pulse.get_duration()
             pls.output_pulse(T, control_pulse)  # pi pulse conditioned on memory in |0>
-            T += self.control_duration
+            T += control_pulse.get_duration()
             pls.output_pulse(T, readout_pulse)  # Readout
             pls.store(T + self.readout_sample_delay)
-            T += self.readout_duration
+            T += readout_pulse.get_duration()
             pls.next_frequency(T, self.memory_port, group=0)
             T += self.wait_delay  # Wait for decay
 
@@ -182,35 +174,35 @@ class Sweep_memory(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "Sweep_memory":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            memory_freq_center = h5f.attrs["memory_freq_center"]
-            memory_freq_span = h5f.attrs["memory_freq_span"]
-            memory_freq_nr = h5f.attrs["memory_freq_nr"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            memory_amp = h5f.attrs["memory_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            memory_duration = h5f.attrs["memory_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            memory_port = h5f.attrs["memory_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            memory_freq_center = float(h5f.attrs["memory_freq_center"])  # type: ignore
+            memory_freq_span = float(h5f.attrs["memory_freq_span"])  # type: ignore
+            memory_freq_nr = int(h5f.attrs["memory_freq_nr"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            memory_amp = float(h5f.attrs["memory_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            memory_duration = float(h5f.attrs["memory_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            memory_port = int(h5f.attrs["memory_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
-            memory_freq_arr = h5f["memory_freq_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type:ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type:ignore
+            memory_freq_arr: npt.NDArray[np.float64] = h5f["memory_freq_arr"][()]  # type:ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -293,18 +285,18 @@ class Sweep_memory(Base):
             ax23.plot(
                 1e-9 * self.memory_freq_arr, mult * _gaussian(self.memory_freq_arr, *popt), "--"
             )
-            ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
-            ax22.set_ylabel("Phase [rad]")
             print(f"f0 = {popt[0]} Hz")
             print(f"sigma = {abs(popt[1])} Hz")
         except Exception:
             print("fit failed")
         ax24.plot(1e-9 * self.memory_freq_arr, mult * np.imag(data))
 
+        ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
+        ax22.set_ylabel("Phase [rad]")
         ax23.set_ylabel(f"I [{unit:s}FS]")
         ax24.set_ylabel(f"Q [{unit:s}FS]")
         ax2[-1].set_xlabel("Control frequency [GHz]")
-        fig2.show()  # type: ignore
+        fig2.show()
         ret_fig.append(fig2)
 
         return ret_fig

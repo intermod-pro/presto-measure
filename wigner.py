@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 """Measure the Wigner function of a bosonic mode."""
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import rotate_opt, sin2
 
-from _base import Base, project
+from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "dac_mode": DacMode.Mixed,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -28,8 +25,8 @@ class Wigner(Base):
         memory_freq: float,
         readout_amp: float,
         control_amp: float,
-        memory_amp_arr_x: List[float],
-        memory_amp_arr_y: List[float],
+        memory_amp_arr_x: Union[List[float], npt.NDArray[np.float64]],
+        memory_amp_arr_y: Union[List[float], npt.NDArray[np.float64]],
         dt_wigner: float,
         readout_duration: float,
         control_duration: float,
@@ -69,16 +66,16 @@ class Wigner(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
-        save: bool = True,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -194,34 +191,34 @@ class Wigner(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "Wigner":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            memory_freq = h5f.attrs["memory_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            memory_amp_arr_x = h5f["memory_amp_arr_x"][()]
-            memory_amp_arr_y = h5f["memory_amp_arr_y"][()]
-            dt_wigner = h5f.attrs["dt_wigner"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            memory_duration = h5f.attrs["memory_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            memory_port = h5f.attrs["memory_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            memory_freq = float(h5f.attrs["memory_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            memory_amp_arr_x: npt.NDArray[np.float64] = h5f["memory_amp_arr_x"][()]  # type:ignore
+            memory_amp_arr_y: npt.NDArray[np.float64] = h5f["memory_amp_arr_y"][()]  # type:ignore
+            dt_wigner = float(h5f.attrs["dt_wigner"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            memory_duration = float(h5f.attrs["memory_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            memory_port = int(h5f.attrs["memory_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type:ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type:ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -249,35 +246,11 @@ class Wigner(Base):
 
         return self
 
-    def analyze_batch(self, reference_templates: Optional[tuple] = None):
-        assert self.t_arr is not None
-        assert self.store_arr is not None
-
-        if reference_templates is None:
-            resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-            data = np.real(rotate_opt(resp_arr))
-        else:
-            resp_arr = self.store_arr[:, 0, :]
-            data = project(resp_arr, reference_templates)
-
-        try:
-            popt, perr = _fit_simple(self.delay_arr, data)
-        except Exception as err:
-            print(f"unable to fit T1: {err}")
-            popt, perr = None, None
-
-        return data, (popt, perr)
-
-    def analyze(self, all_plots: bool = False, blit: bool = False, _do_fit: bool = True):
+    def analyze(self, all_plots: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
 
         import matplotlib.pyplot as plt
-
-        try:
-            import matplotlib.widgets as mwidgets
-        except ImportError:
-            _do_fit = False
 
         ret_fig = []
         t_low = self.t_arr[IDX_LOW]
@@ -314,6 +287,7 @@ class Wigner(Base):
         elif data_max < 1e0:
             unit = "m"
             mult = 1e3
+        resp_arr *= mult
 
         # choose limits for colorbar
         cutoff = 1.0  # %

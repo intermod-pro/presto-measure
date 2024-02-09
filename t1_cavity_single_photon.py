@@ -1,23 +1,18 @@
 # -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
-import ast
-from typing import List, Optional
-import warnings
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2, recommended_dac_config
+from presto.utils import format_precision, rotate_opt, sin2
 
 from _base import Base, project
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -34,7 +29,7 @@ class T1_cavity(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: List[float],
+        delay_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_port: int,
         control_port: int,
         cavity_port: int,
@@ -67,29 +62,17 @@ class T1_cavity(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
-        save: bool = True,
     ) -> str:
-        list_of_ports = [self.readout_port, self.control_port, self.cavity_port]
-        list_of_freq = [self.readout_freq, self.control_freq, self.cavity_freq]
-        dac_mode, dac_fsample = recommended_dac_config_all_tiles(
-            presto_address,
-            list_of_ports=list_of_ports,
-            list_of_freq=list_of_freq,
-            ext_ref_clk=ext_ref_clk,
-        )
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
-            assert pls.hardware is not None
-
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -144,8 +127,8 @@ class T1_cavity(Base):
 
             # optimal control pulse is a complex vector
             with h5py.File(self.opt_control, "r") as h5f:
-                control_opt_pulse_template = h5f["control_pulse"][()]
-                cavity_opt_pulse_template = h5f["cavity_pulse"][()]
+                control_opt_pulse_template: npt.NDArray[np.complex128] = h5f["control_pulse"][()]  # type:ignore
+                cavity_opt_pulse_template: npt.NDArray[np.complex128] = h5f["cavity_pulse"][()]  # type:ignore
             opt_pulse_length = (
                 round(len(control_opt_pulse_template) / pls.get_fs("dac") * 1e9) * 1e-9
             )
@@ -191,32 +174,32 @@ class T1_cavity(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "T1_cavity":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            cavity_freq = h5f.attrs["cavity_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            opt_control = h5f.attrs["opt_control"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            delay_arr = h5f["delay_arr"][()]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            cavity_port = h5f.attrs["cavity_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            cavity_freq = float(h5f.attrs["cavity_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            opt_control = str(h5f.attrs["opt_control"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            delay_arr: npt.NDArray[np.float64] = h5f["delay_arr"][()]  # type:ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            cavity_port = int(h5f.attrs["cavity_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type:ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type:ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -351,49 +334,3 @@ def _fit_simple(t, x):
     popt, pcov = curve_fit(_decay, t, x, p0)
     perr = np.sqrt(np.diag(pcov))
     return popt, perr
-
-
-def recommended_dac_config_all_tiles(
-    presto_address: str,
-    list_of_ports: List[int],
-    list_of_freq: List[float],
-    ext_ref_clk: bool = False,
-):
-    if len(list_of_ports) != len(list_of_freq):
-        raise ValueError("list_of_ports and list_of_freq must have the same len")
-    dac_mode = []
-    dac_fsample = []
-    with pulsed.Pulsed(address=presto_address, ext_ref_clk=ext_ref_clk) as pls:
-        list_of_tiles = [pls.hardware._port_to_tile(port, "dac") for port in list_of_ports]
-    for tile in range(4):
-        nr_occurances = list_of_tiles.count(tile)
-        if nr_occurances < 1:
-            dac_mode.append(DacMode.Mixed02)
-            dac_fsample.append(DacFSample.G6)
-        elif nr_occurances == 1:
-            index = list_of_tiles.index(tile)
-            dac_mode_temp, dac_fsample_temp = recommended_dac_config(list_of_freq[index])
-            dac_mode.append(dac_mode_temp)
-            dac_fsample.append(dac_fsample_temp)
-        else:
-            indices = np.where(np.array(list_of_tiles) == tile)[0]
-            dac_mode_list = []
-            dac_fsample_list = []
-            for i in indices:
-                dac_mode_temp, dac_fsample_temp = recommended_dac_config(list_of_freq[i])
-                dac_mode_list.append(dac_mode_temp)
-                dac_fsample_list.append(dac_fsample_temp)
-            if dac_mode_list.count(dac_mode_list[0]) == len(
-                dac_mode_list
-            ) and dac_fsample_list.count(dac_fsample_list[0]) == len(dac_fsample_list):
-
-                dac_mode.append(dac_mode_list[0])
-                dac_fsample.append(dac_fsample_list[0])
-            # elif: add option if it is not recommended
-            else:
-                dac_mode.append(dac_mode_list[0])
-                dac_fsample.append(dac_fsample_list[0])
-                warnings.warn(
-                    f"Warning: It might not be possible to output all desired frequencies on tile {tile}. Consider outputting some frequencies on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-                )
-    return dac_mode, dac_fsample

@@ -135,7 +135,7 @@ class SweepFreqAndDC(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "Sweep":
+    def load(cls, load_filename: str) -> "SweepFreqAndDC":
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore
@@ -178,14 +178,6 @@ class SweepFreqAndDC(Base):
             raise RuntimeError
 
         import matplotlib.pyplot as plt
-
-        try:
-            from resonator_tools import circuit
-            import matplotlib.widgets as mwidgets
-
-            _do_fit = True
-        except ImportError:
-            _do_fit = False
 
         if quantity == "amplitude":
             data = np.abs(self.resp_arr)
@@ -238,32 +230,6 @@ class SweepFreqAndDC(Base):
         cb = fig1.colorbar(im)
         cb.set_label(label)
         plt.show()
-
-        if _do_fit:
-
-            def onselect(xmin, xmax):
-                port = circuit.notch_port(self.freq_arr, self.resp_arr)  # pyright: ignore[reportUnboundVariable]
-                port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
-                sim_db = 20 * np.log10(np.abs(port.z_data_sim))
-                line_fit_a.set_data(1e-9 * port.f_data, sim_db)  # type: ignore
-                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))  # type: ignore
-                f_min = port.f_data[np.argmin(sim_db)]  # type: ignore
-                print("----------------")
-                print(f"fr = {port.fitresults['fr']}")
-                print(f"Qi = {port.fitresults['Qi_dia_corr']}")
-                print(f"Qc = {port.fitresults['Qc_dia_corr']}")
-                print(f"Ql = {port.fitresults['Ql']}")
-                print(f"kappa = {port.fitresults['fr'] / port.fitresults['Qc_dia_corr']}")
-                print(f"f_min = {f_min}")
-                print("----------------")
-                fig1.canvas.draw()
-
-            rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportUnboundVariable]
-            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportUnboundVariable]
-            # keep references to span selectors
-            fig1._span_a = span_a  # type: ignore
-            fig1._span_p = span_p  # type: ignore
         fig1.show()
 
         return [fig1]

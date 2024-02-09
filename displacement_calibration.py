@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
 """Calibrate the amplitude of the displacement pulse."""
-from typing import List, Optional
+import math
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import rotate_opt, sin2
 
-from _base import Base, project
+from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "dac_mode": DacMode.Mixed,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -25,11 +23,11 @@ class DisplacementCalibration(Base):
         self,
         readout_freq: float,
         control_freq: float,
-        control_df_arr: List[float],
+        control_df_arr: Union[List[float], npt.NDArray[np.float64]],
         memory_freq: float,
         readout_amp: float,
         control_amp: float,
-        memory_amp_arr: List[float],
+        memory_amp_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_duration: float,
         control_duration: float,
         memory_duration: float,
@@ -68,16 +66,16 @@ class DisplacementCalibration(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
-        save: bool = True,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -104,13 +102,9 @@ class DisplacementCalibration(Base):
                 self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,
-            )  # sync in next call
-
-            pls.hardware.configure_mixer(control_nco, out_ports=self.control_port, sync=False)
-            pls.hardware.configure_mixer(
-                self.memory_freq, out_ports=self.memory_port, sync=True
-            )  # sync here
+            )
+            pls.hardware.configure_mixer(control_nco, out_ports=self.control_port)
+            pls.hardware.configure_mixer(self.memory_freq, out_ports=self.memory_port)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -118,7 +112,7 @@ class DisplacementCalibration(Base):
 
             # Setup lookup tables for amplitudes
             pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
-            pls.setup_scale_lut(self.control_port, group=0, scales=1)
+            pls.setup_scale_lut(self.control_port, group=0, scales=1)  # amplitude in template
             pls.setup_scale_lut(self.memory_port, group=0, scales=self.memory_amp_arr)
 
             # final frequency array
@@ -129,7 +123,7 @@ class DisplacementCalibration(Base):
                 frequencies=control_if_arr,
                 phases=np.full_like(control_if_arr, 0.0),
                 phases_q=np.full_like(control_if_arr, -np.pi / 2),
-            )  # HSB
+            )  # USB
 
             # Setup readout and control pulses
             # use setup_long_drive to create a pulse with square envelope
@@ -174,13 +168,13 @@ class DisplacementCalibration(Base):
             T = 0.0  # s, start at time zero ...
             for i in range(len(self.control_freq_arr)):
                 pls.output_pulse(T, memory_pulse)  # displace memory
-                T += self.memory_duration
+                T += memory_pulse.get_duration()
                 pls.select_frequency(T, i, self.control_port, group=0)
                 pls.output_pulse(T, control_pulse)  # pi pulse
-                T += self.control_duration
+                T += control_pulse.get_duration()
                 pls.output_pulse(T, readout_pulse)  # readout
                 pls.store(T + self.readout_sample_delay)
-                T += self.readout_duration
+                T += readout_pulse.get_duration()
                 T += self.wait_delay  # Wait for decay
             pls.next_scale(T, self.memory_port)
             T += self.wait_delay
@@ -196,34 +190,34 @@ class DisplacementCalibration(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "DisplacementCalibration":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            control_df_arr = h5f["control_df_arr"][()]
-            memory_freq = h5f.attrs["memory_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            memory_amp_arr = h5f["memory_amp_arr"][()]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            memory_duration = h5f.attrs["memory_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            memory_port = h5f.attrs["memory_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            control_df_arr: npt.NDArray[np.float64] = h5f["control_df_arr"][()]  # type: ignore
+            memory_freq = float(h5f.attrs["memory_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            memory_amp_arr: npt.NDArray[np.float64] = h5f["memory_amp_arr"][()]  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            memory_duration = float(h5f.attrs["memory_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            memory_port = int(h5f.attrs["memory_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
-            control_freq_arr = h5f["control_freq_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type:ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type:ignore
+            control_freq_arr: npt.NDArray[np.float64] = h5f["control_freq_arr"][()]  # type:ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -251,35 +245,12 @@ class DisplacementCalibration(Base):
 
         return self
 
-    def analyze_batch(self, reference_templates: Optional[tuple] = None):
-        assert self.t_arr is not None
-        assert self.store_arr is not None
-
-        if reference_templates is None:
-            resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-            data = np.real(rotate_opt(resp_arr))
-        else:
-            resp_arr = self.store_arr[:, 0, :]
-            data = project(resp_arr, reference_templates)
-
-        try:
-            popt, perr = _fit_simple(self.delay_arr, data)
-        except Exception as err:
-            print(f"unable to fit T1: {err}")
-            popt, perr = None, None
-
-        return data, (popt, perr)
-
     def analyze(self, all_plots: bool = False, blit: bool = False, _do_fit: bool = True):
         assert self.t_arr is not None
         assert self.store_arr is not None
+        assert self.control_freq_arr is not None
 
         import matplotlib.pyplot as plt
-
-        try:
-            import matplotlib.widgets as mwidgets
-        except ImportError:
-            _do_fit = False
 
         ret_fig = []
         t_low = self.t_arr[IDX_LOW]
@@ -323,7 +294,7 @@ class DisplacementCalibration(Base):
         resp_arr *= mult
         # Fit data
         if _do_fit:
-            popt, perr, M, N = _fit_simple(
+            popt, _perr, M, N = _fit_simple(
                 self.control_freq_arr, resp_arr[self._AMP_IDX], self.control_freq
             )
         # choose limits for colorbar
@@ -353,8 +324,8 @@ class DisplacementCalibration(Base):
             aspect="auto",
             interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-            vmin=lowlim,
-            vmax=highlim,
+            vmin=float(lowlim),
+            vmax=float(highlim),
         )
         line_sel = ax1.axhline(
             self.memory_amp_arr[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit
@@ -375,17 +346,15 @@ class DisplacementCalibration(Base):
             animated=blit,
         )
 
-        ax2.set_ylim(
-            [
-                np.min(resp_arr) - 0.05 * (np.max(resp_arr) - np.min(resp_arr)),
-                np.max(resp_arr) + 0.05 * (np.max(resp_arr) - np.min(resp_arr)),
-            ]
-        )
+        ymin = float(np.min(resp_arr))
+        ymax = float(np.max(resp_arr))
+        yrng = ymax - ymin
+        ax2.set_ylim(ymin - 0.05 * yrng, ymax + 0.05 * yrng)
         ax2.set_ylabel(f"I quadrature [{unit:s}FS]")
         if _do_fit:
             (line_fit_a,) = ax2.plot(
                 1e-9 * self.control_freq_arr,
-                _fit_n_gauss(self.control_freq_arr, M, N, *popt),
+                _fit_n_gauss(self.control_freq_arr, M, N, *popt),  # pyright: ignore[reportPossiblyUnboundVariable]
                 ls="--",
                 label="fit",
                 animated=blit,
@@ -396,12 +365,12 @@ class DisplacementCalibration(Base):
             presto_amp = []
             for i in range(len(resp_arr)):
                 try:
-                    popt, perr, M, N = _fit_simple(
+                    popt, _perr, M, N = _fit_simple(
                         self.control_freq_arr, resp_arr[i], self.control_freq
                     )
                     presto_amp.append(self.memory_amp_arr[i])
                     fitted_alpha.append(np.sqrt(popt[4]))
-                except:
+                except Exception:
                     pass
             ax3.plot(presto_amp, fitted_alpha, ".")
             try:
@@ -446,13 +415,13 @@ class DisplacementCalibration(Base):
             # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
             line_a.set_ydata(resp_arr[self._AMP_IDX])
             if _do_fit:
-                popt, perr, M, N = _fit_simple(
+                popt, _perr, M, N = _fit_simple(
                     self.control_freq_arr, resp_arr[self._AMP_IDX], self.control_freq
                 )
-                line_fit_a.set_ydata(_fit_n_gauss(self.control_freq_arr, M, N, *popt))
+                line_fit_a.set_ydata(_fit_n_gauss(self.control_freq_arr, M, N, *popt))  # pyright: ignore[reportPossiblyUnboundVariable]
             # ax2.set_title("")
             if blit:
-                fig1.canvas.restore_region(self._bg)
+                fig1.canvas.restore_region(self._bg)  # pyright: ignore[reportAttributeAccessIssue]
                 ax1.draw_artist(line_sel)
                 ax2.draw_artist(line_a)
                 fig1.canvas.blit(fig1.bbox)
@@ -466,7 +435,7 @@ class DisplacementCalibration(Base):
         if blit:
             fig1.canvas.draw()
             fig1.canvas.flush_events()
-            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)
+            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # pyright: ignore[reportAttributeAccessIssue]
             ax1.draw_artist(line_sel)
             ax2.draw_artist(line_a)
             fig1.canvas.blit(fig1.bbox)
@@ -486,7 +455,7 @@ def _fit_n_gauss(f, M, N, f0, sigma, off, k, beta2, *df):
             f0 - df[kk - M],
             sigma,
             off,
-            k * beta2**kk / np.math.factorial(kk) * np.exp(-beta2),
+            k * beta2**kk / math.factorial(kk) * np.exp(-beta2),
         )
     return res
 
@@ -508,12 +477,12 @@ def _fit_simple(f, x, control_freq):
         M = int((control_freq - f[peaks[-1]]) / chi_t)
     # chi_p_t = chi_t / 100
     back_t = np.min(x) / (N - M)
-    if back_t < 0:
-        back_t_min = 3 * back_t
-        back_t_max = 0.01 * back_t
-    else:
-        back_t_min = 0.01 * back_t
-        back_t_max = 3 * back_t
+    # if back_t < 0:
+    #     back_t_min = 3 * back_t
+    #     back_t_max = 0.01 * back_t
+    # else:
+    #     back_t_min = 0.01 * back_t
+    #     back_t_max = 3 * back_t
     if N == 1:
         b2_t = 0.0
     elif N < 3:
@@ -522,10 +491,10 @@ def _fit_simple(f, x, control_freq):
         b2_t = (N - M) / 2 + M
     df = control_freq - f[peaks[::-1]]
     p0 = (control_freq, chi_t / 10, back_t, max(x) - min(x), b2_t, *df)
-    bounds = (
-        [control_freq - chi_t / 4, -np.Inf, -np.Inf, -np.Inf, 0, *df - chi_t / 4],
-        [control_freq + chi_t / 4, np.Inf, np.Inf, np.Inf, np.Inf, *df + chi_t / 4],
-    )
+    # bounds = (
+    #     [control_freq - chi_t / 4, -np.Inf, -np.Inf, -np.Inf, 0, *df - chi_t / 4],
+    #     [control_freq + chi_t / 4, np.Inf, np.Inf, np.Inf, np.Inf, *df + chi_t / 4],
+    # )
     popt, pcov = curve_fit(my_fit_n_gauss, f, x, p0=p0)  # , bounds=bounds)
     perr = np.sqrt(np.diag(pcov))
     return popt, perr, M, N
