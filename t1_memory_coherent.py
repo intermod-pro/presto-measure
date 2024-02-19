@@ -217,7 +217,7 @@ class T1_memory_coherent(Base):
 
         return self
 
-    def analyze(self, beta: float, all_plots: bool = False):
+    def analyze(self, beta: float = None, all_plots: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
 
@@ -244,11 +244,15 @@ class T1_memory_coherent(Base):
         resp_arr = rotate_opt(resp_arr)
 
         # Fit data
-        popt, perr = _fit_simple(self.delay_arr, np.real(resp_arr), beta)
+        if beta is not None:
+            popt, perr = _fit_simple(self.delay_arr, np.real(resp_arr), beta)
+        else:
+            beta, popt, perr = _fit_decay(self.delay_arr, np.real(resp_arr))
 
         T1 = popt[0]
         T1_err = perr[0]
-        print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+        print("T1 time: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+        print("beta: {}".format(beta))
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
@@ -310,3 +314,15 @@ def _fit_simple(t, x, beta):
     popt, pcov = curve_fit(my_decay, t, x, p0)
     perr = np.sqrt(np.diag(pcov))
     return popt, perr
+
+
+def _fit_decay(t, x):
+    from scipy.optimize import curve_fit
+
+    T1 = 0.25 * (t[-1] - t[0])
+    xe, xg = x[0], x[-1]
+    beta = 3
+    p0 = (beta, T1, xe, xg)
+    popt, pcov = curve_fit(_decay, t, x, p0, bounds=((0, 0, -np.inf, -np.inf), np.inf))
+    perr = np.sqrt(np.diag(pcov))
+    return popt[0], popt[1:], perr[1:]

@@ -318,7 +318,7 @@ class T2_memory_coherent(Base):
             mult = 1e3
 
         fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(1e6 * self.delay_arr, mult * np.real(resp_arr), ".")
+        ax3.plot(1e6 * self.delay_arr, mult * np.real(data), ".")
         if popt is not None:
             ax3.plot(1e6 * self.delay_arr, mult * _func(self.delay_arr, *popt), "--")
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
