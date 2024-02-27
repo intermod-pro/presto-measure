@@ -8,7 +8,7 @@ import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import plot_sequence, rotate_opt, sin2
+from presto.utils import rotate_opt
 
 from _base import Base
 

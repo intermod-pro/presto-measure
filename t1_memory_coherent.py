@@ -211,7 +211,7 @@ class T1_memory_coherent(Base):
 
         return self
 
-    def analyze(self, beta: float = None, all_plots: bool = False):
+    def analyze(self, beta: Optional[float] = None, all_plots: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
 
