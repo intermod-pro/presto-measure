@@ -97,11 +97,8 @@ class TwoTonePulsed(Base):
                 self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,
-            )  # sync in next call
-            pls.hardware.configure_mixer(
-                freq=control_nco, out_ports=self.control_port, sync=True
-            )  # sync here
+            )
+            pls.hardware.configure_mixer(freq=control_nco, out_ports=self.control_port)
 
             # ************************************
             # *** Setup measurement parameters ***

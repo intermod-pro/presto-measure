@@ -84,8 +84,7 @@ class SweepPulsed(Base):
                 freq=self.readout_nco,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=True,
-            )  # sync here
+            )
 
             # ************************************
             # *** Setup measurement parameters ***

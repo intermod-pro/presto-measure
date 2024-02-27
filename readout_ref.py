@@ -86,12 +86,10 @@ class ReadoutRef(Base):
                 freq=self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,  # sync in next call
             )
             pls.hardware.configure_mixer(
                 freq=self.control_freq,
                 out_ports=self.control_port,
-                sync=True,  # sync here
             )
             if self.jpa_params is not None:
                 pls.hardware.set_lmx(
