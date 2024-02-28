@@ -1,23 +1,19 @@
 # -*- coding: utf-8 -*-
 """Measure the decoherence time T2 with a Ramsey echo experiment."""
 import ast
-from typing import List, Optional
-import warnings
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2, recommended_dac_config
+from presto.utils import format_precision, rotate_opt, sin2
 
 from _base import Base, project
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -33,7 +29,7 @@ class RamseyEcho(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: List[float],
+        delay_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_port: int,
         control_port: int,
         sample_port: int,
@@ -67,40 +63,18 @@ class RamseyEcho(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
         save: bool = True,
     ) -> str:
-        with pulsed.Pulsed(address=presto_address, ext_ref_clk=ext_ref_clk) as pls:
-            control_tile = pls.hardware._port_to_tile(self.control_port, "dac")
-            readout_tile = pls.hardware._port_to_tile(self.readout_port, "dac")
-        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
-        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq)
-        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
-        elif control_tile != readout_tile:
-            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
-            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
-            dac_mode[control_tile] = dac_mode_c
-            dac_fsample[control_tile] = dac_fsample_c
-        else:
-            warnings.warn(
-                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-            )
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
-            assert pls.hardware is not None
-
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -110,12 +84,10 @@ class RamseyEcho(Base):
                 freq=self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,  # sync in next call
             )
             pls.hardware.configure_mixer(
                 freq=self.control_freq,
                 out_ports=self.control_port,
-                sync=True,  # sync here
             )
 
             # ************************************
@@ -180,35 +152,38 @@ class RamseyEcho(Base):
             pls.run(period=T, repeat_count=1, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
 
-        return self.save()
+        if save:
+            return self.save()
+        else:
+            return ""
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RamseyEcho":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp_90 = h5f.attrs["control_amp_90"]
-            control_amp_180 = h5f.attrs["control_amp_180"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            delay_arr = h5f["delay_arr"][()]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
-            drag = h5f.attrs["drag"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp_90 = float(h5f.attrs["control_amp_90"])  # type: ignore
+            control_amp_180 = float(h5f.attrs["control_amp_180"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            delay_arr: npt.NDArray[np.float64] = h5f["delay_arr"][()]  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            drag = float(h5f.attrs["drag"])  # type: ignore
 
-            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.float64] = h5f["store_arr"][()]  # type: ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -301,7 +276,7 @@ class RamseyEcho(Base):
             ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(data)))
             ax23.plot(1e6 * self.delay_arr, np.real(data))
             if success:
-                ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), "--")
+                ax23.plot(1e6 * self.delay_arr, _decay(self.delay_arr, *popt), "--")  # pyright: ignore [reportUnboundVariable]
             ax24.plot(1e6 * self.delay_arr, np.imag(data))
 
             ax21.set_ylabel("Amplitude [FS]")
@@ -330,8 +305,8 @@ class RamseyEcho(Base):
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel("Ramsey delay [μs]")
         if success:
-            ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), "--")
-            ax3.set_title("T2 echo = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))
+            ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), "--")  # pyright: ignore [reportUnboundVariable]
+            ax3.set_title("T2 echo = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))  # pyright: ignore [reportUnboundVariable]
         fig3.show()
         ret_fig.append(fig3)
 

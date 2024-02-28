@@ -2,23 +2,19 @@
 """
 Two-tone spectroscopy in Lockin mode: 2D sweep of pump power and frequency, with fixed probe.
 """
-from typing import List
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
-import warnings
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import lockin
-from presto.utils import ProgressBar, rotate_opt, recommended_dac_config
+from presto.utils import ProgressBar, rotate_opt
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 
 
 class TwoTonePower(Base):
@@ -29,7 +25,7 @@ class TwoTonePower(Base):
         control_freq_span: float,
         df: float,
         readout_amp: float,
-        control_amp_arr: List[float],
+        control_amp_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_port: int,
         control_port: int,
         input_port: int,
@@ -56,38 +52,16 @@ class TwoTonePower(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        with lockin.Lockin(address=presto_address, ext_ref_clk=ext_ref_clk) as lck:
-            control_tile = lck.hardware._port_to_tile(self.control_port, "dac")
-            readout_tile = lck.hardware._port_to_tile(self.readout_port, "dac")
-        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
-        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq_center)
-        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
-        elif control_tile != readout_tile:
-            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
-            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
-            dac_mode[control_tile] = dac_mode_c
-            dac_fsample[control_tile] = dac_fsample_c
-        else:
-            warnings.warn(
-                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-            )
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as lck:
-            assert lck.hardware is not None
-
             lck.hardware.set_adc_attenuation(self.input_port, 0.0)
             lck.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             lck.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -148,7 +122,7 @@ class TwoTonePower(Base):
                         freq=control_freq,
                         out_ports=self.control_port,
                     )
-                    lck.hardware.sleep(1e-3, False)
+                    lck.apply_settings()
 
                     _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                     data_i = _d[self.input_port][1][:, 0]
@@ -173,27 +147,27 @@ class TwoTonePower(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "TwoTonePower":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq_center = h5f.attrs["control_freq_center"]
-            control_freq_span = h5f.attrs["control_freq_span"]
-            df = h5f.attrs["df"]
-            readout_amp = h5f.attrs["readout_amp"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            input_port = h5f.attrs["input_port"]
-            num_averages = h5f.attrs["num_averages"]
-            dither = h5f.attrs["dither"]
-            num_skip = h5f.attrs["num_skip"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq_center = float(h5f.attrs["control_freq_center"])  # type: ignore
+            control_freq_span = float(h5f.attrs["control_freq_span"])  # type: ignore
+            df = float(h5f.attrs["df"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            input_port = int(h5f.attrs["input_port"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            dither = bool(h5f.attrs["dither"])  # type: ignore
+            num_skip = int(h5f.attrs["num_skip"])  # type: ignore
 
-            control_amp_arr = h5f["control_amp_arr"][()]
-            control_freq_arr = h5f["control_freq_arr"][()]
-            resp_arr = h5f["resp_arr"][()]
+            control_amp_arr: npt.NDArray[np.float64] = h5f["control_amp_arr"][()]  # type: ignore
+            control_freq_arr: npt.NDArray[np.float64] = h5f["control_freq_arr"][()]  # type: ignore
+            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]  # type: ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -285,8 +259,8 @@ class TwoTonePower(Base):
             aspect="auto",
             interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-            vmin=lowlim,
-            vmax=highlim,
+            vmin=lowlim,  # type: ignore
+            vmax=highlim,  # type: ignore
         )
         if linecut:
             line_sel = ax1.axhline(amp_dBFS[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit)
@@ -297,7 +271,7 @@ class TwoTonePower(Base):
         cb.set_label(f"{title:s} [{unit:s}]")
 
         if linecut:
-            ax2 = fig1.add_subplot(gs[-1, 0])
+            ax2 = fig1.add_subplot(gs[-1, 0])  # pyright: ignore [reportUnboundVariable]
 
             (line_a,) = ax2.plot(1e-9 * self.control_freq_arr, data[self._AMP_IDX], animated=blit)
 
@@ -332,7 +306,7 @@ class TwoTonePower(Base):
                         update()
 
             def update():
-                line_sel.set_ydata([amp_dBFS[self._AMP_IDX], amp_dBFS[self._AMP_IDX]])
+                line_sel.set_ydata([amp_dBFS[self._AMP_IDX], amp_dBFS[self._AMP_IDX]])  # pyright: ignore [reportUnboundVariable]
                 # ax1.set_title(f"amp = {amp_arr[self._AMP_IDX]:.2e}")
                 print(
                     f"drive amp {self._AMP_IDX:d}: {self.control_amp_arr[self._AMP_IDX]:.2e} FS = {amp_dBFS[self._AMP_IDX]:.1f} dBFS"
@@ -340,8 +314,8 @@ class TwoTonePower(Base):
                 line_a.set_ydata(data[self._AMP_IDX])
                 # ax2.set_title("")
                 if blit:
-                    fig1.canvas.restore_region(self._bg)
-                    ax1.draw_artist(line_sel)
+                    fig1.canvas.restore_region(self._bg)  # type: ignore
+                    ax1.draw_artist(line_sel)  # pyright: ignore [reportUnboundVariable]
                     ax2.draw_artist(line_a)
                     fig1.canvas.blit(fig1.bbox)
                     # fig1.canvas.flush_events()
@@ -355,9 +329,9 @@ class TwoTonePower(Base):
         if linecut and blit:
             fig1.canvas.draw()
             # fig1.canvas.flush_events()
-            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)
-            ax1.draw_artist(line_sel)
-            ax2.draw_artist(line_a)
+            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # type: ignore
+            ax1.draw_artist(line_sel)  # pyright: ignore [reportUnboundVariable]
+            ax2.draw_artist(line_a)  # pyright: ignore [reportUnboundVariable]
             fig1.canvas.blit(fig1.bbox)
 
         return fig1

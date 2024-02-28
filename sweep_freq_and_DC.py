@@ -2,22 +2,19 @@
 """
 2D sweep of DC bias and frequency of probe to find the modulation curve of the JPA.
 """
-from typing import List
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode, Hardware
+from presto.hardware import AdcMode, DacMode, Hardware
 from presto import lockin
-from presto.utils import ProgressBar, recommended_dac_config
+from presto.utils import ProgressBar
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 
 
 class SweepFreqAndDC(Base):
@@ -28,7 +25,7 @@ class SweepFreqAndDC(Base):
         df: float,
         num_averages: int,
         amp: float,
-        bias_arr: List[float],
+        bias_arr: Union[List[float], npt.NDArray[np.float64]],
         output_port: int,
         input_port: int,
         bias_port: int,
@@ -55,20 +52,16 @@ class SweepFreqAndDC(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        dac_mode, dac_fsample = recommended_dac_config(self.freq_center)
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_mode=dac_mode,
-            dac_fsample=dac_fsample,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as lck:
-            assert lck.hardware is not None
-
             lck.hardware.set_adc_attenuation(self.input_port, 0.0)
             lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
@@ -127,10 +120,10 @@ class SweepFreqAndDC(Base):
 
             lck.apply_settings()
 
-            pb = ProgressBar(nr_bias * nr_freq)
+            pb = ProgressBar(nr_bias)
             pb.start()
             for jj, bias in enumerate(self.bias_arr):
-                lck.hardware.ramp_dc_bias(self.bias_arr[jj], self.bias_port, self.bias_ramp_rate)
+                lck.hardware.ramp_dc_bias(bias, self.bias_port, self.bias_ramp_rate)
 
                 for ii, freq in enumerate(self.freq_arr):
                     lck.hardware.configure_mixer(
@@ -138,7 +131,7 @@ class SweepFreqAndDC(Base):
                         in_ports=self.input_port,
                         out_ports=self.output_port,
                     )
-                    lck.hardware.sleep(1e-3, False)
+                    lck.apply_settings()
 
                     _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                     data_i = _d[self.input_port][1][:, 0]
@@ -146,8 +139,7 @@ class SweepFreqAndDC(Base):
                     data = data_i.real + 1j * data_q.real  # using zero IF
 
                     self.resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
-
-                    pb.increment()
+                pb.increment()
 
             pb.done()
 
@@ -158,27 +150,27 @@ class SweepFreqAndDC(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "SweepFreqAndDC":
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = h5f.attrs["freq_center"]
-            freq_span = h5f.attrs["freq_span"]
-            df = h5f.attrs["df"]
-            num_averages = h5f.attrs["num_averages"]
-            amp = h5f.attrs["amp"]
-            output_port = h5f.attrs["output_port"]
-            input_port = h5f.attrs["input_port"]
-            bias_port = h5f.attrs["bias_port"]
-            bias_ramp_rate = h5f.attrs["bias_ramp_rate"]
-            dither = h5f.attrs["dither"]
-            num_skip = h5f.attrs["num_skip"]
+            freq_center = float(h5f.attrs["freq_center"])  # type: ignore
+            freq_span = float(h5f.attrs["freq_span"])  # type: ignore
+            df = float(h5f.attrs["df"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            amp = float(h5f.attrs["amp"])  # type: ignore
+            output_port = int(h5f.attrs["output_port"])  # type: ignore
+            input_port = int(h5f.attrs["input_port"])  # type: ignore
+            bias_port = int(h5f.attrs["bias_port"])  # type: ignore
+            bias_ramp_rate = float(h5f.attrs["bias_ramp_rate"])  # type: ignore
+            dither = bool(h5f.attrs["dither"])  # type: ignore
+            num_skip = int(h5f.attrs["num_skip"])  # type: ignore
 
-            bias_arr = h5f["bias_arr"][()]
-            freq_arr = h5f["freq_arr"][()]
-            resp_arr = h5f["resp_arr"][()]
+            bias_arr: npt.NDArray[np.float64] = h5f["bias_arr"][()]  # type: ignore
+            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]  # type: ignore
+            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]  # type: ignore
 
         self = cls(
             freq_center=freq_center,
@@ -194,6 +186,7 @@ class SweepFreqAndDC(Base):
             dither=dither,
             num_skip=num_skip,
         )
+        self.bias_arr = bias_arr
         self.freq_arr = freq_arr
         self.resp_arr = resp_arr
 

@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
-"""
-Measure Rabi oscillation by changing the amplitude of the control pulse.
-
-The control pulse has a sin^2 envelope, while the readout pulse is square.
-"""
-import ast
-import math
-from typing import List, Optional, Tuple, Union
+"""Measure the Wigner function of a bosonic mode."""
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
@@ -14,7 +8,7 @@ import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import rotate_opt, sin2
 
 from _base import Base
 
@@ -23,46 +17,51 @@ IDX_LOW = 0
 IDX_HIGH = -1
 
 
-class RabiAmp(Base):
+class Wigner(Base):
     def __init__(
         self,
         readout_freq: float,
         control_freq: float,
+        memory_freq: float,
         readout_amp: float,
-        control_amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        control_amp: float,
+        memory_amp_arr_x: Union[List[float], npt.NDArray[np.float64]],
+        memory_amp_arr_y: Union[List[float], npt.NDArray[np.float64]],
+        dt_wigner: float,
         readout_duration: float,
         control_duration: float,
+        memory_duration: float,
         sample_duration: float,
         readout_port: int,
         control_port: int,
+        memory_port: int,
         sample_port: int,
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        num_pulses: int = 1,
-        jpa_params: Optional[dict] = None,
-        drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
+        self.memory_freq = memory_freq
         self.readout_amp = readout_amp
-        self.control_amp_arr = np.atleast_1d(control_amp_arr).astype(np.float64)
+        self.control_amp = control_amp
+        self.memory_amp_arr_x = np.atleast_1d(memory_amp_arr_x).astype(np.float64)
+        self.memory_amp_arr_y = np.atleast_1d(memory_amp_arr_y).astype(np.float64)
+        self.dt_wigner = dt_wigner
         self.readout_duration = readout_duration
         self.control_duration = control_duration
+        self.memory_duration = memory_duration
         self.sample_duration = sample_duration
         self.readout_port = readout_port
         self.control_port = control_port
+        self.memory_port = memory_port
         self.sample_port = sample_port
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.num_pulses = num_pulses
-        self.drag = drag
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
-
-        self.jpa_params = jpa_params
 
     def run(
         self,
@@ -81,8 +80,10 @@ class RabiAmp(Base):
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_dac_current(self.memory_port, DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
+            pls.hardware.set_inv_sinc(self.memory_port, 0)
 
             pls.hardware.configure_mixer(
                 self.readout_freq,
@@ -90,6 +91,7 @@ class RabiAmp(Base):
                 out_ports=self.readout_port,
             )
             pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
+            pls.hardware.configure_mixer(self.memory_freq, out_ports=self.memory_port)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -97,7 +99,20 @@ class RabiAmp(Base):
 
             # Setup lookup tables for amplitudes
             pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
-            pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp_arr)
+            pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp)
+            pls.setup_scale_lut(
+                self.memory_port, group=0, scales=self.memory_amp_arr_x * np.sqrt(2), axis=1
+            )
+            pls.setup_scale_lut(
+                self.memory_port, group=1, scales=self.memory_amp_arr_y * np.sqrt(2), axis=0
+            )
+            # Setup lookup tables for frequencies
+            pls.setup_freq_lut(
+                self.memory_port, group=0, frequencies=0, phases=0, phases_q=-np.pi / 2
+            )  # x displacement
+            pls.setup_freq_lut(
+                self.memory_port, group=1, frequencies=0, phases=np.pi / 2, phases_q=0
+            )  # y displacement
 
             # Setup readout and control pulses
             # use setup_long_drive to create a pulse with square envelope
@@ -111,16 +126,29 @@ class RabiAmp(Base):
                 envelope=False,
             )
 
-            # For the control pulse we create a sine-squared envelope,
-            # and use setup_template to use the user-defined envelope
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = sin2(control_ns, drag=self.drag)
+            control_envelope = sin2(control_ns)
             control_pulse = pls.setup_template(
                 self.control_port,
                 group=0,
                 template=control_envelope + 1j * control_envelope,
                 envelope=False,
+            )
+
+            memory_ns = int(round(self.memory_duration * pls.get_fs("dac")))
+            memory_envelope = sin2(memory_ns)
+            memory_pulse_x = pls.setup_template(
+                self.memory_port,
+                group=0,
+                template=memory_envelope + 1j * memory_envelope,
+                envelope=True,
+            )
+            memory_pulse_y = pls.setup_template(
+                self.memory_port,
+                group=1,
+                template=memory_envelope + 1j * memory_envelope,
+                envelope=True,
             )
 
             # Setup sampling window
@@ -131,23 +159,28 @@ class RabiAmp(Base):
             # *** Program pulse sequence ***
             # ******************************
             T = 0.0  # s, start at time zero ...
-            for _ in range(self.num_pulses):
-                pls.output_pulse(T, control_pulse)  # Control pulse
-                T += self.control_duration
-            pls.output_pulse(T, readout_pulse)  # Readout
+            pls.reset_phase(T, output_ports=self.memory_port, group=[0, 1])
+            pls.output_pulse(T, [memory_pulse_x, memory_pulse_y])  # displace memory
+            T += self.memory_duration
+            pls.output_pulse(T, control_pulse)  # pi/2 pulse
+            T += self.control_duration + self.dt_wigner
+            pls.output_pulse(T, control_pulse)  # pi/2 pulse
+            T += self.control_duration
+            pls.output_pulse(T, readout_pulse)  # readout
             pls.store(T + self.readout_sample_delay)
             T += self.readout_duration
-            pls.next_scale(T, self.control_port)  # Move to next Rabi amplitude
             T += self.wait_delay  # Wait for decay
+            pls.next_scale(T, self.memory_port, group=[0, 1])
+            T += self.wait_delay
 
             # **************************
             # *** Run the experiment ***
             # **************************
-            # repeat the whole sequence `nr_amps` times
-            # then average `num_averages` times
-
-            nr_amps = len(self.control_amp_arr)
-            pls.run(period=T, repeat_count=nr_amps, num_averages=self.num_averages)
+            pls.run(
+                period=T,
+                repeat_count=(len(self.memory_amp_arr_y), len(self.memory_amp_arr_x)),
+                num_averages=self.num_averages,
+            )
             self.t_arr, self.store_arr = pls.get_store_data()
 
         return self.save()
@@ -156,50 +189,51 @@ class RabiAmp(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RabiAmp":
+    def load(cls, load_filename: str) -> "Wigner":
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            memory_freq = float(h5f.attrs["memory_freq"])  # type: ignore
             readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
-            control_amp_arr: npt.NDArray[np.float64] = h5f["control_amp_arr"][()]  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            memory_amp_arr_x: npt.NDArray[np.float64] = h5f["memory_amp_arr_x"][()]  # type:ignore
+            memory_amp_arr_y: npt.NDArray[np.float64] = h5f["memory_amp_arr_y"][()]  # type:ignore
+            dt_wigner = float(h5f.attrs["dt_wigner"])  # type: ignore
             readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
             control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            memory_duration = float(h5f.attrs["memory_duration"])  # type: ignore
             sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
             readout_port = int(h5f.attrs["readout_port"])  # type: ignore
             control_port = int(h5f.attrs["control_port"])  # type: ignore
+            memory_port = int(h5f.attrs["memory_port"])  # type: ignore
             sample_port = int(h5f.attrs["sample_port"])  # type: ignore
             wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
             readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
             num_averages = int(h5f.attrs["num_averages"])  # type: ignore
-            num_pulses = int(h5f.attrs["num_pulses"])  # type: ignore
 
-            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
-
-            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
-            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
-
-            try:
-                drag = float(h5f.attrs["drag"])  # type: ignore
-            except KeyError:
-                drag = 0.0
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type:ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type:ignore
 
         self = cls(
             readout_freq=readout_freq,
             control_freq=control_freq,
+            memory_freq=memory_freq,
             readout_amp=readout_amp,
-            control_amp_arr=control_amp_arr,
+            control_amp=control_amp,
+            memory_amp_arr_x=memory_amp_arr_x,
+            memory_amp_arr_y=memory_amp_arr_y,
+            dt_wigner=dt_wigner,
             readout_duration=readout_duration,
             control_duration=control_duration,
+            memory_duration=memory_duration,
             sample_duration=sample_duration,
             readout_port=readout_port,
             control_port=control_port,
+            memory_port=memory_port,
             sample_port=sample_port,
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
-            num_pulses=num_pulses,
-            jpa_params=jpa_params,
-            drag=drag,
         )
         self.t_arr = t_arr
         self.store_arr = store_arr
@@ -207,10 +241,8 @@ class RabiAmp(Base):
         return self
 
     def analyze(self, all_plots: bool = False):
-        if self.t_arr is None:
-            raise RuntimeError
-        if self.store_arr is None:
-            raise RuntimeError
+        assert self.t_arr is not None
+        assert self.store_arr is not None
 
         import matplotlib.pyplot as plt
 
@@ -220,54 +252,24 @@ class RabiAmp(Base):
 
         if all_plots:
             # Plot raw store data for first iteration as a check
-            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-            ax11, ax12 = ax1
-            ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
-            ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
-            ax12.set_xlabel("Time [ns]")
-            fig1.show()
-            ret_fig.append(fig1)
+            fig0, ax0 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+            ax01, ax02 = ax0
+            ax01.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+            ax02.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+            ax01.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
+            ax02.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
+            ax02.set_xlabel("Time [ns]")
+            fig0.show()
+            ret_fig.append(fig0)
 
-        # Analyze Rabi
+        # Analyze
         resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-        data = rotate_opt(resp_arr)
+        resp_arr.shape = (len(self.memory_amp_arr_y), len(self.memory_amp_arr_x))
+        resp_arr = rotate_opt(resp_arr) * np.exp(1j * np.pi)
+        resp_arr = resp_arr.real
 
-        # Fit data
-        popt_x, perr_x = _fit_period(self.control_amp_arr, np.real(data))
-        period = popt_x[3] * self.num_pulses
-        period_err = perr_x[3] * self.num_pulses
-        pi_amp = period / 2
-        pi_2_amp = period / 4
-        if self.num_pulses > 1:
-            print(f"{self.num_pulses} pulses")
-
-        print(f"Tau pulse amplitude: {format_precision(period, period_err)} FS")
-        print(f"Pi pulse amplitude: {format_precision(pi_amp, period_err / 2)} FS")
-        print(f"Pi/2 pulse amplitude: {format_precision(pi_2_amp, period_err / 4)} FS")
-
-        print(f"control_amp_180 = {pi_amp:.5f}")
-        print(f"control_amp_90 = {pi_2_amp:.5f}")
-
-        if all_plots:
-            fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-            ax21, ax22, ax23, ax24 = ax2
-            ax21.plot(self.control_amp_arr, np.abs(data))
-            ax22.plot(self.control_amp_arr, np.angle(data))
-            ax23.plot(self.control_amp_arr, np.real(data))
-            ax23.plot(self.control_amp_arr, _func(self.control_amp_arr, *popt_x), "--")
-            ax24.plot(self.control_amp_arr, np.imag(data))
-
-            ax21.set_ylabel("Amplitude [FS]")
-            ax22.set_ylabel("Phase [rad]")
-            ax23.set_ylabel("I [FS]")
-            ax24.set_ylabel("Q [FS]")
-            ax2[-1].set_xlabel("Pulse amplitude [FS]")
-            fig2.show()
-            ret_fig.append(fig2)
-
-        data_max = np.abs(data).max()
+        # bigger plot just for I quadrature
+        data_max = np.abs(resp_arr).max()
         unit = ""
         mult = 1.0
         if data_max < 1e-6:
@@ -279,54 +281,36 @@ class RabiAmp(Base):
         elif data_max < 1e0:
             unit = "m"
             mult = 1e3
+        resp_arr *= mult
 
-        fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(self.control_amp_arr, mult * np.real(data), ".")
-        ax3.plot(self.control_amp_arr, mult * _func(self.control_amp_arr, *popt_x), "--")
-        ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel("Pulse amplitude [FS]")
-        if self.num_pulses > 1:
-            ax3.set_title(f"{self.num_pulses} pulses")
-        # fig3.show()
-        ret_fig.append(fig3)
+        # choose limits for colorbar
+        cutoff = 1.0  # %
+        lowlim = np.percentile(resp_arr, cutoff)
+        highlim = np.percentile(resp_arr, 100.0 - cutoff)
 
+        # extent
+        x_min = self.memory_amp_arr_x[0]
+        x_max = self.memory_amp_arr_x[-1]
+        dx = self.memory_amp_arr_x[1] - self.memory_amp_arr_x[0]
+        y_min = self.memory_amp_arr_y[0]
+        y_max = self.memory_amp_arr_y[-1]
+        dy = self.memory_amp_arr_y[1] - self.memory_amp_arr_y[0]
+
+        fig1 = plt.figure(tight_layout=True)
+        ax1 = fig1.add_subplot(1, 1, 1)
+        im = ax1.imshow(
+            resp_arr,
+            origin="lower",
+            aspect="auto",
+            interpolation="none",
+            extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
+            vmin=lowlim,
+            vmax=highlim,
+        )
+        # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
+        ax1.set_xlabel("Displacement I [FS]")
+        ax1.set_ylabel("Displacement Q [FS]")
+        ax1.set_aspect("equal")
+        cb = fig1.colorbar(im)
+        cb.set_label(f"I quadrature [{unit:s}FS]")
         return ret_fig
-
-
-def _func(t, offset, amplitude, T2, period, phase):
-    frequency = 1 / period
-    return offset + amplitude * np.exp(-t / T2) * np.cos(math.tau * frequency * t + phase)
-
-
-def _fit_period(
-    x: npt.NDArray[np.float64], y: npt.NDArray[np.float64]
-) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    from scipy.optimize import curve_fit
-
-    pkpk = np.max(y) - np.min(y)
-    offset = np.min(y) + pkpk / 2
-    amplitude = 0.5 * pkpk
-    T2 = 0.5 * (np.max(x) - np.min(x))
-    freqs = np.fft.rfftfreq(len(x), x[1] - x[0])
-    fft = np.fft.rfft(y)
-    frequency = freqs[1 + np.argmax(np.abs(fft[1:]))]
-    period = 1 / frequency
-    first = (y[0] - offset) / amplitude
-    if first > 1.0:
-        first = 1.0
-    elif first < -1.0:
-        first = -1.0
-    phase = np.arccos(first)
-    p0 = (
-        offset,
-        amplitude,
-        T2,
-        period,
-        phase,
-    )
-    res = curve_fit(_func, x, y, p0=p0)
-    popt = res[0]
-    pcov = res[1]
-    perr = np.sqrt(np.diag(pcov))
-    offset, amplitude, T2, period, phase = popt
-    return popt, perr

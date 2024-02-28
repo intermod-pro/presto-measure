@@ -2,22 +2,19 @@
 """
 2D sweep of drive power and frequency in Lockin mode.
 """
-from typing import List
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import lockin
-from presto.utils import ProgressBar, recommended_dac_config
+from presto.utils import ProgressBar
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 
 
 class SweepPower(Base):
@@ -27,7 +24,7 @@ class SweepPower(Base):
         freq_span: float,
         df: float,
         num_averages: int,
-        amp_arr: List[float],
+        amp_arr: Union[List[float], npt.NDArray[np.float64]],
         output_port: int,
         input_port: int,
         dither: bool = True,
@@ -49,20 +46,16 @@ class SweepPower(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        dac_mode, dac_fsample = recommended_dac_config(self.freq_center)
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_mode=dac_mode,
-            dac_fsample=dac_fsample,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as lck:
-            assert lck.hardware is not None
-
             lck.hardware.set_adc_attenuation(self.input_port, 0.0)
             lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
@@ -107,7 +100,7 @@ class SweepPower(Base):
                     lck.hardware.configure_mixer(
                         freq=freq, in_ports=self.input_port, out_ports=self.output_port
                     )
-                    lck.hardware.sleep(1e-3, False)
+                    lck.apply_settings()
 
                     _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                     data_i = _d[self.input_port][1][:, 0]
@@ -126,24 +119,24 @@ class SweepPower(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "SweepPower":
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = h5f.attrs["freq_center"]
-            freq_span = h5f.attrs["freq_span"]
-            df = h5f.attrs["df"]
-            num_averages = h5f.attrs["num_averages"]
-            output_port = h5f.attrs["output_port"]
-            input_port = h5f.attrs["input_port"]
-            dither = h5f.attrs["dither"]
-            num_skip = h5f.attrs["num_skip"]
+            freq_center = float(h5f.attrs["freq_center"])  # type: ignore
+            freq_span = float(h5f.attrs["freq_span"])  # type: ignore
+            df = float(h5f.attrs["df"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            output_port = int(h5f.attrs["output_port"])  # type: ignore
+            input_port = int(h5f.attrs["input_port"])  # type: ignore
+            dither = bool(h5f.attrs["dither"])  # type: ignore
+            num_skip = int(h5f.attrs["num_skip"])  # type: ignore
 
-            amp_arr = h5f["amp_arr"][()]
-            freq_arr = h5f["freq_arr"][()]
-            resp_arr = h5f["resp_arr"][()]
+            amp_arr: npt.NDArray[np.float64] = h5f["amp_arr"][()]  # type: ignore
+            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]  # type: ignore
+            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]  # type: ignore
 
         self = cls(
             freq_center=freq_center,
@@ -215,8 +208,8 @@ class SweepPower(Base):
             aspect="auto",
             interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-            vmin=lowlim,
-            vmax=highlim,
+            vmin=lowlim,  # type: ignore
+            vmax=highlim,  # type: ignore
         )
         line_sel = ax1.axhline(amp_dBFS[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit)
         # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
@@ -299,6 +292,7 @@ class SweepPower(Base):
                     update()
 
         def update():
+            assert self.resp_arr is not None
             line_sel.set_ydata([amp_dBFS[self._AMP_IDX], amp_dBFS[self._AMP_IDX]])
             # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
             print(
@@ -307,11 +301,11 @@ class SweepPower(Base):
             line_a.set_ydata(resp_dB[self._AMP_IDX])
             line_p.set_ydata(np.angle(self.resp_arr[self._AMP_IDX]))
             if _do_fit:
-                line_fit_a.set_ydata(np.full_like(self.freq_arr, np.nan))
-                line_fit_p.set_ydata(np.full_like(self.freq_arr, np.nan))
+                line_fit_a.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportUnboundVariable]
+                line_fit_p.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportUnboundVariable]
             # ax2.set_title("")
             if blit:
-                fig1.canvas.restore_region(self._bg)
+                fig1.canvas.restore_region(self._bg)  # type: ignore
                 ax1.draw_artist(line_sel)
                 ax2.draw_artist(line_a)
                 ax3.draw_artist(line_p)
@@ -323,16 +317,17 @@ class SweepPower(Base):
         if _do_fit:
 
             def onselect(xmin, xmax):
-                port = circuit.notch_port(self.freq_arr, self.resp_arr[self._AMP_IDX])
+                assert self.resp_arr is not None
+                port = circuit.notch_port(self.freq_arr, self.resp_arr[self._AMP_IDX])  # pyright: ignore [reportUnboundVariable]
                 port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
                 if norm:
-                    line_fit_a.set_data(
-                        1e-9 * port.f_data,
+                    line_fit_a.set_data(  # pyright: ignore [reportUnboundVariable]
+                        1e-9 * port.f_data,  # type: ignore
                         20 * np.log10(np.abs(port.z_data_sim / self.amp_arr[self._AMP_IDX])),
                     )
                 else:
-                    line_fit_a.set_data(1e-9 * port.f_data, 20 * np.log10(np.abs(port.z_data_sim)))
-                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))
+                    line_fit_a.set_data(1e-9 * port.f_data, 20 * np.log10(np.abs(port.z_data_sim)))  # pyright: ignore
+                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))  # pyright: ignore
                 # print(port.fitresults)
                 print("----------------")
                 print(f"fr = {port.fitresults['fr']}")
@@ -344,22 +339,22 @@ class SweepPower(Base):
                 # ax2.set_title(
                 #     f"fr = {1e-6*fr:.0f} MHz, Ql = {Ql:.0f}, Qi = {Qi:.0f}, Qc = {Qc:.0f}, kappa = {1e-3*kappa:.0f} kHz")
                 if blit:
-                    fig1.canvas.restore_region(self._bg)
+                    fig1.canvas.restore_region(self._bg)  # type: ignore
                     ax1.draw_artist(line_sel)
                     ax2.draw_artist(line_a)
-                    ax2.draw_artist(line_fit_a)
+                    ax2.draw_artist(line_fit_a)  # pyright: ignore [reportUnboundVariable]
                     ax3.draw_artist(line_p)
-                    ax3.draw_artist(line_fit_p)
+                    ax3.draw_artist(line_fit_p)  # pyright: ignore [reportUnboundVariable]
                     fig1.canvas.blit(fig1.bbox)
                     fig1.canvas.flush_events()
                 else:
                     fig1.canvas.draw()
 
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            fig1._span_a = mwidgets.SpanSelector(
+            fig1._span_a = mwidgets.SpanSelector(  # type: ignore
                 ax2, onselect, "horizontal", props=rectprops, useblit=blit
             )
-            fig1._span_p = mwidgets.SpanSelector(
+            fig1._span_p = mwidgets.SpanSelector(  # type: ignore
                 ax3, onselect, "horizontal", props=rectprops, useblit=blit
             )
 
@@ -369,7 +364,7 @@ class SweepPower(Base):
         if blit:
             fig1.canvas.draw()
             fig1.canvas.flush_events()
-            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)
+            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # type: ignore
             ax1.draw_artist(line_sel)
             ax2.draw_artist(line_a)
             ax3.draw_artist(line_p)

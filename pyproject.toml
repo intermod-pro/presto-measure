@@ -4,6 +4,14 @@ line-length = 99
 [tool.pylint.format]
 max-line-length = 99
 
+[tool.pyright]
+ignore = ["bak/", "data/"]
+reportMissingImports = false
+
+[tool.ruff]
+extend-exclude = ["bak/", "data/"]
+line-length = 99
+
 [tool.yapf]
 based_on_style = "pep8"
 column_limit = 99
