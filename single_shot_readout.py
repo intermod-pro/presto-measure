@@ -14,7 +14,7 @@ from presto.utils import rotate_opt, sin2
 
 from _base import Base
 
-DAC_CURRENT = 32_000  # uA
+DAC_CURRENT = 40_500  # uA
 
 
 class SingleShotReadout(Base):

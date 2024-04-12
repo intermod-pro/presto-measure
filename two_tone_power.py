@@ -2,6 +2,7 @@
 """
 Two-tone spectroscopy in Lockin mode: 2D sweep of pump power and frequency, with fixed probe.
 """
+
 from typing import List, Optional, Union
 
 import h5py
@@ -14,7 +15,7 @@ from presto.utils import ProgressBar, rotate_opt
 
 from _base import Base
 
-DAC_CURRENT = 32_000  # uA
+DAC_CURRENT = 40_500  # uA
 
 
 class TwoTonePower(Base):
@@ -104,7 +105,8 @@ class TwoTonePower(Base):
             ogc.set_amplitudes(self.control_amp_arr[0])
             ogc.set_phases(0.0, 0.0)
 
-            lck.set_dither(self.dither, [self.readout_port, self.control_port])
+            lck.set_dither(self.dither, self.readout_port)
+            lck.set_dither(self.dither, self.control_port)
 
             ig = lck.add_input_group(self.input_port, nr_freq=1)
             ig.set_frequencies(0.0)

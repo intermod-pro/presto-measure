@@ -18,7 +18,7 @@ from presto.utils import format_precision, rotate_opt
 
 from _base import Base
 
-DAC_CURRENT = 32_000  # uA
+DAC_CURRENT = 40_500  # uA
 IDX_LOW = 0
 IDX_HIGH = -1
 

@@ -14,7 +14,7 @@ from presto.utils import ProgressBar
 
 from _base import Base
 
-DAC_CURRENT = 32_000  # uA
+DAC_CURRENT = 40_500  # uA
 
 
 class JpaSweepBias(Base):
