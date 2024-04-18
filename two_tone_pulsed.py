@@ -132,19 +132,12 @@ class TwoTonePulsed(Base):
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
             # number of samples in the control template
-            # control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            # control_envelope = sin2(control_ns)
-            # control_pulse = pls.setup_template(
-            #     self.control_port,
-            #     group=0,
-            #     template=control_envelope + 1j * control_envelope,
-            #     envelope=True,
-            # )
-            control_pulse = pls.setup_long_drive(
+            control_ns = int(round(self.control_duration * pls.get_fs("dac")))
+            control_envelope = sin2(control_ns)
+            control_pulse = pls.setup_template(
                 self.control_port,
                 group=0,
-                duration=self.control_duration,
-                amplitude=1.0 + 1j,
+                template=control_envelope + 1j * control_envelope,
                 envelope=True,
             )
 
