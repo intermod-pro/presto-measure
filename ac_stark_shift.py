@@ -3,6 +3,7 @@
 
 Measure Ramsey oscillations while driving the resonator with variable power.
 """
+
 import ast
 from typing import List, Optional, Union
 
@@ -10,13 +11,11 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import rotate_opt, sin2
 
 from _base import Base
 
-DAC_CURRENT = 40_500  # uA
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -76,12 +75,11 @@ class AcStarkShift(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as pls:
-            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
+            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
             pls.hardware.configure_mixer(

@@ -2,19 +2,17 @@
 """
 Simple frequency sweep using the Lockin mode.
 """
+
 from typing import List, Optional, Union
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import lockin
 from presto.utils import ProgressBar
 
 from _base import Base
-
-DAC_CURRENT = 40_500  # uA
 
 
 class SweepFreqAndDC(Base):
@@ -57,12 +55,11 @@ class SweepFreqAndDC(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, 0.0)
-            lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
-            lck.hardware.set_dac_current(self.bias_port, DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
+            lck.hardware.set_dac_current(self.output_port, self.DAC_CURRENT)
+            lck.hardware.set_dac_current(self.bias_port, self.DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
             lck.hardware.set_inv_sinc(self.bias_port, 0)
 

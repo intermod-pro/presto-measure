@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator."""
+
 from typing import Optional
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import untwist_downconversion
 
 from _base import Base
 
-DAC_CURRENT = 40_500  # uA
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -61,8 +60,7 @@ class SweepPulsed(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as pls:
             # figure out frequencies
             assert self.readout_freq_center > (self.readout_freq_span / 2)
@@ -76,8 +74,8 @@ class SweepPulsed(Base):
             self.readout_nco = self.readout_freq_center - readout_if_center
             self.readout_freq_arr = self.readout_nco + self.readout_if_arr
 
-            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
+            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
 
             pls.hardware.configure_mixer(
@@ -260,7 +258,7 @@ class SweepPulsed(Base):
             # port_g = circuit.reflection_port(
             #    self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
             # )
-            port_g = circuit.notch_port(  # pyright: ignore [reportUnboundVariable]
+            port_g = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
                 self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
             )
             port_g.autofit(electric_delay=-6.1e-9)
@@ -275,7 +273,7 @@ class SweepPulsed(Base):
 
         for ax_ in ax2:
             if _has_resonator_tools:
-                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)  # pyright: ignore [reportUnboundVariable]
+                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
 
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="tab:blue", label="|g>")
         ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="tab:blue")
@@ -283,7 +281,7 @@ class SweepPulsed(Base):
         if _has_resonator_tools:
             ax21.plot(
                 1e-9 * port_g.f_data,  # pyright: ignore
-                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportUnboundVariable]
+                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
                 c="tab:red",
                 ls="--",
             )

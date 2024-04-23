@@ -2,19 +2,18 @@
 """
 3D sweep of pump power, DC bias and frequency of probe, to see where we get gain.
 """
+
+import math
 from typing import List, Optional, Union
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import lockin
 from presto.utils import ProgressBar
 
 from _base import Base
-
-DAC_CURRENT = 40_500  # uA
 
 
 class JpaSweepPowerBias(Base):
@@ -66,11 +65,10 @@ class JpaSweepPowerBias(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, 0.0)
-            lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
+            lck.hardware.set_dac_current(self.output_port, self.DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
 
             nr_bias = len(self.bias_arr)
@@ -281,16 +279,19 @@ class JpaSweepPowerBias(Base):
             nr_rows = 3
             nr_columns = 4
             nr_plots = nr_rows * nr_columns
-            nr_figs = ((nr_pump_pwr - 1) // nr_plots) + 1
+            nr_figs = math.ceil(nr_pump_pwr / nr_plots)
 
             for jj in range(nr_figs):
                 fig, ax = plt.subplots(
                     nr_rows, nr_columns, sharex=True, sharey=True, tight_layout=True
                 )
                 for ii in range(nr_plots):
+                    idx = jj * nr_plots + ii
+                    if idx >= nr_pump_pwr:
+                        break
                     _ax = ax[ii // nr_columns][ii % nr_columns]
                     _ax.imshow(
-                        gain_db[jj * nr_plots + ii, :, :],
+                        gain_db[idx, :, :],
                         origin="lower",
                         aspect="auto",
                         extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),

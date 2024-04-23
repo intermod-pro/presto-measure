@@ -2,19 +2,17 @@
 """
 Simple frequency sweep using the Lockin mode.
 """
+
 from typing import Optional
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import lockin
 from presto.utils import ProgressBar
 
 from _base import Base
-
-DAC_CURRENT = 40_500  # uA
 
 
 class Sweep(Base):
@@ -53,11 +51,10 @@ class Sweep(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, 0.0)
-            lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
+            lck.hardware.set_dac_current(self.output_port, self.DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
 
             # tune frequencies
@@ -182,11 +179,13 @@ class Sweep(Base):
         ax11.set_ylabel("Amplitude [dB]")
         ax12.set_ylabel("Phase [rad]")
         ax12.legend()
+        ax11.grid()
+        ax12.grid()
 
         if _do_fit:
 
             def onselect(xmin, xmax):
-                port = circuit.notch_port(self.freq_arr, self.resp_arr)  # pyright: ignore[reportUnboundVariable]
+                port = circuit.notch_port(self.freq_arr, self.resp_arr)  # pyright: ignore[reportPossiblyUnboundVariable]
                 port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
                 sim_db = 20 * np.log10(np.abs(port.z_data_sim))
                 line_fit_a.set_data(1e-9 * port.f_data, sim_db)  # type: ignore
@@ -203,8 +202,8 @@ class Sweep(Base):
                 fig1.canvas.draw()
 
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportUnboundVariable]
-            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportUnboundVariable]
+            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
+            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
             # keep references to span selectors
             fig1._span_a = span_a  # type: ignore
             fig1._span_p = span_p  # type: ignore

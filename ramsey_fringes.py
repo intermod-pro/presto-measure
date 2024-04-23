@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Measure a Ramsey fringes pattern by changing the frequency of two π/2 pulses and their delay."""
+
 import ast
 from typing import Any, List, Optional, Union
 
@@ -7,13 +8,11 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import format_precision, rotate_opt, sin2, si_prefix_scale
 
 from _base import Base
 
-DAC_CURRENT = 40_500  # uA
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -74,8 +73,7 @@ class RamseyFringes(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as pls:
             # figure out frequencies
             assert self.control_freq_center > (self.control_freq_span / 2)
@@ -87,9 +85,9 @@ class RamseyFringes(Base):
             control_nco = self.control_freq_center - control_if_center
             self.control_freq_arr = control_nco + control_if_arr
 
-            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
+            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
@@ -99,6 +97,8 @@ class RamseyFringes(Base):
                 out_ports=self.readout_port,
             )
             pls.hardware.configure_mixer(freq=control_nco, out_ports=self.control_port)
+
+            self._jpa_setup(pls)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -130,7 +130,7 @@ class RamseyFringes(Base):
 
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = self.control_amp * sin2(control_ns)
+            control_envelope = self.control_amp * sin2(control_ns, self.drag)
             # we loose 3 dB by using a nonzero IF so multiply the envelope by sqrt(2)
             control_envelope *= np.sqrt(2)
             control_pulse = pls.setup_template(
@@ -162,11 +162,15 @@ class RamseyFringes(Base):
             pls.next_frequency(T, self.control_port)
             T += self.wait_delay
 
+            T = self._jpa_tweak(T, pls)
+
             # **************************
             # *** Run the experiment ***
             # **************************
             pls.run(period=T, repeat_count=self.control_freq_nr, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
+
+            self._jpa_stop(pls)
 
         return self.save()
 

@@ -2,19 +2,17 @@
 """
 2D sweep of drive power and frequency in Lockin mode.
 """
+
 from typing import List, Optional, Union
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import lockin
 from presto.utils import ProgressBar
 
 from _base import Base
-
-DAC_CURRENT = 40_500  # uA
 
 
 class SweepPower(Base):
@@ -53,11 +51,10 @@ class SweepPower(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, 0.0)
-            lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
+            lck.hardware.set_dac_current(self.output_port, self.DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
 
             nr_amps = len(self.amp_arr)
@@ -301,8 +298,8 @@ class SweepPower(Base):
             line_a.set_ydata(resp_dB[self._AMP_IDX])
             line_p.set_ydata(np.angle(self.resp_arr[self._AMP_IDX]))
             if _do_fit:
-                line_fit_a.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportUnboundVariable]
-                line_fit_p.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportUnboundVariable]
+                line_fit_a.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportPossiblyUnboundVariable]
+                line_fit_p.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportPossiblyUnboundVariable]
             # ax2.set_title("")
             if blit:
                 fig1.canvas.restore_region(self._bg)  # type: ignore
@@ -318,10 +315,10 @@ class SweepPower(Base):
 
             def onselect(xmin, xmax):
                 assert self.resp_arr is not None
-                port = circuit.notch_port(self.freq_arr, self.resp_arr[self._AMP_IDX])  # pyright: ignore [reportUnboundVariable]
+                port = circuit.notch_port(self.freq_arr, self.resp_arr[self._AMP_IDX])  # pyright: ignore [reportPossiblyUnboundVariable]
                 port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
                 if norm:
-                    line_fit_a.set_data(  # pyright: ignore [reportUnboundVariable]
+                    line_fit_a.set_data(  # pyright: ignore [reportPossiblyUnboundVariable]
                         1e-9 * port.f_data,  # type: ignore
                         20 * np.log10(np.abs(port.z_data_sim / self.amp_arr[self._AMP_IDX])),
                     )
@@ -342,9 +339,9 @@ class SweepPower(Base):
                     fig1.canvas.restore_region(self._bg)  # type: ignore
                     ax1.draw_artist(line_sel)
                     ax2.draw_artist(line_a)
-                    ax2.draw_artist(line_fit_a)  # pyright: ignore [reportUnboundVariable]
+                    ax2.draw_artist(line_fit_a)  # pyright: ignore [reportPossiblyUnboundVariable]
                     ax3.draw_artist(line_p)
-                    ax3.draw_artist(line_fit_p)  # pyright: ignore [reportUnboundVariable]
+                    ax3.draw_artist(line_fit_p)  # pyright: ignore [reportPossiblyUnboundVariable]
                     fig1.canvas.blit(fig1.bbox)
                     fig1.canvas.flush_events()
                 else:

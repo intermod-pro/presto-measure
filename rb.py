@@ -7,6 +7,7 @@ Requires third-party packages:
   - qiskit 0.45.1
   - qiskit_experiments 0.5.4
 """
+
 import time
 from typing import List, Optional, Tuple, TypeAlias, Union
 
@@ -18,7 +19,6 @@ from qiskit.compiler import transpile
 from qiskit_experiments.library import StandardRB
 
 from presto import pulsed
-from presto.hardware import AdcMode, DacMode
 from presto.utils import rotate_opt, sin2
 
 from _base import Base
@@ -26,7 +26,6 @@ from _base import Base
 Gate: TypeAlias = Tuple[str, int]
 GateSeq: TypeAlias = List[Gate]
 
-DAC_CURRENT = 40_500  # uA
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -166,12 +165,11 @@ class Rb(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as pls:
-            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
+            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 

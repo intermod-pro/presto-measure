@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
+
 import ast
 from typing import List, Optional, Union
 
@@ -7,13 +8,11 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import format_precision, rotate_opt, sin2
 
 from _base import Base, project
 
-DAC_CURRENT = 40_500  # uA
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -71,12 +70,11 @@ class T1(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as pls:
-            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
+            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
@@ -86,6 +84,8 @@ class T1(Base):
                 out_ports=self.readout_port,
             )
             pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
+
+            self._jpa_setup(pls)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -109,7 +109,7 @@ class T1(Base):
 
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = sin2(control_ns)
+            control_envelope = sin2(control_ns, self.drag)
             control_pulse = pls.setup_template(
                 self.control_port,
                 group=0,
@@ -134,11 +134,15 @@ class T1(Base):
                 T += self.readout_duration
                 T += self.wait_delay  # Wait for decay
 
+            T = self._jpa_tweak(T, pls)
+
             # **************************
             # *** Run the experiment ***
             # **************************
             pls.run(period=T, repeat_count=1, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
+
+            self._jpa_stop(pls)
 
         if save:
             return self.save()
@@ -284,6 +288,7 @@ class T1(Base):
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel(r"Control-readout delay [μs]")
         ax3.set_title("T1 = {:s} μs".format(format_precision(1e6 * T1, 1e6 * T1_err)))
+        ax3.grid()
         fig3.show()
         ret_fig.append(fig3)
 

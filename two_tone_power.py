@@ -9,13 +9,10 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import lockin
 from presto.utils import ProgressBar, rotate_opt
 
 from _base import Base
-
-DAC_CURRENT = 40_500  # uA
 
 
 class TwoTonePower(Base):
@@ -60,16 +57,13 @@ class TwoTonePower(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, 0.0)
-            lck.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
-            lck.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
+            lck.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
+            lck.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.readout_port, 0)
             lck.hardware.set_inv_sinc(self.control_port, 0)
-            # if USE_JPA:
-            #     lck.hardware.set_lmx(jpa_pump_freq, jpa_pump_pwr)
 
             nr_amps = len(self.control_amp_arr)
 
@@ -92,7 +86,7 @@ class TwoTonePower(Base):
                 out_ports=self.readout_port,
             )
             lck.hardware.configure_mixer(
-                freq=self.control_freq_arr[0],
+                freq=self.control_freq_arr[nr_freq // 2],
                 out_ports=self.control_port,
             )
 
@@ -112,6 +106,7 @@ class TwoTonePower(Base):
             ig.set_frequencies(0.0)
 
             lck.apply_settings()
+            lck.hardware.dac_autoconfig = False
 
             pb = ProgressBar(nr_amps * nr_freq)
             pb.start()
@@ -141,11 +136,6 @@ class TwoTonePower(Base):
             ogr.set_amplitudes(0.0)
             ogc.set_amplitudes(0.0)
             lck.apply_settings()
-            # if USE_JPA:
-            #     lck.hardware.set_lmx(0.0, 0)
-        # if USE_JPA:
-        #     mla.lockin.set_dc_offset(jpa_bias_port, 0.0)
-        #     mla.disconnect()
 
         return self.save()
 
@@ -273,7 +263,7 @@ class TwoTonePower(Base):
         cb.set_label(f"{title:s} [{unit:s}]")
 
         if linecut:
-            ax2 = fig1.add_subplot(gs[-1, 0])  # pyright: ignore [reportUnboundVariable]
+            ax2 = fig1.add_subplot(gs[-1, 0])  # pyright: ignore [reportPossiblyUnboundVariable]
 
             (line_a,) = ax2.plot(1e-9 * self.control_freq_arr, data[self._AMP_IDX], animated=blit)
 
@@ -308,7 +298,7 @@ class TwoTonePower(Base):
                         update()
 
             def update():
-                line_sel.set_ydata([amp_dBFS[self._AMP_IDX], amp_dBFS[self._AMP_IDX]])  # pyright: ignore [reportUnboundVariable]
+                line_sel.set_ydata([amp_dBFS[self._AMP_IDX], amp_dBFS[self._AMP_IDX]])  # pyright: ignore [reportPossiblyUnboundVariable]
                 # ax1.set_title(f"amp = {amp_arr[self._AMP_IDX]:.2e}")
                 print(
                     f"drive amp {self._AMP_IDX:d}: {self.control_amp_arr[self._AMP_IDX]:.2e} FS = {amp_dBFS[self._AMP_IDX]:.1f} dBFS"
@@ -317,7 +307,7 @@ class TwoTonePower(Base):
                 # ax2.set_title("")
                 if blit:
                     fig1.canvas.restore_region(self._bg)  # type: ignore
-                    ax1.draw_artist(line_sel)  # pyright: ignore [reportUnboundVariable]
+                    ax1.draw_artist(line_sel)  # pyright: ignore [reportPossiblyUnboundVariable]
                     ax2.draw_artist(line_a)
                     fig1.canvas.blit(fig1.bbox)
                     # fig1.canvas.flush_events()
@@ -332,8 +322,8 @@ class TwoTonePower(Base):
             fig1.canvas.draw()
             # fig1.canvas.flush_events()
             self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # type: ignore
-            ax1.draw_artist(line_sel)  # pyright: ignore [reportUnboundVariable]
-            ax2.draw_artist(line_a)  # pyright: ignore [reportUnboundVariable]
+            ax1.draw_artist(line_sel)  # pyright: ignore [reportPossiblyUnboundVariable]
+            ax2.draw_artist(line_a)  # pyright: ignore [reportPossiblyUnboundVariable]
             fig1.canvas.blit(fig1.bbox)
 
         return fig1

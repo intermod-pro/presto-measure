@@ -2,19 +2,17 @@
 """
 2D sweep of DC bias and frequency of probe to find the modulation curve of the JPA.
 """
+
 from typing import List, Optional, Union
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode, Hardware
 from presto import lockin
 from presto.utils import ProgressBar
 
 from _base import Base
-
-DAC_CURRENT = 40_500  # uA
 
 
 class SweepFreqAndDC(Base):
@@ -59,11 +57,10 @@ class SweepFreqAndDC(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, 0.0)
-            lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
+            lck.hardware.set_dac_current(self.output_port, self.DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
 
             nr_bias = len(self.bias_arr)
@@ -81,7 +78,9 @@ class SweepFreqAndDC(Base):
             max_bias = max(self.bias_arr)
             min_bias = min(self.bias_arr)
             active_bias, active_range = lck.hardware.get_dc_bias(self.bias_port, get_range=True)
-            active_range_max_voltage, active_range_min_voltage = Hardware._dc_max_min(active_range)
+            active_range_max_voltage, active_range_min_voltage = lck.hardware._dc_max_min(
+                active_range
+            )
             if max_bias > active_range_max_voltage or min_bias < active_range_min_voltage:
                 if max_bias > 10 or min_bias < 10:
                     raise ValueError("Value of DC bias has to be between -10 and 10V")

@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator with and without a π/2 control pulse."""
+
 from typing import Optional
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import sin2, untwist_downconversion
 
 from _base import Base
-
-DAC_CURRENT = 40_500  # uA
 
 IDX_LOW = 0
 IDX_HIGH = -1
@@ -72,8 +70,7 @@ class ExcitedSweep(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as pls:
             # figure out frequencies
             assert self.readout_freq_center > (self.readout_freq_span / 2)
@@ -87,9 +84,9 @@ class ExcitedSweep(Base):
             self.readout_nco = self.readout_freq_center - readout_if_center
             self.readout_freq_arr = self.readout_nco + self.readout_if_arr
 
-            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
+            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
@@ -130,7 +127,7 @@ class ExcitedSweep(Base):
 
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = sin2(control_ns)
+            control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 self.control_port, group=0, template=control_envelope, envelope=False
             )
@@ -161,10 +158,6 @@ class ExcitedSweep(Base):
             pls.run(period=T, repeat_count=self.readout_freq_nr, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
 
-            # if self.jpa_params is not None:
-            #     pls.hardware.set_lmx(0.0, 0.0, self.jpa_params['pump_port'])
-            #     pls.hardware.set_dc_bias(0.0, self.jpa_params['bias_port'])
-
         return self.save()
 
     def save(self, save_filename: Optional[str] = None) -> str:
@@ -191,8 +184,6 @@ class ExcitedSweep(Base):
             drag = float(h5f.attrs["drag"])  # type: ignore
             readout_nco = float(h5f.attrs["readout_nco"])  # type: ignore
 
-            # jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
-
             readout_freq_arr: npt.NDArray[np.float64] = h5f["readout_freq_arr"][()]  # type: ignore
             readout_if_arr: npt.NDArray[np.float64] = h5f["readout_if_arr"][()]  # type: ignore
             t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
@@ -214,7 +205,6 @@ class ExcitedSweep(Base):
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
-            # jpa_params=jpa_params,
             drag=drag,
         )
         self.readout_freq_arr = readout_freq_arr
@@ -312,10 +302,10 @@ class ExcitedSweep(Base):
 
         print("----------------")
         if _has_resonator_tools:
-            port_g = circuit.notch_port(  # pyright: ignore [reportUnboundVariable]
+            port_g = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
                 self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
             )
-            port_e = circuit.notch_port(  # pyright: ignore [reportUnboundVariable]
+            port_e = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
                 self.readout_freq_arr, resp_H_arr[1, :] * np.exp(-1j * background)
             )
             port_g.autofit()
@@ -338,8 +328,8 @@ class ExcitedSweep(Base):
 
         for ax_ in ax2:
             if _has_resonator_tools:
-                ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)  # pyright: ignore [reportUnboundVariable]
-                ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)  # pyright: ignore [reportUnboundVariable]
+                ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
+                ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
             ax_.axvline(1e-9 * popt[0], ls="--", c="C5", alpha=0.5)
 
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="C0", label="|g>")
@@ -351,13 +341,13 @@ class ExcitedSweep(Base):
         if _has_resonator_tools:
             ax21.plot(
                 1e-9 * port_g.f_data,  # pyright: ignore
-                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportUnboundVariable]
+                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
                 c="C3",
                 ls="--",
             )
             ax21.plot(
                 1e-9 * port_e.f_data,  # pyright: ignore
-                20 * np.log10(np.abs(port_e.z_data_sim)),  # pyright: ignore [reportUnboundVariable]
+                20 * np.log10(np.abs(port_e.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
                 c="C4",
                 ls="--",
             )
@@ -377,6 +367,9 @@ class ExcitedSweep(Base):
         ax2[-1].set_xlabel("Readout frequency [GHz]")
         ax21.legend(ncol=2, loc="lower right")
         ax23.legend(loc="upper right")
+        ax21.grid()
+        ax22.grid()
+        ax23.grid()
         fig2.show()
         ret_fig.append(fig2)
 

@@ -10,13 +10,11 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 
-from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import rotate_opt, sin2
 
 from _base import Base
 
-DAC_CURRENT = 40_500  # uA
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -75,8 +73,7 @@ class TwoTonePulsed(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            adc_mode=AdcMode.Mixed,
-            dac_mode=DacMode.Mixed,
+            **self.DC_PARAMS,
         ) as pls:
             # figure out frequencies
             assert self.control_freq_center > (self.control_freq_span / 2)
@@ -88,9 +85,9 @@ class TwoTonePulsed(Base):
             control_nco = self.control_freq_center - control_if_center
             self.control_freq_arr = control_nco + control_if_arr
 
-            pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
-            pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
+            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
+            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
@@ -100,6 +97,8 @@ class TwoTonePulsed(Base):
                 out_ports=self.readout_port,
             )
             pls.hardware.configure_mixer(freq=control_nco, out_ports=self.control_port)
+
+            self._jpa_setup(pls)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -133,7 +132,7 @@ class TwoTonePulsed(Base):
             # and use setup_template to use the user-defined envelope
             # number of samples in the control template
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = sin2(control_ns)
+            control_envelope = sin2(control_ns, self.drag)
             control_pulse = pls.setup_template(
                 self.control_port,
                 group=0,
@@ -158,6 +157,8 @@ class TwoTonePulsed(Base):
             pls.next_frequency(T, self.control_port)  # Move to next control frequency
             T += self.wait_delay  # Wait for decay
 
+            T = self._jpa_tweak(T, pls)
+
             # **************************
             # *** Run the experiment ***
             # **************************
@@ -165,6 +166,8 @@ class TwoTonePulsed(Base):
             # then average `num_averages` times
             pls.run(period=T, repeat_count=self.control_freq_nr, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
+
+            self._jpa_stop(pls)
 
         return self.save()
 
@@ -268,33 +271,52 @@ class TwoTonePulsed(Base):
             unit = "m"
             mult = 1e3
 
-        fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-        ax21, ax22, ax23, ax24 = ax2
-        ax21.plot(1e-9 * self.control_freq_arr, mult * np.abs(data))
-        ax22.plot(1e-9 * self.control_freq_arr, np.angle(data))
-        ax23.plot(1e-9 * self.control_freq_arr, mult * np.real(data))
         try:
             data_min = data.real.min()
             data_max = data.real.max()
             data_rng = data_max - data_min
             p0 = [self.control_freq_center, self.control_freq_span / 4, data_rng, data_min]
             popt, _ = curve_fit(_gaussian, self.control_freq_arr, data.real, p0)
-            ax23.plot(
-                1e-9 * self.control_freq_arr, mult * _gaussian(self.control_freq_arr, *popt), "--"
-            )
             print(f"f0 = {popt[0]} Hz")
             print(f"sigma = {abs(popt[1])} Hz")
         except Exception:
             print("fit failed")
-        ax24.plot(1e-9 * self.control_freq_arr, mult * np.imag(data))
+            popt = None
 
-        ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
-        ax22.set_ylabel("Phase [rad]")
-        ax23.set_ylabel(f"I [{unit:s}FS]")
-        ax24.set_ylabel(f"Q [{unit:s}FS]")
-        ax2[-1].set_xlabel("Control frequency [GHz]")
-        fig2.show()
-        ret_fig.append(fig2)
+        if all_plots:
+            fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
+            ax21, ax22, ax23, ax24 = ax2
+            ax21.plot(1e-9 * self.control_freq_arr, mult * np.abs(data))
+            ax22.plot(1e-9 * self.control_freq_arr, np.angle(data))
+            ax23.plot(1e-9 * self.control_freq_arr, mult * np.real(data))
+            ax24.plot(1e-9 * self.control_freq_arr, mult * np.imag(data))
+            if popt is not None:
+                ax23.plot(
+                    1e-9 * self.control_freq_arr,
+                    mult * _gaussian(self.control_freq_arr, *popt),
+                    "--",
+                )
+
+            ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
+            ax22.set_ylabel("Phase [rad]")
+            ax23.set_ylabel(f"I [{unit:s}FS]")
+            ax24.set_ylabel(f"Q [{unit:s}FS]")
+            ax2[-1].set_xlabel("Control frequency [GHz]")
+            fig2.show()
+            ret_fig.append(fig2)
+
+        # bigger plot just for I quadrature
+        fig3, ax3 = plt.subplots(tight_layout=True)
+        ax3.plot(1e-9 * self.control_freq_arr, mult * np.real(data), ".")
+        if popt is not None:
+            ax3.plot(
+                1e-9 * self.control_freq_arr, mult * _gaussian(self.control_freq_arr, *popt), "--"
+            )
+        ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
+        ax3.set_xlabel(r"Control frequency [GHz]")
+        ax3.grid()
+        fig3.show()
+        ret_fig.append(fig3)
 
         return ret_fig
 
