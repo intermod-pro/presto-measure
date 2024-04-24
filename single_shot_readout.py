@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Measure Rabi oscillation by changing the amplitude of the control pulse.
-
-The control pulse has a sin^2 envelope, while the readout pulse is square.
+Perform single-shot readout with template matching and build IQ cloud.
 """
+
 import ast
 import math
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import h5py
 import numpy as np
 import warnings
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import format_precision, rotate_opt, sin2, recommended_dac_config
 
@@ -20,7 +19,7 @@ from _base import Base
 DAC_CURRENT = 32_000  # uA
 CONVERTER_CONFIGURATION = {
     "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
+    "dac_mode": DacMode.Mixed,
 }
 
 
@@ -40,9 +39,9 @@ class SingleShotReadout(Base):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        template_match_start: float,
-        template_match_duration=None,
-        template_match_phase=0.0,
+        template_match_delay: float,
+        template_match_duration: Optional[float] = None,
+        template_match_phase: float = 0.0,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -58,8 +57,8 @@ class SingleShotReadout(Base):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.template_match_start = template_match_start
-        if template_match_duration == None:
+        self.template_match_delay = template_match_delay
+        if template_match_duration is None:
             self.template_match_duration = sample_duration
         else:
             self.template_match_duration = template_match_duration
@@ -76,25 +75,13 @@ class SingleShotReadout(Base):
         presto_port: int = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        list_of_ports = [self.readout_port, self.control_port]
-        list_of_freq = [self.readout_freq, self.control_freq]
-        dac_mode, dac_fsample = recommended_dac_config_all_tiles(
-            presto_address,
-            list_of_ports=list_of_ports,
-            list_of_freq=list_of_freq,
-            ext_ref_clk=ext_ref_clk,
-        )
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
             **CONVERTER_CONFIGURATION,
         ) as pls:
-            assert pls.hardware is not None
-
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -105,12 +92,9 @@ class SingleShotReadout(Base):
                 self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,
-            )  # sync in next call
+            )
 
-            pls.hardware.configure_mixer(
-                self.control_freq, out_ports=self.control_port, sync=True
-            )  # sync here
+            pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -166,7 +150,7 @@ class SingleShotReadout(Base):
 
                 pls.output_pulse(T, [readout_pulse])
                 pls.store(T + self.readout_sample_delay)
-                pls.match(T + self.template_match_start, [match_events])
+                pls.match(T + self.template_match_delay, match_events)
                 T += self.readout_duration + self.wait_delay
 
             # **************************
@@ -180,26 +164,26 @@ class SingleShotReadout(Base):
         return self.save()
 
     def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "SingleShotReadout":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            template_match_start = h5f.attrs["template_match_start"]
-            template_match_duration = h5f.attrs["template_match_duration"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            template_match_delay = float(h5f.attrs["template_match_delay"])  # type: ignore
+            template_match_duration = float(h5f.attrs["template_match_duration"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
             t_arr = h5f["t_arr"][()]
             store_arr = h5f["store_arr"][()]
@@ -223,7 +207,7 @@ class SingleShotReadout(Base):
             sample_port=sample_port,
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
-            template_match_start=template_match_start,
+            template_match_delay=template_match_delay,
             template_match_duration=template_match_duration,
             num_averages=num_averages,
             drag=drag,
@@ -248,8 +232,8 @@ class SingleShotReadout(Base):
         ret_fig = []
 
         fs = 1 / (self.t_arr[1] - self.t_arr[0])
-        IDX_LOW = int(round(self.template_match_start * fs))
-        IDX_HIGH = int(round((self.template_match_start + self.template_match_duration) * fs))
+        IDX_LOW = int(round(self.template_match_delay * fs))
+        IDX_HIGH = int(round((self.template_match_delay + self.template_match_duration) * fs))
         t_low = self.t_arr[IDX_LOW]
         t_high = self.t_arr[IDX_HIGH]
 
@@ -300,49 +284,3 @@ class SingleShotReadout(Base):
         ret_fig.append(fig2)
 
         return ret_fig
-
-
-def recommended_dac_config_all_tiles(
-    presto_address: str,
-    list_of_ports: List[int],
-    list_of_freq: List[float],
-    ext_ref_clk: bool = False,
-):
-    if len(list_of_ports) != len(list_of_freq):
-        raise ValueError("list_of_ports and list_of_freq must have the same len")
-    dac_mode = []
-    dac_fsample = []
-    with pulsed.Pulsed(address=presto_address, ext_ref_clk=ext_ref_clk) as pls:
-        list_of_tiles = [pls.hardware._port_to_tile(port, "dac") for port in list_of_ports]
-    for tile in range(4):
-        nr_occurances = list_of_tiles.count(tile)
-        if nr_occurances < 1:
-            dac_mode.append(DacMode.Mixed02)
-            dac_fsample.append(DacFSample.G6)
-        elif nr_occurances == 1:
-            index = list_of_tiles.index(tile)
-            dac_mode_temp, dac_fsample_temp = recommended_dac_config(list_of_freq[index])
-            dac_mode.append(dac_mode_temp)
-            dac_fsample.append(dac_fsample_temp)
-        else:
-            indices = np.where(np.array(list_of_tiles) == tile)[0]
-            dac_mode_list = []
-            dac_fsample_list = []
-            for i in indices:
-                dac_mode_temp, dac_fsample_temp = recommended_dac_config(list_of_freq[i])
-                dac_mode_list.append(dac_mode_temp)
-                dac_fsample_list.append(dac_fsample_temp)
-            if dac_mode_list.count(dac_mode_list[0]) == len(
-                dac_mode_list
-            ) and dac_fsample_list.count(dac_fsample_list[0]) == len(dac_fsample_list):
-
-                dac_mode.append(dac_mode_list[0])
-                dac_fsample.append(dac_fsample_list[0])
-            # elif: add option if it is not recommended
-            else:
-                dac_mode.append(dac_mode_list[0])
-                dac_fsample.append(dac_fsample_list[0])
-                warnings.warn(
-                    f"Warning: It might not be possible to output all desired frequencies on tile {tile}. Consider outputting some frequencies on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-                )
-    return dac_mode, dac_fsample
