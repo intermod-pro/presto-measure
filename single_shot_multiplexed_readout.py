@@ -19,11 +19,7 @@ from presto.utils import format_precision, rotate_opt, sin2, plot_sequence
 
 from _base import Base
 
-DAC_CURRENT = 40_500  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "dac_mode": DacMode.Mixed,
-}
+DAC_CURRENT = 32_000  # uA
 
 
 class SingleShotMultiplexedReadout(Base):
@@ -82,7 +78,8 @@ class SingleShotMultiplexedReadout(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             assert pls.hardware is not None
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
