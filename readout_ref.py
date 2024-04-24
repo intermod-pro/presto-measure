@@ -8,8 +8,9 @@ from typing import Optional
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.pulsed import MAX_TEMPLATE_LEN
 from presto.utils import sin2, to_pm_pi
@@ -17,14 +18,8 @@ from presto.utils import sin2, to_pm_pi
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
-}
-IDX_LOW = 1_500
-IDX_HIGH = 2_000
+IDX_LOW = 0
+IDX_HIGH = -1
 
 
 class ReadoutRef(Base):
@@ -43,9 +38,9 @@ class ReadoutRef(Base):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: dict = None,
+        jpa_params: Optional[dict] = None,
         drag: float = 0.0,
-        clear: dict = None,
+        clear: Optional[dict] = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -71,7 +66,7 @@ class ReadoutRef(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -79,7 +74,8 @@ class ReadoutRef(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -90,12 +86,10 @@ class ReadoutRef(Base):
                 freq=self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,  # sync in next call
             )
             pls.hardware.configure_mixer(
                 freq=self.control_freq,
                 out_ports=self.control_port,
-                sync=True,  # sync here
             )
             if self.jpa_params is not None:
                 pls.hardware.set_lmx(
@@ -156,17 +150,17 @@ class ReadoutRef(Base):
                 from presto._clear import clear
 
                 lens, amps = clear(self.readout_duration * 1e9, **self.clear)
-                lens = [int(round(l * pls.get_fs("dac"))) for l in lens]
+                lens = [int(round(d * pls.get_fs("dac"))) for d in lens]
 
                 readout_ns = int(
                     round(self.readout_duration * pls.get_fs("dac"))
                 )  # number of samples in the control template
                 readout_envelope = np.zeros(readout_ns)
                 start = 0
-                for l, a in zip(lens, amps):
-                    stop = start + l
+                for d, a in zip(lens, amps):
+                    stop = start + d
                     readout_envelope[start:stop] = a
-                    start += l
+                    start += d
                 readout_envelope *= self.readout_amp
 
                 readout_pulse = pls.setup_template(
@@ -240,37 +234,37 @@ class ReadoutRef(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_lmx(0.0, 0, self.jpa_params["pump_port"])
                 pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "ReadoutRef":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
-            drag = h5f.attrs["drag"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            drag = float(h5f.attrs["drag"])  # type: ignore
 
-            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
-            clear = ast.literal_eval(h5f.attrs["clear"])
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
+            clear: dict = ast.literal_eval(h5f.attrs["clear"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.float64] = h5f["store_arr"][()]  # type: ignore
 
         self = cls(
             readout_freq=readout_freq,

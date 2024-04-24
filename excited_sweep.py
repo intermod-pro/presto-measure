@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator with and without a π/2 control pulse."""
+
+from typing import Optional
+
 import h5py
 import numpy as np
-import warnings
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import sin2, untwist_downconversion, recommended_dac_config
+from presto.utils import sin2, untwist_downconversion
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 
 IDX_LOW = 0
 IDX_HIGH = -1
@@ -66,41 +65,17 @@ class ExcitedSweep(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        with pulsed.Pulsed(
-            address=presto_address, port=presto_port, ext_ref_clk=ext_ref_clk, dry_run=True
-        ) as pls:
-            control_tile = pls.hardware._port_to_tile(self.control_port, "dac")
-            readout_tile = pls.hardware._port_to_tile(self.readout_port, "dac")
-        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq_center)
-        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq)
-        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
-        elif control_tile != readout_tile:
-            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
-            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
-            dac_mode[control_tile] = dac_mode_c
-            dac_fsample[control_tile] = dac_fsample_c
-        else:
-            warnings.warn(
-                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-            )
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
-            assert pls.hardware is not None
-
             # figure out frequencies
             assert self.readout_freq_center > (self.readout_freq_span / 2)
             assert self.readout_freq_span < pls.get_fs("dac") / 2  # fits in HSB
@@ -123,11 +98,8 @@ class ExcitedSweep(Base):
                 freq=self.readout_nco,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,
-            )  # sync in next call
-            pls.hardware.configure_mixer(
-                self.control_freq, out_ports=self.control_port, sync=True
-            )  # sync here
+            )
+            pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -196,36 +168,36 @@ class ExcitedSweep(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "ExcitedSweep":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq_center = h5f.attrs["readout_freq_center"]
-            readout_freq_span = h5f.attrs["readout_freq_span"]
-            readout_freq_nr = h5f.attrs["readout_freq_nr"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
-            drag = h5f.attrs["drag"]
-            readout_nco = h5f.attrs["readout_nco"]
+            readout_freq_center = float(h5f.attrs["readout_freq_center"])  # type: ignore
+            readout_freq_span = float(h5f.attrs["readout_freq_span"])  # type: ignore
+            readout_freq_nr = int(h5f.attrs["readout_freq_nr"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            drag = float(h5f.attrs["drag"])  # type: ignore
+            readout_nco = float(h5f.attrs["readout_nco"])  # type: ignore
 
             # jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            readout_freq_arr = h5f["readout_freq_arr"][()]
-            readout_if_arr = h5f["readout_if_arr"][()]
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            readout_freq_arr: npt.NDArray[np.float64] = h5f["readout_freq_arr"][()]  # type: ignore
+            readout_if_arr: npt.NDArray[np.float64] = h5f["readout_if_arr"][()]  # type: ignore
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
 
         self = cls(
             readout_freq_center=readout_freq_center,
@@ -337,14 +309,14 @@ class ExcitedSweep(Base):
             np.max(separation),
             0.0,
         ]
-        popt, pcov = curve_fit(_gaussian, self.readout_freq_arr, separation, p0)
+        popt, _ = curve_fit(_gaussian, self.readout_freq_arr, separation, p0)
 
         print("----------------")
         if _has_resonator_tools:
-            port_g = circuit.notch_port(
+            port_g = circuit.notch_port(  # pyright: ignore [reportUnboundVariable]
                 self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
             )
-            port_e = circuit.notch_port(
+            port_e = circuit.notch_port(  # pyright: ignore [reportUnboundVariable]
                 self.readout_freq_arr, resp_H_arr[1, :] * np.exp(-1j * background)
             )
             port_g.autofit()
@@ -367,8 +339,8 @@ class ExcitedSweep(Base):
 
         for ax_ in ax2:
             if _has_resonator_tools:
-                ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)
-                ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)
+                ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)  # pyright: ignore [reportUnboundVariable]
+                ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)  # pyright: ignore [reportUnboundVariable]
             ax_.axvline(1e-9 * popt[0], ls="--", c="C5", alpha=0.5)
 
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="C0", label="|g>")
@@ -379,19 +351,19 @@ class ExcitedSweep(Base):
 
         if _has_resonator_tools:
             ax21.plot(
-                1e-9 * port_g.f_data,
-                20 * np.log10(np.abs(port_g.z_data_sim)),
+                1e-9 * port_g.f_data,  # pyright: ignore
+                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportUnboundVariable]
                 c="C3",
                 ls="--",
             )
             ax21.plot(
-                1e-9 * port_e.f_data,
-                20 * np.log10(np.abs(port_e.z_data_sim)),
+                1e-9 * port_e.f_data,  # pyright: ignore
+                20 * np.log10(np.abs(port_e.z_data_sim)),  # pyright: ignore [reportUnboundVariable]
                 c="C4",
                 ls="--",
             )
-            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="C3", ls="--")
-            ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="C4", ls="--")
+            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="C3", ls="--")  # pyright: ignore
+            ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="C4", ls="--")  # pyright: ignore
 
         ax23.plot(
             1e-9 * self.readout_freq_arr,

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-2D sweep of DC bias and frequency of probe to find the modulation curve of the JPA.
+Simple frequency sweep using the Lockin mode.
 """
 from typing import List, Optional, Union
 
@@ -17,7 +17,7 @@ from _base import Base
 DAC_CURRENT = 32_000  # uA
 
 
-class JpaSweepBias(Base):
+class SweepFreqAndDC(Base):
     def __init__(
         self,
         freq_center: float,
@@ -62,28 +62,26 @@ class JpaSweepBias(Base):
         ) as lck:
             lck.hardware.set_adc_attenuation(self.input_port, 0.0)
             lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
+            lck.hardware.set_dac_current(self.bias_port, DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
+            lck.hardware.set_inv_sinc(self.bias_port, 0)
 
-            nr_bias = len(self.bias_arr)
+            # tune frequencies
             _, self.df = lck.tune(0.0, self.df)
-
             f_start = self.freq_center - self.freq_span / 2
             f_stop = self.freq_center + self.freq_span / 2
             n_start = int(round(f_start / self.df))
             n_stop = int(round(f_stop / self.df))
             n_arr = np.arange(n_start, n_stop + 1)
             nr_freq = len(n_arr)
+            nr_bias = len(self.bias_arr)
             self.freq_arr = self.df * n_arr
             self.resp_arr = np.zeros((nr_bias, nr_freq), np.complex128)
 
-            lck.hardware.set_dc_bias(self.bias_arr[0], self.bias_port)
-            lck.hardware.sleep(1.0, False)
-
             lck.hardware.configure_mixer(
-                freq=self.freq_arr[0],
-                in_ports=self.input_port,
-                out_ports=self.output_port,
+                freq=self.freq_arr[0], in_ports=self.input_port, out_ports=self.output_port
             )
+            lck.hardware.configure_mixer(freq=0.0, out_ports=self.bias_port)
 
             lck.set_df(self.df)
             og = lck.add_output_group(self.output_port, 1)
@@ -91,24 +89,28 @@ class JpaSweepBias(Base):
             og.set_amplitudes(self.amp)
             og.set_phases(0.0, 0.0)
 
+            og_b = lck.add_output_group(self.bias_port, 1)
+            og_b.set_frequencies(0.0)
+            og_b.set_amplitudes(self.bias_arr[0])
+            og_b.set_phases(0.0, 0.0)
+
             lck.set_dither(self.dither, self.output_port)
+
             ig = lck.add_input_group(self.input_port, 1)
             ig.set_frequencies(0.0)
 
             lck.apply_settings()
 
-            pb = ProgressBar(nr_bias * nr_freq)
+            pb = ProgressBar(nr_freq)
             pb.start()
-            for jj, bias in enumerate(self.bias_arr):
-                lck.hardware.set_dc_bias(bias, self.bias_port)
-                lck.hardware.sleep(1.0, False)
-
-                for ii, freq in enumerate(self.freq_arr):
-                    lck.hardware.configure_mixer(
-                        freq=freq,
-                        in_ports=self.input_port,
-                        out_ports=self.output_port,
-                    )
+            for ii in range(len(n_arr)):
+                f = self.freq_arr[ii]
+                lck.hardware.configure_mixer(
+                    freq=f, in_ports=self.input_port, out_ports=self.output_port
+                )
+                lck.apply_settings()
+                for jj, bias in enumerate(self.bias_arr):
+                    og_b.set_amplitudes(bias)
                     lck.apply_settings()
 
                     _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
@@ -118,14 +120,14 @@ class JpaSweepBias(Base):
 
                     self.resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
 
-                    pb.increment()
+                pb.increment()
 
             pb.done()
 
             # Mute outputs at the end of the sweep
             og.set_amplitudes(0.0)
+            og_b.set_amplitudes(0.0)
             lck.apply_settings()
-            lck.hardware.set_dc_bias(0.0, self.bias_port)
 
         return self.save()
 
@@ -133,7 +135,7 @@ class JpaSweepBias(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "JpaSweepBias":
+    def load(cls, load_filename: str) -> "SweepFreqAndDC":
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore
@@ -156,31 +158,26 @@ class JpaSweepBias(Base):
             df=df,
             num_averages=num_averages,
             amp=amp,
-            bias_arr=bias_arr,
             output_port=output_port,
             input_port=input_port,
             bias_port=bias_port,
             dither=dither,
             num_skip=num_skip,
+            bias_arr=bias_arr,
         )
+
         self.freq_arr = freq_arr
         self.resp_arr = resp_arr
 
         return self
 
     def analyze(self, quantity: str):
-        assert self.freq_arr is not None
-        assert self.resp_arr is not None
+        if self.freq_arr is None:
+            raise RuntimeError
+        if self.resp_arr is None:
+            raise RuntimeError
 
         import matplotlib.pyplot as plt
-
-        # fig, ax = plt.subplots()
-        # x = self.freq_arr
-        # y = np.unwrap(np.angle(self.resp_arr[0, :]))
-        # pfit = np.polyfit(x, y, 1)
-        # y -= np.polyval(pfit, x)
-        # ax.plot(self.freq_arr, y)
-        # fig.show()
 
         if quantity == "amplitude":
             data = np.abs(self.resp_arr)
@@ -208,11 +205,9 @@ class JpaSweepBias(Base):
         else:
             raise ValueError
 
-        # choose limits for colorbar
-        cutoff = 10.0  # %
+        cutoff = 5.0  # %
         lowlim = np.percentile(data, cutoff)
         highlim = np.percentile(data, 100.0 - cutoff)
-
         # extent
         x_min = 1e-9 * self.freq_arr[0]
         x_max = 1e-9 * self.freq_arr[-1]
@@ -234,6 +229,7 @@ class JpaSweepBias(Base):
         ax1.set_ylabel("Bias [V]")
         cb = fig1.colorbar(im)
         cb.set_label(label)
+        plt.show()
         fig1.show()
 
-        return fig1
+        return [fig1]

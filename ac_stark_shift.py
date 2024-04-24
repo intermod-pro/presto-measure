@@ -4,26 +4,21 @@
 Measure Ramsey oscillations while driving the resonator with variable power.
 """
 import ast
-from typing import List
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
 from presto.utils import rotate_opt, sin2
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G4,
-    "dac_mode": [DacMode.Mixed42, DacMode.Mixed02, DacMode.Mixed02, DacMode.Mixed02],
-    "dac_fsample": [DacFSample.G10, DacFSample.G6, DacFSample.G6, DacFSample.G6],
-}
-IDX_LOW = 1_500
-IDX_HIGH = 2_000
+IDX_LOW = 0
+IDX_HIGH = -1
 
 
 class AcStarkShift(Base):
@@ -37,15 +32,15 @@ class AcStarkShift(Base):
         control_duration: float,
         sample_duration: float,
         ringup_duration: float,
-        delay_arr: List[float],
-        ringup_amp_arr: List[float],
+        delay_arr: Union[List[float], npt.NDArray[np.float64]],
+        ringup_amp_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_port: int,
         control_port: int,
         sample_port: int,
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: dict = None,
+        jpa_params: Optional[dict] = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -73,7 +68,7 @@ class AcStarkShift(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -81,10 +76,9 @@ class AcStarkShift(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
-            assert pls.hardware is not None
-
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
             pls.hardware.set_dac_current(self.control_port, DAC_CURRENT)
@@ -94,12 +88,10 @@ class AcStarkShift(Base):
                 freq=self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,  # sync in next call
             )
             pls.hardware.configure_mixer(
                 freq=self.control_freq,
                 out_ports=self.control_port,
-                sync=True,  # sync here
             )
             if self.jpa_params is not None:
                 pls.hardware.set_lmx(
@@ -242,39 +234,39 @@ class AcStarkShift(Base):
             self.t_arr, self.store_arr = pls.get_store_data()
 
             if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0.0, self.jpa_params["pump_port"])
+                pls.hardware.set_lmx(0.0, 0, self.jpa_params["pump_port"])
                 pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "AcStarkShift":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq = h5f.attrs["control_freq"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            ringup_duration = h5f.attrs["ringup_duration"]
-            delay_arr = h5f["delay_arr"][()]
-            ringup_amp_arr = h5f["ringup_amp_arr"][()]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
-            drag = h5f.attrs["drag"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            ringup_duration = float(h5f.attrs["ringup_duration"])  # type: ignore
+            delay_arr: npt.NDArray[np.float64] = h5f["delay_arr"][()]  # type: ignore
+            ringup_amp_arr: npt.NDArray[np.float64] = h5f["ringup_amp_arr"][()]  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            drag = float(h5f.attrs["drag"])  # type: ignore
 
-            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
 
         self = cls(
             readout_freq=readout_freq,

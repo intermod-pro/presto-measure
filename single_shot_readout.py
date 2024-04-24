@@ -3,24 +3,19 @@
 Perform single-shot readout with template matching and build IQ cloud.
 """
 
-import ast
-import math
-from typing import List, Tuple, Optional
+from typing import Optional
+
 import h5py
 import numpy as np
-import warnings
+import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2, recommended_dac_config
+from presto.utils import rotate_opt, sin2
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "dac_mode": DacMode.Mixed,
-}
 
 
 class SingleShotReadout(Base):
@@ -72,7 +67,7 @@ class SingleShotReadout(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -80,7 +75,8 @@ class SingleShotReadout(Base):
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, 0.0)
             pls.hardware.set_dac_current(self.readout_port, DAC_CURRENT)
@@ -159,11 +155,11 @@ class SingleShotReadout(Base):
 
             pls.run(period=T, repeat_count=1, num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
-            self.match_arr = pls.get_template_matching_data([match_events])
+            self.match_arr = pls.get_template_matching_data(match_events)
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
+    def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
@@ -185,12 +181,12 @@ class SingleShotReadout(Base):
             template_match_duration = float(h5f.attrs["template_match_duration"])  # type: ignore
             num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
-            match_arr = h5f["match_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
+            match_arr: npt.NDArray[np.float64] = h5f["match_arr"][()]  # type: ignore
 
             try:
-                drag = h5f.attrs["drag"]
+                drag = float(h5f.attrs["drag"])  # type: ignore
             except KeyError:
                 drag = 0.0
 
@@ -218,9 +214,7 @@ class SingleShotReadout(Base):
 
         return self
 
-    def analyze(
-        self, rotate_optimally: bool = True, portrait: bool = True, all_plots: bool = False
-    ):
+    def analyze(self, rotate_optimally: bool = True, all_plots: bool = False):
         if self.t_arr is None:
             raise RuntimeError
         if self.store_arr is None:

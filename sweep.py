@@ -2,20 +2,19 @@
 """
 Simple frequency sweep using the Lockin mode.
 """
+from typing import Optional
+
 import h5py
 import numpy as np
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import lockin
-from presto.utils import ProgressBar, recommended_dac_config
+from presto.utils import ProgressBar
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 
 
 class Sweep(Base):
@@ -47,20 +46,16 @@ class Sweep(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        dac_mode, dac_fsample = recommended_dac_config(self.freq_center)
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_mode=dac_mode,
-            dac_fsample=dac_fsample,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as lck:
-            assert lck.hardware is not None
-
             lck.hardware.set_adc_attenuation(self.input_port, 0.0)
             lck.hardware.set_dac_current(self.output_port, DAC_CURRENT)
             lck.hardware.set_inv_sinc(self.output_port, 0)
@@ -100,7 +95,7 @@ class Sweep(Base):
                 lck.hardware.configure_mixer(
                     freq=f, in_ports=self.input_port, out_ports=self.output_port
                 )
-                lck.hardware.sleep(1e-3, False)
+                lck.apply_settings()
 
                 _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
                 data_i = _d[self.input_port][1][:, 0]
@@ -119,24 +114,24 @@ class Sweep(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "Sweep":
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = h5f.attrs["freq_center"]
-            freq_span = h5f.attrs["freq_span"]
-            df = h5f.attrs["df"]
-            num_averages = h5f.attrs["num_averages"]
-            amp = h5f.attrs["amp"]
-            output_port = h5f.attrs["output_port"]
-            input_port = h5f.attrs["input_port"]
-            dither = h5f.attrs["dither"]
-            num_skip = h5f.attrs["num_skip"]
+            freq_center = float(h5f.attrs["freq_center"])  # type: ignore
+            freq_span = float(h5f.attrs["freq_span"])  # type: ignore
+            df = float(h5f.attrs["df"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            amp = float(h5f.attrs["amp"])  # type: ignore
+            output_port = int(h5f.attrs["output_port"])  # type: ignore
+            input_port = int(h5f.attrs["input_port"])  # type: ignore
+            dither = bool(h5f.attrs["dither"])  # type: ignore
+            num_skip = int(h5f.attrs["num_skip"])  # type: ignore
 
-            freq_arr = h5f["freq_arr"][()]
-            resp_arr = h5f["resp_arr"][()]
+            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]  # type: ignore
+            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]  # type: ignore
 
         self = cls(
             freq_center=freq_center,
@@ -191,12 +186,12 @@ class Sweep(Base):
         if _do_fit:
 
             def onselect(xmin, xmax):
-                port = circuit.notch_port(self.freq_arr, self.resp_arr)
+                port = circuit.notch_port(self.freq_arr, self.resp_arr)  # pyright: ignore[reportUnboundVariable]
                 port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
                 sim_db = 20 * np.log10(np.abs(port.z_data_sim))
-                line_fit_a.set_data(1e-9 * port.f_data, sim_db)
-                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))
-                f_min = port.f_data[np.argmin(sim_db)]
+                line_fit_a.set_data(1e-9 * port.f_data, sim_db)  # type: ignore
+                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))  # type: ignore
+                f_min = port.f_data[np.argmin(sim_db)]  # type: ignore
                 print("----------------")
                 print(f"fr = {port.fitresults['fr']}")
                 print(f"Qi = {port.fitresults['Qi_dia_corr']}")
@@ -208,11 +203,11 @@ class Sweep(Base):
                 fig1.canvas.draw()
 
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)
-            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)
+            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportUnboundVariable]
+            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportUnboundVariable]
             # keep references to span selectors
-            fig1._span_a = span_a
-            fig1._span_p = span_p
+            fig1._span_a = span_a  # type: ignore
+            fig1._span_p = span_p  # type: ignore
         fig1.show()
 
         return fig1

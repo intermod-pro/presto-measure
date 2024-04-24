@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 import ast
 import os
-
-# https://github.com/ContinuumIO/anaconda-issues/issues/905#issuecomment-232498034
-os.environ["FOR_DISABLE_CONSOLE_CTRL_HANDLER"] = "1"
 import signal
 import time
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import h5py
 from matplotlib import _pylab_helpers
 import matplotlib.pyplot as plt
 import matplotlib.widgets as mwidgets
 import numpy as np
+import numpy.typing as npt
 
 from presto.utils import format_precision
 
@@ -34,7 +32,7 @@ class CycleTs(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: List[float],
+        delay_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_port: int,
         control_port: int,
         sample_port: int,
@@ -154,7 +152,7 @@ class CycleTs(Base):
 
     def save(self, save_filename: Optional[str] = None) -> str:
         # save parameters
-        self._save_filename = super().save(__file__, save_filename=save_filename)
+        self._save_filename = super()._save(__file__, save_filename=save_filename)
         # add growable arrays
         with h5py.File(self._save_filename, "a") as h5f:
             # h5f.create_dataset('data1', data=self._data1, compression="gzip", chunks=True, maxshape=(None, self._nr_delays))
@@ -235,35 +233,31 @@ class CycleTs(Base):
     @classmethod
     def load(cls, load_filename: str) -> "CycleTs":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = float(h5f.attrs["readout_freq"])
-            control_freq = float(h5f.attrs["control_freq"])
-            readout_amp = float(h5f.attrs["readout_amp"])
-            control_amp_90 = float(h5f.attrs["control_amp_90"])
-            control_amp_180 = float(h5f.attrs["control_amp_180"])
-            readout_duration = float(h5f.attrs["readout_duration"])
-            control_duration = float(h5f.attrs["control_duration"])
-            sample_duration = float(h5f.attrs["sample_duration"])
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp_90 = float(h5f.attrs["control_amp_90"])  # type: ignore
+            control_amp_180 = float(h5f.attrs["control_amp_180"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
             delay_arr = np.array(h5f["delay_arr"])
-            readout_port = int(h5f.attrs["readout_port"])
-            control_port = int(h5f.attrs["control_port"])
-            sample_port = int(h5f.attrs["sample_port"])
-            wait_delay = float(h5f.attrs["wait_delay"])
-            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])
-            num_averages = int(h5f.attrs["num_averages"])
-            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
-            drag = float(h5f.attrs["drag"])
-            # ref_g = np.array(h5f['ref_g'])
-            # ref_e = np.array(h5f['ref_e'])
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
+            drag = float(h5f.attrs["drag"])  # type: ignore
 
-            time_start = float(h5f.attrs["time_start"])
+            time_start = float(h5f.attrs["time_start"])  # type: ignore
             time1_arr = np.array(h5f["time1_arr"])
             time2_arr = np.array(h5f["time2_arr"])
             t1_arr = np.array(h5f["t1_arr"])
             t2_arr = np.array(h5f["t2_arr"])
             t1_err_arr = np.array(h5f["t1_err_arr"])
             t2_err_arr = np.array(h5f["t2_err_arr"])
-            # data1 = np.array(h5f['data1'])
-            # data2 = np.array(h5f['data2'])
 
         self = cls(
             readout_freq=readout_freq,
@@ -350,7 +344,7 @@ class CycleTs(Base):
 
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
             span = mwidgets.SpanSelector(ax1, onselect, "horizontal", props=rectprops)
-            fig1._span = span  # keep references to span selector
+            fig1._span = span  # keep references to span selector  # type: ignore
 
         return ret_fig
 

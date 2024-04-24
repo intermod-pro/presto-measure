@@ -1,29 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Measure a Ramsey fringes pattern by changing the delay between two π/2 pulses and their frequency."""
+"""Measure a Ramsey fringes pattern by changing the frequency of two π/2 pulses and their delay."""
+
 import ast
-from typing import List
+from typing import Any, List, Optional, Union
 
 import h5py
 import numpy as np
-import warnings
+import numpy.typing as npt
 
-from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+from presto.hardware import AdcMode, DacMode
 from presto import pulsed
-from presto.utils import (
-    format_precision,
-    rotate_opt,
-    sin2,
-    si_prefix_scale,
-    recommended_dac_config,
-)
+from presto.utils import format_precision, rotate_opt, sin2, si_prefix_scale
 
 from _base import Base
 
 DAC_CURRENT = 32_000  # uA
-CONVERTER_CONFIGURATION = {
-    "adc_mode": AdcMode.Mixed,
-    "adc_fsample": AdcFSample.G2,
-}
 IDX_LOW = 0
 IDX_HIGH = -1
 
@@ -40,14 +31,14 @@ class RamseyFringes(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: List[float],
+        delay_arr: Union[List[float], npt.NDArray[np.float64]],
         readout_port: int,
         control_port: int,
         sample_port: int,
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: dict = None,
+        jpa_params: Optional[dict] = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -76,41 +67,17 @@ class RamseyFringes(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: int = None,
+        presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
     ) -> str:
-        with pulsed.Pulsed(
-            address=presto_address, port=presto_port, ext_ref_clk=ext_ref_clk
-        ) as pls:
-            control_tile = pls.hardware._port_to_tile(self.control_port, "dac")
-            readout_tile = pls.hardware._port_to_tile(self.readout_port, "dac")
-        dac_mode_r, dac_fsample_r = recommended_dac_config(self.readout_freq)
-        dac_mode_c, dac_fsample_c = recommended_dac_config(self.control_freq_center)
-        if dac_mode_c == dac_mode_r and dac_fsample_c == dac_fsample_r:
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
-        elif control_tile != readout_tile:
-            dac_mode = [dac_mode_r, dac_mode_r, dac_mode_r, dac_mode_r]
-            dac_fsample = [dac_fsample_r, dac_fsample_r, dac_fsample_r, dac_fsample_r]
-            dac_mode[control_tile] = dac_mode_c
-            dac_fsample[control_tile] = dac_fsample_c
-        else:
-            warnings.warn(
-                "Warning: The qubit and readout frequency might not be able to be output on the same tile. Consider outputting qubit tone on a different tile or manually choose the dac_mode and dac_fsample. See presto.utils.recommended_dac_config for help."
-            )
-            dac_mode = dac_mode_c
-            dac_fsample = dac_fsample_c
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            dac_fsample=dac_fsample,
-            dac_mode=dac_mode,
-            **CONVERTER_CONFIGURATION,
+            adc_mode=AdcMode.Mixed,
+            dac_mode=DacMode.Mixed,
         ) as pls:
-            assert pls.hardware is not None
-
             # figure out frequencies
             assert self.control_freq_center > (self.control_freq_span / 2)
             assert self.control_freq_span < pls.get_fs("dac") / 2  # fits in HSB
@@ -131,11 +98,8 @@ class RamseyFringes(Base):
                 self.readout_freq,
                 in_ports=self.sample_port,
                 out_ports=self.readout_port,
-                sync=False,
-            )  # sync in next call
-            pls.hardware.configure_mixer(
-                freq=control_nco, out_ports=self.control_port, sync=True
-            )  # sync here
+            )
+            pls.hardware.configure_mixer(freq=control_nco, out_ports=self.control_port)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -207,37 +171,37 @@ class RamseyFringes(Base):
 
         return self.save()
 
-    def save(self, save_filename: str = None) -> str:
-        return super().save(__file__, save_filename=save_filename)
+    def save(self, save_filename: Optional[str] = None) -> str:
+        return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
     def load(cls, load_filename: str) -> "RamseyFringes":
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = h5f.attrs["readout_freq"]
-            control_freq_center = h5f.attrs["control_freq_center"]
-            control_freq_span = h5f.attrs["control_freq_span"]
-            control_freq_nr = h5f.attrs["control_freq_nr"]
-            readout_amp = h5f.attrs["readout_amp"]
-            control_amp = h5f.attrs["control_amp"]
-            readout_duration = h5f.attrs["readout_duration"]
-            control_duration = h5f.attrs["control_duration"]
-            sample_duration = h5f.attrs["sample_duration"]
-            delay_arr = h5f["delay_arr"][()]
-            readout_port = h5f.attrs["readout_port"]
-            control_port = h5f.attrs["control_port"]
-            sample_port = h5f.attrs["sample_port"]
-            wait_delay = h5f.attrs["wait_delay"]
-            readout_sample_delay = h5f.attrs["readout_sample_delay"]
-            num_averages = h5f.attrs["num_averages"]
+            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
+            control_freq_center = float(h5f.attrs["control_freq_center"])  # type: ignore
+            control_freq_span = float(h5f.attrs["control_freq_span"])  # type: ignore
+            control_freq_nr = int(h5f.attrs["control_freq_nr"])  # type: ignore
+            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
+            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
+            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
+            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
+            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
+            delay_arr: npt.NDArray[np.float64] = h5f["delay_arr"][()]  # type: ignore
+            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
+            control_port = int(h5f.attrs["control_port"])  # type: ignore
+            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
+            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
+            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
-            jpa_params = ast.literal_eval(h5f.attrs["jpa_params"])
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
 
-            control_freq_arr = h5f["control_freq_arr"][()]
-            t_arr = h5f["t_arr"][()]
-            store_arr = h5f["store_arr"][()]
+            control_freq_arr: npt.NDArray[np.float64] = h5f["control_freq_arr"][()]  # type: ignore
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
 
             try:
-                drag = h5f.attrs["drag"]
+                drag = float(h5f.attrs["drag"])  # type: ignore
             except KeyError:
                 drag = 0.0
 
@@ -267,7 +231,7 @@ class RamseyFringes(Base):
 
         return self
 
-    def analyze(self, all_plots: bool = False, portrait: bool = True):
+    def analyze(self, all_plots: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
         assert self.control_freq_arr is not None
@@ -329,7 +293,7 @@ class RamseyFringes(Base):
         fig2 = plt.figure(figsize=(6.4, 9.6), constrained_layout=True)
         gs = fig2.add_gridspec(2, 1)
         gs1 = gs[0].subgridspec(1, 1)
-        ax2 = gs1.subplots()
+        ax2: Any = gs1.subplots()
         ax3 = fig2.add_subplot(gs[1])
 
         im = ax2.imshow(
