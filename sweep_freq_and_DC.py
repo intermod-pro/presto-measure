@@ -2,6 +2,7 @@
 """
 2D sweep of DC bias and frequency of probe to find the modulation curve of the JPA.
 """
+
 from typing import List, Optional, Union
 
 import h5py
@@ -83,7 +84,7 @@ class SweepFreqAndDC(Base):
             active_bias, active_range = lck.hardware.get_dc_bias(self.bias_port, get_range=True)
             active_range_max_voltage, active_range_min_voltage = Hardware._dc_max_min(active_range)
             if max_bias > active_range_max_voltage or min_bias < active_range_min_voltage:
-                if max_bias > 10 or min_bias < 10:
+                if max_bias > 10 or min_bias < -10:
                     raise ValueError("Value of DC bias has to be between -10 and 10V")
                 elif min_bias > 0:
                     if max_bias > 3.33:
