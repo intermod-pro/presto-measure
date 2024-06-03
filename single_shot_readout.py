@@ -120,8 +120,7 @@ class SingleShotReadout(Base):
             )
 
             # Setup sampling window
-            pls.set_store_ports(self.sample_port)
-            pls.set_store_duration(self.sample_duration)
+            pls.setup_store(self.sample_port, self.sample_duration)
 
             # Setup template matching
             shape = np.ones(int(round(self.template_match_duration * pls.get_fs("dac"))))

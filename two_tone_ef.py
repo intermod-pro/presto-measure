@@ -159,8 +159,7 @@ class TwoToneEF(Base):
             )
 
             # Setup sampling window
-            pls.set_store_ports(self.sample_port)
-            pls.set_store_duration(self.sample_duration)
+            pls.setup_store(self.sample_port, self.sample_duration)
 
             # ******************************
             # *** Program pulse sequence ***
@@ -343,7 +342,7 @@ class TwoToneEF(Base):
         if popt is not None:
             ax3.plot(1e-6 * self.alpha_arr, mult * _gaussian(self.alpha_arr, *popt), "--")
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel(r"Anharmonicity [MHz]")
+        ax3.set_xlabel(r"Anharmonicity α / 2π [MHz]")
         ax3.grid()
         fig3.show()
         ret_fig.append(fig3)

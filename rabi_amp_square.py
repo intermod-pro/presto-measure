@@ -119,8 +119,7 @@ class RabiAmp(Base):
             )
 
             # Setup sampling window
-            pls.set_store_ports(self.sample_port)
-            pls.set_store_duration(self.sample_duration)
+            pls.setup_store(self.sample_port, self.sample_duration)
 
             # ******************************
             # *** Program pulse sequence ***

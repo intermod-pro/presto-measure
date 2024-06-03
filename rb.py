@@ -220,8 +220,7 @@ class Rb(Base):
                 ),
             ]
 
-            pls.set_store_ports(self.sample_port)
-            pls.set_store_duration(self.sample_duration)
+            pls.setup_store(self.sample_port, self.sample_duration)
 
             pls.setup_scale_lut(self.control_port, 0, self.control_amp)
             pls.setup_scale_lut(self.readout_port, 0, self.readout_amp)
