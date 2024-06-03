@@ -48,15 +48,18 @@ class Base:
                 ds[ii] = line
 
             for attribute in self.__dict__:
-                if attribute.startswith("_"):
-                    # don't save private attributes
-                    continue
-                if attribute in ["jpa_params", "clear"]:
-                    h5f.attrs[attribute] = str(self.__dict__[attribute])
-                elif np.isscalar(self.__dict__[attribute]):
-                    h5f.attrs[attribute] = self.__dict__[attribute]
-                else:
-                    h5f.create_dataset(attribute, data=self.__dict__[attribute])
+                try:
+                    if attribute.startswith("_"):
+                        # don't save private attributes
+                        continue
+                    if attribute in ["jpa_params", "clear"]:
+                        h5f.attrs[attribute] = str(self.__dict__[attribute])
+                    elif np.isscalar(self.__dict__[attribute]):
+                        h5f.attrs[attribute] = self.__dict__[attribute]
+                    else:
+                        h5f.create_dataset(attribute, data=self.__dict__[attribute])
+                except Exception as err:
+                    print(f"WARN: unable to save {attribute}: {err}")
         print(f"Data saved to: {save_path}")
         return save_path
 
