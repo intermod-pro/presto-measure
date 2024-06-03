@@ -121,31 +121,21 @@ class JpaSweepPowerBias(Base):
                     lck.hardware.set_dc_bias(bias, self.bias_port)
                     lck.hardware.sleep(0.1, False)
 
-                    for ii, freq in enumerate(self.freq_arr):
-                        lck.hardware.configure_mixer(
-                            freq=freq,
-                            in_ports=self.input_port,
-                            out_ports=self.output_port,
-                        )
-                        lck.apply_settings()
-
-                        _d = lck.get_pixels(self.num_skip + self.num_averages, quiet=True)
-                        data_i = _d[self.input_port][1][:, 0]
-                        data_q = _d[self.input_port][2][:, 0]
-                        data = data_i.real + 1j * data_q.real  # using zero IF
-
-                        if kk == 0:
-                            self.ref_resp_arr[jj, ii] = np.mean(data[-self.num_averages :])
-                            self.ref_pwr_arr[jj, ii] = np.mean(
-                                np.abs(data[-self.num_averages :]) ** 2
-                            )
-                        else:
-                            self.resp_arr[kk - 1, jj, ii] = np.mean(data[-self.num_averages :])
-                            self.pwr_arr[kk - 1, jj, ii] = np.mean(
-                                np.abs(data[-self.num_averages :]) ** 2
-                            )
-
-                        pb.increment()
+                    _d = lck.sweep_nco(
+                        input_port=self.input_port,
+                        input_freqs=self.freq_arr,
+                        output_port=self.output_port,
+                        output_freqs=self.freq_arr,
+                        nr_averages=self.num_averages,
+                        status_callback=pb.increment,
+                    )
+                    data_i = _d[self.input_port][1][:, 0]
+                    data_q = _d[self.input_port][2][:, 0]
+                    data = data_i.real + 1j * data_q.real  # using zero IF
+                    if kk == 0:
+                        self.ref_resp_arr[jj, :] = data
+                    else:
+                        self.resp_arr[kk - 1, jj, :] = data
 
             pb.done()
 
