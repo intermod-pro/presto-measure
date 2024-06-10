@@ -128,7 +128,6 @@ class Rb(Base):
 
             t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
             store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
-            rb_sequences = h5f["rb_sequences"][()]  # type: ignore
 
         self = cls(
             readout_freq=readout_freq,
@@ -150,7 +149,6 @@ class Rb(Base):
         )
         self.t_arr = t_arr
         self.store_arr = store_arr
-        self._rb_sequences = rb_sequences  # type: ignore
 
         return self
 
