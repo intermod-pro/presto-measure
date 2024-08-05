@@ -463,7 +463,7 @@ def _lowpass(s):
     from scipy.signal import filtfilt, remez
 
     # b = firwin(256, 2e6, fs=1e9, pass_zero=True)
-    b = remez(256, [0, 4e6, 5e6, 0.5 * 1e9], [1, 0], Hz=1e9)
+    b = remez(256, [0, 4e6, 5e6, 0.5 * 1e9], [1, 0], fs=1e9)
     # w, h = freqz(b, fs=1e9)
     # plt.plot(w, 20*np.log10(np.abs(h)))
     # plt.show()
