@@ -39,7 +39,6 @@ class ReadoutRef(Base):
         num_averages: int,
         jpa_params: Optional[dict] = None,
         drag: float = 0.0,
-        clear: Optional[dict] = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -55,7 +54,6 @@ class ReadoutRef(Base):
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
         self.drag = drag
-        self.clear = clear
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
@@ -89,103 +87,42 @@ class ReadoutRef(Base):
                 freq=self.control_freq,
                 out_ports=self.control_port,
             )
-            if self.jpa_params is not None:
-                pls.hardware.set_lmx(
-                    self.jpa_params["pump_freq"],
-                    self.jpa_params["pump_pwr"],
-                    self.jpa_params["pump_port"],
-                )
-                pls.hardware.set_dc_bias(self.jpa_params["bias"], self.jpa_params["bias_port"])
-                pls.hardware.sleep(1.0, False)
+
+            self._jpa_setup(pls)
 
             # ************************************
             # *** Setup measurement parameters ***
             # ************************************
 
-            # Setup lookup tables for frequencies
-            pls.setup_freq_lut(
-                output_ports=self.readout_port,
-                group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
-            )
-            pls.setup_freq_lut(
-                output_ports=self.control_port,
-                group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
-            )
-
             # Setup lookup tables for amplitudes
-            pls.setup_scale_lut(
-                output_ports=self.readout_port,
-                group=0,
-                scales=1.0,  # set it in pulse
-            )
-            pls.setup_scale_lut(
-                output_ports=self.control_port,
-                group=0,
-                scales=self.control_amp,
-            )
+            pls.setup_scale_lut(self.readout_port, group=0, scales=self.readout_amp)
+            pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp)
 
             # Setup readout and control pulses
             # use setup_long_drive to create a pulse with square envelope
             # setup_long_drive supports smooth rise and fall transitions for the pulse,
             # but we keep it simple here
-            if self.clear is None:
-                readout_pulse = pls.setup_long_drive(
-                    output_port=self.readout_port,
-                    group=0,
-                    duration=self.readout_duration,
-                    amplitude=self.readout_amp,
-                    amplitude_q=self.readout_amp,
-                    rise_time=0e-9,
-                    fall_time=0e-9,
-                )
-            else:
-                from presto._clear import clear
-
-                lens, amps = clear(self.readout_duration * 1e9, **self.clear)
-                lens = [int(round(d * pls.get_fs("dac"))) for d in lens]
-
-                readout_ns = int(
-                    round(self.readout_duration * pls.get_fs("dac"))
-                )  # number of samples in the control template
-                readout_envelope = np.zeros(readout_ns)
-                start = 0
-                for d, a in zip(lens, amps):
-                    stop = start + d
-                    readout_envelope[start:stop] = a
-                    start += d
-                readout_envelope *= self.readout_amp
-
-                readout_pulse = pls.setup_template(
-                    output_port=self.readout_port,
-                    group=0,
-                    template=readout_envelope,
-                    template_q=readout_envelope,
-                    envelope=True,
-                )
+            readout_pulse = pls.setup_long_drive(
+                self.readout_port,
+                group=0,
+                duration=self.readout_duration,
+                amplitude=1.0 + 1j,
+                envelope=False,
+            )
 
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
-            control_ns = int(
-                round(self.control_duration * pls.get_fs("dac"))
-            )  # number of samples in the control template
+            control_ns = int(round(self.control_duration * pls.get_fs("dac")))
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
-                output_port=self.control_port,
+                self.control_port,
                 group=0,
-                template=control_envelope,
-                template_q=control_envelope if self.drag == 0.0 else None,
-                envelope=True,
+                template=control_envelope + 1j * control_envelope,
+                envelope=False,
             )
 
             # Setup sampling window
-            pls.set_store_ports(self.sample_port)
-            pls.set_store_duration(self.sample_duration)
+            pls.setup_store(self.sample_port, self.sample_duration)
 
             # ******************************
             # *** Program pulse sequence ***
@@ -206,19 +143,7 @@ class ReadoutRef(Base):
                 T += self.readout_duration
                 T += self.wait_delay
 
-            if self.jpa_params is not None:
-                # adjust period to minimize effect of JPA idler
-                idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
-                idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
-                idler_period = 1 / idler_if
-                T_clk = int(round(T * pls.get_clk_f()))
-                idler_period_clk = int(round(idler_period * pls.get_clk_f()))
-                # first make T a multiple of idler period
-                if T_clk % idler_period_clk > 0:
-                    T_clk += idler_period_clk - (T_clk % idler_period_clk)
-                # then make it off by one clock cycle
-                T_clk += 1
-                T = T_clk * pls.get_clk_T()
+            T = self._jpa_tweak(T, pls)
 
             # **************************
             # *** Run the experiment ***
@@ -231,9 +156,7 @@ class ReadoutRef(Base):
             )
             self.t_arr, self.store_arr = pls.get_store_data()
 
-            if self.jpa_params is not None:
-                pls.hardware.set_lmx(0.0, 0, self.jpa_params["pump_port"])
-                pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
+            self._jpa_stop(pls)
 
         return self.save()
 
@@ -259,7 +182,6 @@ class ReadoutRef(Base):
             drag = float(h5f.attrs["drag"])  # type: ignore
 
             jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
-            clear: dict = ast.literal_eval(h5f.attrs["clear"])  # type: ignore
 
             t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
             store_arr: npt.NDArray[np.float64] = h5f["store_arr"][()]  # type: ignore
@@ -280,7 +202,6 @@ class ReadoutRef(Base):
             num_averages=num_averages,
             jpa_params=jpa_params,
             drag=drag,
-            clear=clear,
         )
         self.t_arr = t_arr
         self.store_arr = store_arr
