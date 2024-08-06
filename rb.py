@@ -8,6 +8,7 @@ Requires third-party packages:
   - qiskit_experiments 0.5.4
 """
 
+import ast
 import time
 from typing import List, Optional, Tuple, TypeAlias, Union
 
@@ -49,6 +50,7 @@ class Rb(Base):
         rb_len_arr: Union[List[int], npt.NDArray[np.int64]],
         rb_nr_realizations: int,
         drag: float = 0.0,
+        jpa_params: Optional[dict] = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -66,6 +68,7 @@ class Rb(Base):
         self.rb_len_arr = np.atleast_1d(rb_len_arr).astype(np.int64)
         self.rb_nr_realizations = rb_nr_realizations
         self.drag = drag
+        self.jpa_params = jpa_params
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
@@ -126,6 +129,11 @@ class Rb(Base):
             rb_nr_realizations = int(h5f.attrs["rb_nr_realizations"])  # type: ignore
             drag = float(h5f.attrs["drag"])  # type: ignore
 
+            try:
+                jpa_params: Optional[dict] = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
+            except KeyError:
+                jpa_params = None
+
             t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
             store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
 
@@ -146,6 +154,7 @@ class Rb(Base):
             rb_len_arr=rb_len_arr,
             rb_nr_realizations=rb_nr_realizations,
             drag=drag,
+            jpa_params=jpa_params,
         )
         self.t_arr = t_arr
         self.store_arr = store_arr
@@ -172,14 +181,17 @@ class Rb(Base):
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
             pls.hardware.configure_mixer(
-                self.control_freq,
-                out_ports=self.control_port,
-            )
-            pls.hardware.configure_mixer(
                 self.readout_freq,
-                out_ports=self.readout_port,
                 in_ports=self.sample_port,
+                out_ports=self.readout_port,
             )
+            pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
+
+            self._jpa_setup(pls)
+
+            pls.setup_scale_lut(self.readout_port, 0, self.readout_amp)
+            # we lose 3 dB compared to e.g. rabi_amp, so increase control amplitude
+            pls.setup_scale_lut(self.control_port, 0, self.control_amp * np.sqrt(2))
 
             readout_pulse = pls.setup_long_drive(
                 self.readout_port,
@@ -220,9 +232,6 @@ class Rb(Base):
 
             pls.setup_store(self.sample_port, self.sample_duration)
 
-            pls.setup_scale_lut(self.control_port, 0, self.control_amp)
-            pls.setup_scale_lut(self.readout_port, 0, self.readout_amp)
-
             T = 0
             vphase: int = 0
 
@@ -240,15 +249,20 @@ class Rb(Base):
 
             print(f"{pulse_count = }")
 
-            # reset phase on readout_port here if using IF
             pls.output_pulse(T, readout_pulse)
             pls.store(T + self.readout_sample_delay)
 
             # wait for qubit decay
             T += self.wait_delay
 
+            T = self._jpa_tweak(T, pls)
+
             pls.run(T, 1, self.num_averages)
-            return pls.get_store_data()
+            ret = pls.get_store_data()
+
+            self._jpa_stop(pls)
+
+            return ret
 
     def _rbgen(self) -> List[List[GateSeq]]:
         return _singlequbitrb(self.rb_len_arr.tolist(), self.rb_nr_realizations)
