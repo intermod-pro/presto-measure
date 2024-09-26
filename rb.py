@@ -329,9 +329,6 @@ class Rb(Base):
         result_average = np.average(result, axis=-1)
         rotated = np.real(rotate_opt(result_average))
         rotated_avg = np.average(rotated, axis=0)
-        rotated_75 = np.percentile(rotated, 75, axis=0)
-        rotated_50 = np.percentile(rotated, 50, axis=0)
-        rotated_25 = np.percentile(rotated, 25, axis=0)
 
         popt, pcov = curve_fit(
             _exp_fit_fn, self.rb_len_arr, rotated_avg, p0=(rotated_avg[0], rotated_avg[-1], 0.99)
@@ -377,9 +374,10 @@ class Rb(Base):
         fig.show()
         ret_fig.append(fig)
 
-        center = _rescale(rotated_50, xe, xg)
-        higher = _rescale(rotated_75, xe, xg)
-        lower = _rescale(rotated_25, xe, xg)
+        rescaled = _rescale(rotated, xe, xg)
+        higher = np.percentile(rescaled, 75, axis=0)
+        center = np.percentile(rescaled, 50, axis=0)
+        lower = np.percentile(rescaled, 25, axis=0)
         err_h = higher - center
         err_l = center - lower
         err = [err_l, err_h]
