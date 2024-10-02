@@ -82,7 +82,7 @@ class SweepFreqAndDC(Base):
                 active_range
             )
             if max_bias > active_range_max_voltage or min_bias < active_range_min_voltage:
-                if max_bias > 10 or min_bias < 10:
+                if max_bias > 10 or min_bias < -10:
                     raise ValueError("Value of DC bias has to be between -10 and 10V")
                 elif min_bias > 0:
                     if max_bias > 3.33:

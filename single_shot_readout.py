@@ -31,7 +31,7 @@ class SingleShotReadout(Base):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        template_match_start: float,
+        template_match_delay: float,
         template_match_duration: Optional[float] = None,
         template_match_phase: float = 0.0,
         drag: float = 0.0,
@@ -49,7 +49,7 @@ class SingleShotReadout(Base):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.template_match_start = template_match_start
+        self.template_match_delay = template_match_delay
         if template_match_duration is None:
             self.template_match_duration = sample_duration
         else:
@@ -141,7 +141,7 @@ class SingleShotReadout(Base):
 
                 pls.output_pulse(T, [readout_pulse])
                 pls.store(T + self.readout_sample_delay)
-                pls.match(T + self.template_match_start, match_events)
+                pls.match(T + self.template_match_delay, match_events)
                 T += self.readout_duration + self.wait_delay
 
             # **************************
@@ -172,7 +172,7 @@ class SingleShotReadout(Base):
             sample_port = int(h5f.attrs["sample_port"])  # type: ignore
             wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
             readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
-            template_match_start = float(h5f.attrs["template_match_start"])  # type: ignore
+            template_match_delay = float(h5f.attrs["template_match_delay"])  # type: ignore
             template_match_duration = float(h5f.attrs["template_match_duration"])  # type: ignore
             num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
@@ -198,7 +198,7 @@ class SingleShotReadout(Base):
             sample_port=sample_port,
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
-            template_match_start=template_match_start,
+            template_match_delay=template_match_delay,
             template_match_duration=template_match_duration,
             num_averages=num_averages,
             drag=drag,
@@ -221,8 +221,8 @@ class SingleShotReadout(Base):
         ret_fig = []
 
         fs = 1 / (self.t_arr[1] - self.t_arr[0])
-        IDX_LOW = int(round(self.template_match_start * fs))
-        IDX_HIGH = int(round((self.template_match_start + self.template_match_duration) * fs))
+        IDX_LOW = int(round(self.template_match_delay * fs))
+        IDX_HIGH = int(round((self.template_match_delay + self.template_match_duration) * fs))
         t_low = self.t_arr[IDX_LOW]
         t_high = self.t_arr[IDX_HIGH]
 
