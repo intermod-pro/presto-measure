@@ -10,13 +10,10 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import untwist_downconversion
 
-from _base import Base
-
-IDX_LOW = 0
-IDX_HIGH = -1
+from _base import PlsBase
 
 
-class SweepPulsed(Base):
+class SweepPulsed(PlsBase):
     def __init__(
         self,
         readout_freq_center: float,
@@ -197,14 +194,9 @@ class SweepPulsed(Base):
             _has_resonator_tools = False
 
         ret_fig = []
-
-        idx = np.arange(IDX_LOW, IDX_HIGH)
-        t_low = self.t_arr[IDX_LOW]
-        t_high = self.t_arr[IDX_HIGH]
-        nr_samples = IDX_HIGH - IDX_LOW
-
         if all_plots:
             # Plot raw store data for first iteration as a check
+            t_low, t_high = self._store_t_analysis()
             fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
             ax11, ax12 = ax1
             ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
@@ -220,7 +212,9 @@ class SweepPulsed(Base):
             ret_fig.append(fig1)
 
         # Analyze
-        data = self.store_arr[:, 0, idx]
+        idx_low, idx_high = self._store_idx_analysis()
+        nr_samples = len(self.t_arr[idx_low:idx_high])
+        data = self.store_arr[:, 0, idx_low:idx_high]
         data.shape = (self.readout_freq_nr, 1, nr_samples)
         resp_I_arr = np.zeros((1, self.readout_freq_nr), np.complex128)
         resp_Q_arr = np.zeros((1, self.readout_freq_nr), np.complex128)
@@ -252,32 +246,39 @@ class SweepPulsed(Base):
         background = np.polyval(pfit_g, self.readout_freq_arr)
         resp_phase[0, :] -= background
 
-        print("----------------")
         if _has_resonator_tools:
-            # port_g = circuit.reflection_port(
-            #    self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
-            # )
-            port_g = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
-                self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
-            )
-            port_g.autofit(electric_delay=-6.1e-9)
+            print("----------------")
+            try:
+                # port_g = circuit.reflection_port(
+                #    self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
+                # )
+                port_g = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
+                    self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
+                )
+                port_g.autofit(electric_delay=-6.1e-9)
 
-            f_g = port_g.fitresults["fr"]
+                f_g = port_g.fitresults["fr"]
 
-            print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
-        print("----------------")
+                print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
+                _fit_success = True
+            except Exception:
+                print("fit failed")
+                _fit_success = False
+            print("----------------")
+        else:
+            _fit_success = False
 
         fig2, ax2 = plt.subplots(2, 1, sharex=True, tight_layout=True, figsize=(6.4, 6.4))
         ax21, ax22 = ax2
 
         for ax_ in ax2:
-            if _has_resonator_tools:
+            if _fit_success:
                 ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
 
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="tab:blue", label="|g>")
         ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="tab:blue")
 
-        if _has_resonator_tools:
+        if _fit_success:
             ax21.plot(
                 1e-9 * port_g.f_data,  # pyright: ignore
                 20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]

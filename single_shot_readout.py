@@ -12,10 +12,10 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import rotate_opt, sin2
 
-from _base import Base
+from _base import PlsBase
 
 
-class SingleShotReadout(Base):
+class SingleShotReadout(PlsBase):
     def __init__(
         self,
         readout_freq: float,
@@ -221,10 +221,10 @@ class SingleShotReadout(Base):
         ret_fig = []
 
         fs = 1 / (self.t_arr[1] - self.t_arr[0])
-        IDX_LOW = int(round(self.template_match_start * fs))
-        IDX_HIGH = int(round((self.template_match_start + self.template_match_duration) * fs))
-        t_low = self.t_arr[IDX_LOW]
-        t_high = self.t_arr[IDX_HIGH]
+        idx_low = int(round(self.template_match_start * fs))
+        idx_high = int(round((self.template_match_start + self.template_match_duration) * fs))
+        t_low = self.t_arr[idx_low]
+        t_high = self.t_arr[idx_high]
 
         if all_plots:
             # Plot raw store data for first iteration as a check
@@ -244,8 +244,8 @@ class SingleShotReadout(Base):
         complex_match_data = self.match_arr[0] + 1j * self.match_arr[1]
         avg_data = np.array(
             [
-                np.sum(self.store_arr[0, 0, IDX_LOW:IDX_HIGH]),
-                np.sum(self.store_arr[1, 0, IDX_LOW:IDX_HIGH]),
+                np.sum(self.store_arr[0, 0, idx_low:idx_high]),
+                np.sum(self.store_arr[1, 0, idx_low:idx_high]),
             ]
         )
         if rotate_optimally:
