@@ -22,16 +22,13 @@ from qiskit_experiments.library import StandardRB
 from presto import pulsed
 from presto.utils import rotate_opt, sin2
 
-from _base import Base
+from _base import PlsBase
 
 Gate: TypeAlias = Tuple[str, int]
 GateSeq: TypeAlias = List[Gate]
 
-IDX_LOW = 0
-IDX_HIGH = -1
 
-
-class Rb(Base):
+class Rb(PlsBase):
     def __init__(
         self,
         readout_freq: float,
@@ -276,7 +273,8 @@ class Rb(Base):
         import matplotlib.pyplot as plt
         from scipy.optimize import curve_fit
 
-        result = _lowpass(self.store_arr[:, :, IDX_LOW:IDX_HIGH])
+        idx_low, idx_high = self._store_idx_analysis()
+        result = _lowpass(self.store_arr[:, :, idx_low:idx_high])
         result_average = np.average(result, axis=-1)
         rotated = np.real(rotate_opt(result_average))
         rotated_avg = np.average(rotated, axis=0)
@@ -325,7 +323,8 @@ class Rb(Base):
         from matplotlib.ticker import ScalarFormatter
         from scipy.optimize import curve_fit
 
-        result = _lowpass(self.store_arr[:, :, IDX_LOW:IDX_HIGH])
+        idx_low, idx_high = self._store_idx_analysis()
+        result = _lowpass(self.store_arr[:, :, idx_low:idx_high])
         result_average = np.average(result, axis=-1)
         rotated = np.real(rotate_opt(result_average))
         rotated_avg = np.average(rotated, axis=0)

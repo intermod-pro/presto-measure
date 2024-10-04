@@ -11,13 +11,10 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import rotate_opt, sin2
 
-from _base import Base
-
-IDX_LOW = 0
-IDX_HIGH = -1
+from _base import PlsBase
 
 
-class DisplacementCalibration(Base):
+class DisplacementCalibration(PlsBase):
     def __init__(
         self,
         readout_freq: float,
@@ -250,14 +247,13 @@ class DisplacementCalibration(Base):
         import matplotlib.pyplot as plt
 
         ret_fig = []
-        t_low = self.t_arr[IDX_LOW]
-        t_high = self.t_arr[IDX_HIGH]
 
         nr_amps = len(self.memory_amp_arr)
         self._AMP_IDX = nr_amps // 2
 
         if all_plots:
             # Plot raw store data for first iteration as a check
+            t_low, t_high = self._store_t_analysis()
             fig0, ax0 = plt.subplots(2, 1, sharex=True, tight_layout=True)
             ax01, ax02 = ax0
             ax01.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
@@ -269,7 +265,8 @@ class DisplacementCalibration(Base):
             ret_fig.append(fig0)
 
         # Analyze
-        resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
+        idx_low, idx_high = self._store_idx_analysis()
+        resp_arr = np.mean(self.store_arr[:, 0, idx_low:idx_high], axis=-1)
         resp_arr.shape = (len(self.memory_amp_arr), len(self.control_df_arr))
         resp_arr = rotate_opt(resp_arr)
         resp_arr = resp_arr.real

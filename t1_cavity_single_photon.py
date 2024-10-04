@@ -10,13 +10,10 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import format_precision, rotate_opt, sin2
 
-from _base import Base, project
-
-IDX_LOW = 0
-IDX_HIGH = -1
+from _base import PlsBase
 
 
-class T1_cavity(Base):
+class T1_cavity(PlsBase):
     def __init__(
         self,
         readout_freq: float,
@@ -217,25 +214,6 @@ class T1_cavity(Base):
 
         return self
 
-    def analyze_batch(self, reference_templates: Optional[tuple] = None):
-        assert self.t_arr is not None
-        assert self.store_arr is not None
-
-        if reference_templates is None:
-            resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
-            data = np.real(rotate_opt(resp_arr))
-        else:
-            resp_arr = self.store_arr[:, 0, :]
-            data = project(resp_arr, reference_templates)
-
-        try:
-            popt, perr = _fit_simple(self.delay_arr, data)
-        except Exception as err:
-            print(f"unable to fit T1: {err}")
-            popt, perr = None, None
-
-        return data, (popt, perr)
-
     def analyze(self, all_plots: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
@@ -243,11 +221,9 @@ class T1_cavity(Base):
         import matplotlib.pyplot as plt
 
         ret_fig = []
-        t_low = self.t_arr[IDX_LOW]
-        t_high = self.t_arr[IDX_HIGH]
-
         if all_plots:
             # Plot raw store data for first iteration as a check
+            t_low, t_high = self._store_t_analysis()
             fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
             ax11, ax12 = ax1
             ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
@@ -259,7 +235,8 @@ class T1_cavity(Base):
             ret_fig.append(fig1)
 
         # Analyze T1
-        resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
+        idx_low, idx_high = self._store_idx_analysis()
+        resp_arr = np.mean(self.store_arr[:, 0, idx_low:idx_high], axis=-1)
         resp_arr = rotate_opt(resp_arr)
 
         # Fit data

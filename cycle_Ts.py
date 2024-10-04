@@ -293,7 +293,7 @@ class CycleTs(Base):
 
         time1_arr = self._time1_arr - self.time_start
         time2_arr = self._time2_arr - self.time_start
-        max_time = max(np.max(time1_arr), np.max(time2_arr))
+        max_time = max(max(time1_arr), max(time2_arr))
         if max_time > 86_400:
             time1_arr /= 86_400
             time2_arr /= 86_400
