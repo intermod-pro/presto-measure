@@ -11,13 +11,10 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import format_precision, rotate_opt, sin2, si_prefix_scale
 
-from _base import Base
-
-IDX_LOW = 0
-IDX_HIGH = -1
+from _base import PlsBase
 
 
-class RamseyFringes(Base):
+class RamseyFringes(PlsBase):
     def __init__(
         self,
         readout_freq: float,
@@ -243,12 +240,9 @@ class RamseyFringes(Base):
         from scipy.optimize import curve_fit
 
         ret_fig = []
-
-        t_low = self.t_arr[IDX_LOW]
-        t_high = self.t_arr[IDX_HIGH]
-
         if all_plots:
             # Plot raw store data for first iteration as a check
+            t_low, t_high = self._store_t_analysis()
             fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
             ax11, ax12 = ax1
             ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
@@ -260,7 +254,8 @@ class RamseyFringes(Base):
             ret_fig.append(fig1)
 
         # Analyze
-        resp_arr = np.mean(self.store_arr[:, 0, IDX_LOW:IDX_HIGH], axis=-1)
+        idx_low, idx_high = self._store_idx_analysis()
+        resp_arr = np.mean(self.store_arr[:, 0, idx_low:idx_high], axis=-1)
         resp_arr.shape = (self.control_freq_nr, len(self.delay_arr))
         data = rotate_opt(resp_arr)
         plot_data = data.real

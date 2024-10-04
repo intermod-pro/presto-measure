@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import os
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 import h5py
 import numpy as np
+import numpy.typing as npt
 
 from presto.hardware import AdcMode, DacMode
 from presto.pulsed import Pulsed
@@ -63,6 +64,21 @@ class Base:
         print(f"Data saved to: {save_path}")
         return save_path
 
+
+class PlsBase(Base):
+    """
+    Base class for ``pulsed`` measurements
+    """
+
+    IDX_LOW: int = 0
+    """Analyze only ``store`` data starting from index ``IDX_LOW`` (inclusive), default from the
+    beginning. Has not effect on ``match`` data or in lockin mode.
+    """
+    IDX_HIGH: Optional[int] = None
+    """Analyze only ``store`` data up to index ``IDX_HIGH`` (exclusive), or until the end if
+    ``None`` (default). Has not effect on ``match`` data or in lockin mode.
+    """
+
     def _jpa_setup(self, pls: Pulsed):
         self.jpa_params: Optional[dict]
         if self.jpa_params is not None:
@@ -99,6 +115,26 @@ class Base:
             return T
         else:
             return T
+
+    def _store_idx_analysis(self) -> Tuple[int, int]:
+        self.t_arr: Optional[npt.NDArray[np.float64]]
+        assert self.t_arr is not None
+
+        idx_low = self.IDX_LOW
+        idx_high = len(self.t_arr) if self.IDX_HIGH is None else self.IDX_HIGH
+
+        return (idx_low, idx_high)
+
+    def _store_t_analysis(self) -> Tuple[float, float]:
+        self.t_arr: Optional[npt.NDArray[np.float64]]
+        assert self.t_arr is not None
+        idx_low, idx_high = self._store_idx_analysis()
+
+        dt = float(self.t_arr[1] - self.t_arr[0])
+        t_low = float(self.t_arr[idx_low])
+        t_high = dt + float(self.t_arr[idx_high - 1])
+
+        return (t_low, t_high)
 
 
 def project(resp_arr, reference_templates):

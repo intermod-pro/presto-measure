@@ -10,13 +10,10 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import sin2, untwist_downconversion
 
-from _base import Base
-
-IDX_LOW = 0
-IDX_HIGH = -1
+from _base import PlsBase
 
 
-class ExcitedSweep(Base):
+class ExcitedSweep(PlsBase):
     def __init__(
         self,
         readout_freq_center: float,
@@ -234,16 +231,9 @@ class ExcitedSweep(Base):
             _has_resonator_tools = False
 
         ret_fig = []
-
-        t_low = self.t_arr[IDX_LOW]
-        t_high = self.t_arr[IDX_HIGH]
-        if IDX_HIGH < 0:
-            nr_samples = len(self.t_arr) + IDX_HIGH - IDX_LOW
-        else:
-            nr_samples = IDX_HIGH - IDX_LOW
-
         if all_plots:
             # Plot raw store data for first iteration as a check
+            t_low, t_high = self._store_t_analysis()
             fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
             ax11, ax12 = ax1
             ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
@@ -255,7 +245,9 @@ class ExcitedSweep(Base):
             ret_fig.append(fig1)
 
         # Analyze
-        data = self.store_arr[:, 0, IDX_LOW:IDX_HIGH]
+        idx_low, idx_high = self._store_idx_analysis()
+        nr_samples = len(self.t_arr[idx_low:idx_high])
+        data = self.store_arr[:, 0, idx_low:idx_high]
         data.shape = (self.readout_freq_nr, 2, nr_samples)
         resp_I_arr = np.zeros((2, self.readout_freq_nr), np.complex128)
         resp_Q_arr = np.zeros((2, self.readout_freq_nr), np.complex128)

@@ -15,13 +15,10 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import sin2
 
-from _base import Base
-
-IDX_LOW = 0
-IDX_HIGH = -1
+from _base import PlsBase
 
 
-class SingleShot(Base):
+class SingleShot(PlsBase):
     def __init__(
         self,
         readout_freq: float,

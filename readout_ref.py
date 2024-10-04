@@ -15,13 +15,10 @@ from presto import pulsed
 from presto.pulsed import MAX_TEMPLATE_LEN
 from presto.utils import sin2, to_pm_pi
 
-from _base import Base
-
-IDX_LOW = 0
-IDX_HIGH = -1
+from _base import PlsBase
 
 
-class ReadoutRef(Base):
+class ReadoutRef(PlsBase):
     def __init__(
         self,
         readout_freq: float,
