@@ -5,7 +5,7 @@ Acquire reference templates for template matching.
 """
 
 import ast
-from typing import Optional
+from typing import Dict, Optional, overload, Literal, Any, Tuple, Union
 
 import h5py
 import numpy as np
@@ -205,7 +205,21 @@ class ReadoutRef(PlsBase):
 
         return self
 
-    def analyze(self, plot: bool = True, rotate: bool = False, match_len: Optional[int] = None):
+    @overload
+    def analyze(
+        self, plot: Literal[True], rotate: bool = False, match_len: Optional[int] = None
+    ) -> Tuple[Dict, Any]: ...
+    @overload
+    def analyze(
+        self, plot: Literal[False], rotate: bool = False, match_len: Optional[int] = None
+    ) -> Dict: ...
+    @overload
+    def analyze(
+        self, plot: bool = True, rotate: bool = False, match_len: Optional[int] = None
+    ) -> Union[Dict, Tuple[Dict, Any]]: ...
+    def analyze(
+        self, plot: bool = True, rotate: bool = False, match_len: Optional[int] = None
+    ) -> Union[Dict, Tuple[Dict, Any]]:
         assert self.t_arr is not None
         assert self.store_arr is not None
 
