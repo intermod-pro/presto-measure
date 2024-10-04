@@ -203,8 +203,8 @@ class SweepFreqAndDC(Base):
             raise ValueError
 
         cutoff = 5.0  # %
-        lowlim = np.percentile(data, cutoff)
-        highlim = np.percentile(data, 100.0 - cutoff)
+        lowlim = float(np.percentile(data, cutoff))
+        highlim = float(np.percentile(data, 100.0 - cutoff))
         # extent
         x_min = 1e-9 * self.freq_arr[0]
         x_max = 1e-9 * self.freq_arr[-1]

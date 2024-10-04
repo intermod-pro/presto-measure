@@ -203,8 +203,8 @@ class JpaSweepBias(Base):
 
         # choose limits for colorbar
         cutoff = 10.0  # %
-        lowlim = np.percentile(data, cutoff)
-        highlim = np.percentile(data, 100.0 - cutoff)
+        lowlim = float(np.percentile(data, cutoff))
+        highlim = float(np.percentile(data, 100.0 - cutoff))
 
         # extent
         x_min = 1e-9 * self.freq_arr[0]

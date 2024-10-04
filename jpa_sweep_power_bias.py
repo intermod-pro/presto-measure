@@ -232,8 +232,8 @@ class JpaSweepPowerBias(Base):
 
         # choose limits for colorbar
         cutoff = 1.0  # %
-        lowlim = np.percentile(gain_db, cutoff)
-        highlim = np.percentile(gain_db, 100.0 - cutoff)
+        lowlim = float(np.percentile(gain_db, cutoff))
+        highlim = float(np.percentile(gain_db, 100.0 - cutoff))
         abslim = max(abs(lowlim), abs(highlim))
 
         # extent
