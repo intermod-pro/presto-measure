@@ -305,13 +305,13 @@ class ExcitedSweep(PlsBase):
             f_g = port_g.fitresults["fr"]
             f_e = port_e.fitresults["fr"]
             f_r = (f_e + f_g) / 2
-            f_o = popt[0]
             chi_hz = (f_e - f_g) / 2
             print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
             print(f"ω_e / 2π = {f_e * 1e-9:.6f} GHz")
             print(f"ω_r / 2π = {f_r * 1e-9:.6f} GHz")
             print(f"χ / 2π = {chi_hz * 1e-3:.2f} kHz")
-            print(f"ω_opt / 2π = {f_o * 1e-9:.6f} GHz")
+        f_o = popt[0]
+        print(f"ω_opt / 2π = {f_o * 1e-9:.6f} GHz")
         print("----------------")
 
         fig2, ax2 = plt.subplots(3, 1, sharex=True, tight_layout=True, figsize=(6.4, 6.4))

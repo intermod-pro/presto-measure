@@ -8,9 +8,11 @@ Requires third-party packages:
   - qiskit_experiments 0.5.4
 """
 
+from __future__ import annotations
+
 import ast
 import time
-from typing import List, Optional, Tuple, TypeAlias, Union
+from typing import List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
@@ -24,8 +26,8 @@ from presto.utils import rotate_opt, sin2
 
 from _base import PlsBase
 
-Gate: TypeAlias = Tuple[str, int]
-GateSeq: TypeAlias = List[Gate]
+Gate = Tuple[str, int]
+GateSeq = List[Gate]
 
 
 class Rb(PlsBase):
