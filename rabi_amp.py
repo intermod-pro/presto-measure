@@ -14,7 +14,7 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import format_precision, rotate_opt, sin2, plot_sequence
 
 from _base import PlsBase
 
@@ -65,12 +65,15 @@ class RabiAmp(PlsBase):
         presto_address: str,
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
+        save: bool = True,
+        dry_run: bool = False,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dry_run=dry_run,
             **self.DC_PARAMS,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
@@ -145,12 +148,18 @@ class RabiAmp(PlsBase):
             # then average `num_averages` times
 
             nr_amps = len(self.control_amp_arr)
-            pls.run(period=T, repeat_count=nr_amps, num_averages=self.num_averages)
-            self.t_arr, self.store_arr = pls.get_store_data()
+            if not dry_run:
+                pls.run(period=T, repeat_count=nr_amps, num_averages=self.num_averages)
+                self.t_arr, self.store_arr = pls.get_store_data()
+            else:
+                plot_sequence(pls, period=T, repeat_count=nr_amps, num_averages=self.num_averages)
 
             self._jpa_stop(pls)
 
-        return self.save()
+        if save and not dry_run:
+            return self.save()
+        else:
+            return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)

@@ -9,7 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2, si_prefix_scale
+from presto.utils import format_precision, rotate_opt, sin2, si_prefix_scale, plot_sequence
 
 from _base import PlsBase
 
@@ -64,12 +64,15 @@ class RamseyFringes(PlsBase):
         presto_address: str,
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
+        save: bool = True,
+        dry_run: bool = False,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dry_run=dry_run,
             **self.DC_PARAMS,
         ) as pls:
             # figure out frequencies
@@ -163,12 +166,24 @@ class RamseyFringes(PlsBase):
             # **************************
             # *** Run the experiment ***
             # **************************
-            pls.run(period=T, repeat_count=self.control_freq_nr, num_averages=self.num_averages)
-            self.t_arr, self.store_arr = pls.get_store_data()
-
+            if not dry_run:
+                pls.run(
+                    period=T, repeat_count=self.control_freq_nr, num_averages=self.num_averages
+                )
+                self.t_arr, self.store_arr = pls.get_store_data()
+            else:
+                plot_sequence(
+                    pls,
+                    period=T,
+                    repeat_count=self.control_freq_nr,
+                    num_averages=self.num_averages,
+                )
             self._jpa_stop(pls)
 
-        return self.save()
+        if save and not dry_run:
+            return self.save()
+        else:
+            return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
