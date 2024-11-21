@@ -153,10 +153,10 @@ class Sweep(Base):
             raise RuntimeError
 
         import matplotlib.pyplot as plt
+        import matplotlib.widgets as mwidgets
 
         try:
             from resonator_tools import circuit
-            import matplotlib.widgets as mwidgets
 
             _do_fit = True
         except ImportError:
@@ -182,9 +182,8 @@ class Sweep(Base):
         ax11.grid()
         ax12.grid()
 
-        if _do_fit:
-
-            def onselect(xmin, xmax):
+        def onselect(xmin, xmax):
+            if _do_fit:
                 port = circuit.notch_port(self.freq_arr, self.resp_arr)  # pyright: ignore[reportPossiblyUnboundVariable]
                 port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
                 sim_db = 20 * np.log10(np.abs(port.z_data_sim))
@@ -200,13 +199,21 @@ class Sweep(Base):
                 print(f"f_min = {f_min}")
                 print("----------------")
                 fig1.canvas.draw()
+            else:
+                print("unable to perform fit: resonator_tools is not installed")
 
-            rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
-            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
-            # keep references to span selectors
-            fig1._span_a = span_a  # type: ignore
-            fig1._span_p = span_p  # type: ignore
+        # SpanSelector messes up x limits in some versions of matplotlib
+        # save limits now and restore them later on
+        xlims = ax11.get_xlim()
+        rectprops = dict(facecolor="tab:gray", alpha=0.5)
+        span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
+        span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
+        # keep references to span selectors
+        fig1._span_a = span_a  # type: ignore
+        fig1._span_p = span_p  # type: ignore
+        # restore x limits
+        ax11.set_xlim(xlims)
+
         fig1.show()
 
         return fig1
