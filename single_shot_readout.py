@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import rotate_opt, sin2, plot_sequence
 
 from _base import PlsBase
 
@@ -31,9 +31,8 @@ class SingleShotReadout(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        template_match_start: float,
-        template_match_duration: Optional[float] = None,
         template_match_phase: float = 0.0,
+        jpa_params: Optional[dict] = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -49,12 +48,8 @@ class SingleShotReadout(PlsBase):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.template_match_start = template_match_start
-        if template_match_duration is None:
-            self.template_match_duration = sample_duration
-        else:
-            self.template_match_duration = template_match_duration
         self.template_match_phase = template_match_phase
+        self.jpa_params = jpa_params
         self.drag = drag
 
         self.t_arr = None  # replaced by run
@@ -66,12 +61,15 @@ class SingleShotReadout(PlsBase):
         presto_address: str,
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
+        save: bool = True,
+        dry_run: bool = False,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dry_run=dry_run,
             **self.DC_PARAMS,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
@@ -87,6 +85,8 @@ class SingleShotReadout(PlsBase):
             )
 
             pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
+
+            self._jpa_setup(pls)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -123,11 +123,11 @@ class SingleShotReadout(PlsBase):
             pls.setup_store(self.sample_port, self.sample_duration)
 
             # Setup template matching
-            shape = np.ones(int(round(self.template_match_duration * pls.get_fs("dac"))))
-            match_events = pls.setup_template_matching_pair(
+            match_events = pls.setup_flat_matching_pair(
                 input_port=self.sample_port,
-                template1=shape * np.exp(self.template_match_phase),
-                template2=1j * shape * np.exp(self.template_match_phase),
+                duration=self.sample_duration,
+                weight1=np.exp(1j * self.template_match_phase),
+                weight2=np.exp(1j * (self.template_match_phase + np.pi / 2)),
             )
 
             # ******************************
@@ -141,18 +141,30 @@ class SingleShotReadout(PlsBase):
 
                 pls.output_pulse(T, [readout_pulse])
                 pls.store(T + self.readout_sample_delay)
-                pls.match(T + self.template_match_start, match_events)
+                pls.match(T + self.readout_sample_delay, match_events)
                 T += self.readout_duration + self.wait_delay
 
+            T = self._jpa_tweak(T, pls)
             # **************************
             # *** Run the experiment ***
             # **************************
+            if not dry_run:
+                pls.run(period=T, repeat_count=1, num_averages=self.num_averages)
+                self.t_arr, self.store_arr = pls.get_store_data()
+                self.match_arr = pls.get_template_matching_data(match_events)
+            else:
+                plot_sequence(
+                    pls,
+                    period=T,
+                    repeat_count=1,
+                    num_averages=self.num_averages,
+                )
+            self._jpa_stop(pls)
 
-            pls.run(period=T, repeat_count=1, num_averages=self.num_averages)
-            self.t_arr, self.store_arr = pls.get_store_data()
-            self.match_arr = pls.get_template_matching_data(match_events)
-
-        return self.save()
+        if save and not dry_run:
+            return self.save()
+        else:
+            return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
@@ -172,8 +184,6 @@ class SingleShotReadout(PlsBase):
             sample_port = int(h5f.attrs["sample_port"])  # type: ignore
             wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
             readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
-            template_match_start = float(h5f.attrs["template_match_start"])  # type: ignore
-            template_match_duration = float(h5f.attrs["template_match_duration"])  # type: ignore
             num_averages = int(h5f.attrs["num_averages"])  # type: ignore
 
             t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
@@ -198,8 +208,6 @@ class SingleShotReadout(PlsBase):
             sample_port=sample_port,
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
-            template_match_start=template_match_start,
-            template_match_duration=template_match_duration,
             num_averages=num_averages,
             drag=drag,
         )
@@ -220,14 +228,9 @@ class SingleShotReadout(PlsBase):
 
         ret_fig = []
 
-        fs = 1 / (self.t_arr[1] - self.t_arr[0])
-        idx_low = int(round(self.template_match_start * fs))
-        idx_high = int(round((self.template_match_start + self.template_match_duration) * fs))
-        t_low = self.t_arr[idx_low]
-        t_high = self.t_arr[idx_high]
-
         if all_plots:
             # Plot raw store data for first iteration as a check
+            t_low, t_high = self._store_t_analysis()
             fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
             ax11, ax12 = ax1
             ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
@@ -238,6 +241,8 @@ class SingleShotReadout(PlsBase):
             fig1.show()
             ret_fig.append(fig1)
 
+        idx_low, idx_high = self._store_idx_analysis()
+
         fig2 = plt.figure(tight_layout=True)
         ax1 = fig2.add_subplot(1, 1, 1)
 
@@ -247,11 +252,11 @@ class SingleShotReadout(PlsBase):
                 np.sum(self.store_arr[0, 0, idx_low:idx_high]),
                 np.sum(self.store_arr[1, 0, idx_low:idx_high]),
             ]
-        )
+        ) * np.exp(-1j * self.template_match_phase)
         if rotate_optimally:
             avg_data, angle = rotate_opt(avg_data, True)
         else:
-            angle = 0
+            angle = 0.0
         print("Angle of rotationg the data in post-processing: ", angle)
         ground_data = complex_match_data[::2] * np.exp(1j * angle)
         excited_data = complex_match_data[1::2] * np.exp(1j * angle)
@@ -260,6 +265,8 @@ class SingleShotReadout(PlsBase):
 
         ax1.plot(ground_data.real, ground_data.imag, ".", alpha=0.2, label="ground")
         ax1.plot(excited_data.real, excited_data.imag, ".", alpha=0.2, label="excited")
+        # ax1.plot(np.average(ground_data.real), np.average(ground_data.imag), "x", label="ground")
+        # ax1.plot(np.average(excited_data.real), np.average(excited_data.imag), "x", label="excited")
         ax1.plot(
             ground_avg_data.real, ground_avg_data.imag, "C0o", alpha=1, markeredgecolor="white"
         )
