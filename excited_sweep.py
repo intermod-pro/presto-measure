@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator with and without a π/2 control pulse."""
 
+import ast
 from typing import Optional
 
 import h5py
@@ -8,7 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import sin2, untwist_downconversion
+from presto.utils import sin2, untwist_downconversion, plot_sequence
 
 from _base import PlsBase
 
@@ -61,12 +62,15 @@ class ExcitedSweep(PlsBase):
         presto_address: str,
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
+        save: bool = True,
+        dry_run: bool = False,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dry_run=dry_run,
             **self.DC_PARAMS,
         ) as pls:
             # figure out frequencies
@@ -151,10 +155,23 @@ class ExcitedSweep(PlsBase):
             # **************************
             # *** Run the experiment ***
             # **************************
-            pls.run(period=T, repeat_count=self.readout_freq_nr, num_averages=self.num_averages)
-            self.t_arr, self.store_arr = pls.get_store_data()
+            if not dry_run:
+                pls.run(
+                    period=T, repeat_count=self.readout_freq_nr, num_averages=self.num_averages
+                )
+                self.t_arr, self.store_arr = pls.get_store_data()
+            else:
+                plot_sequence(
+                    pls,
+                    period=T,
+                    repeat_count=self.readout_freq_nr,
+                    num_averages=self.num_averages,
+                )
 
-        return self.save()
+        if save and not dry_run:
+            return self.save()
+        else:
+            return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)

@@ -5,6 +5,7 @@ Measure Rabi oscillation by changing the amplitude and the duration of the contr
 Both control pulse and readout pulse have a square envelope.
 """
 
+import ast
 import math
 from typing import List, Optional, Tuple, Union
 
@@ -13,7 +14,7 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt
+from presto.utils import rotate_opt, plot_sequence
 
 from _base import PlsBase
 
@@ -34,6 +35,7 @@ class RabiTime(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
+        jpa_params: Optional[dict] = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -54,17 +56,22 @@ class RabiTime(PlsBase):
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
 
+        self.jpa_params = jpa_params
+
     def run(
         self,
         presto_address: str,
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
+        save: bool = True,
+        dry_run: bool = False,
     ) -> str:
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dry_run=dry_run,
             **self.DC_PARAMS,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
@@ -79,6 +86,8 @@ class RabiTime(PlsBase):
                 out_ports=self.readout_port,
             )
             pls.hardware.configure_mixer(self.control_freq, out_ports=self.control_port)
+
+            self._jpa_setup(pls)
 
             # ************************************
             # *** Setup measurement parameters ***
@@ -129,6 +138,8 @@ class RabiTime(PlsBase):
             pls.next_scale(T, self.control_port, group=0)
             T += self.wait_delay
 
+            T = self._jpa_tweak(T, pls)
+
             # **************************
             # *** Run the experiment ***
             # **************************
@@ -136,10 +147,18 @@ class RabiTime(PlsBase):
             # then average `num_averages` times
 
             nr_amps = len(self.control_amp_arr)
-            pls.run(period=T, repeat_count=nr_amps, num_averages=self.num_averages)
-            self.t_arr, self.store_arr = pls.get_store_data()
+            if not dry_run:
+                pls.run(period=T, repeat_count=nr_amps, num_averages=self.num_averages)
+                self.t_arr, self.store_arr = pls.get_store_data()
+            else:
+                plot_sequence(pls, period=T, repeat_count=nr_amps, num_averages=self.num_averages)
 
-        return self.save()
+            self._jpa_stop(pls)
+
+        if save and not dry_run:
+            return self.save()
+        else:
+            return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
@@ -160,6 +179,8 @@ class RabiTime(PlsBase):
             wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
             readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
             num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
 
             t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
             store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
@@ -183,6 +204,7 @@ class RabiTime(PlsBase):
             wait_delay=wait_delay,
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
+            jpa_params=jpa_params,
             drag=drag,
         )
         self.t_arr = t_arr

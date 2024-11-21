@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import rotate_opt, sin2, plot_sequence
 
 from _base import PlsBase
 
@@ -65,11 +65,14 @@ class TwoTonePulsed(PlsBase):
         presto_address: str,
         presto_port: Optional[int] = None,
         ext_ref_clk: bool = False,
+        save: bool = True,
+        dry_run: bool = False,
     ) -> str:
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
+            dry_run=dry_run,
             **self.DC_PARAMS,
         ) as pls:
             # figure out frequencies
@@ -125,15 +128,11 @@ class TwoTonePulsed(PlsBase):
                 envelope=False,
             )
 
-            # For the control pulse we create a sine-squared envelope,
-            # and use setup_template to use the user-defined envelope
-            # number of samples in the control template
-            control_ns = int(round(self.control_duration * pls.get_fs("dac")))
-            control_envelope = sin2(control_ns, self.drag)
-            control_pulse = pls.setup_template(
+            control_pulse = pls.setup_long_drive(
                 self.control_port,
                 group=0,
-                template=control_envelope + 1j * control_envelope,
+                duration=self.control_duration,
+                amplitude=1.0 + 1j,
                 envelope=True,
             )
 
@@ -160,12 +159,24 @@ class TwoTonePulsed(PlsBase):
             # **************************
             # repeat the whole sequence `control_freq_nr` times
             # then average `num_averages` times
-            pls.run(period=T, repeat_count=self.control_freq_nr, num_averages=self.num_averages)
-            self.t_arr, self.store_arr = pls.get_store_data()
-
+            if not dry_run:
+                pls.run(
+                    period=T, repeat_count=self.control_freq_nr, num_averages=self.num_averages
+                )
+                self.t_arr, self.store_arr = pls.get_store_data()
+            else:
+                plot_sequence(
+                    pls,
+                    period=T,
+                    repeat_count=self.control_freq_nr,
+                    num_averages=self.num_averages,
+                )
             self._jpa_stop(pls)
 
-        return self.save()
+        if save and not dry_run:
+            return self.save()
+        else:
+            return ""
 
     def save(self, save_filename: Optional[str] = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
