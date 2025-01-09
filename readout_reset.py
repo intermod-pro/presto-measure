@@ -106,22 +106,6 @@ class ReadoutReset(PlsBase):
             # *** Setup measurement parameters ***
             # ************************************
 
-            # Setup lookup tables for frequencies
-            pls.setup_freq_lut(
-                output_ports=self.readout_port,
-                group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
-            )
-            pls.setup_freq_lut(
-                output_ports=self.control_port,
-                group=0,
-                frequencies=0.0,
-                phases=0.0,
-                phases_q=0.0,
-            )
-
             # Setup lookup tables for amplitudes
             pls.setup_scale_lut(
                 output_ports=self.readout_port,
@@ -134,12 +118,11 @@ class ReadoutReset(PlsBase):
                 scales=self.control_amp,
             )
 
-            readout_pulse = pls.setup_long_drive(
+            readout_pulse = pls.setup_flat_pulse(
                 output_port=self.readout_port,
                 group=0,
                 duration=self.readout_duration,
-                amplitude=self.readout_amp,
-                amplitude_q=self.readout_amp,
+                amplitude=self.readout_amp * (1 + 1j),
                 rise_time=0e-9,
                 fall_time=0e-9,
             )
@@ -153,21 +136,18 @@ class ReadoutReset(PlsBase):
                 group=0,
                 template=control_envelope,
                 template_q=control_envelope if self.drag == 0.0 else None,
-                envelope=True,
             )
             control_pulse_to_g = pls.setup_template(
                 output_port=self.control_port,
                 group=0,
                 template=control_envelope,
                 template_q=control_envelope if self.drag == 0.0 else None,
-                envelope=True,
             )
             control_pulse_to_e = pls.setup_template(
                 output_port=self.control_port,
                 group=0,
                 template=control_envelope,
                 template_q=control_envelope if self.drag == 0.0 else None,
-                envelope=True,
             )
 
             # Setup sampling window

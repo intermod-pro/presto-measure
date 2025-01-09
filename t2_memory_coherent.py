@@ -100,15 +100,13 @@ class T2_memory_coherent(PlsBase):
             )
 
             # Setup readout and control pulses
-            # use setup_long_drive to create a pulse with square envelope
-            # setup_long_drive supports smooth rise and fall transitions for the pulse,
+            # use setup_flat_pulse to create a pulse with square envelope
+            # setup_flat_pulse supports smooth rise and fall transitions for the pulse,
             # but we keep it simple here
-            readout_pulse = pls.setup_long_drive(
+            readout_pulse = pls.setup_flat_pulse(
                 self.readout_port,
                 group=0,
                 duration=self.readout_duration,
-                amplitude=1.0 + 1j,
-                envelope=False,
             )
 
             # number of samples in the control template

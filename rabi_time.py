@@ -91,26 +91,22 @@ class RabiTime(PlsBase):
             pls.setup_scale_lut(self.control_port, group=0, scales=self.control_amp_arr)
 
             # Setup readout and control pulses
-            # use setup_long_drive to create a pulse with square envelope
-            # setup_long_drive supports smooth rise and fall transitions for the pulse,
+            # use setup_flat_pulse to create a pulse with square envelope
+            # setup_flat_pulse supports smooth rise and fall transitions for the pulse,
             # but we keep it simple here
-            readout_pulse = pls.setup_long_drive(
+            readout_pulse = pls.setup_flat_pulse(
                 self.readout_port,
                 group=0,
                 duration=self.readout_duration,
-                amplitude=1.0 + 1j,
-                envelope=False,
             )
 
-            # use setup_long_drive to create a pulse with square envelope
-            # setup_long_drive supports smooth rise and fall transitions for the pulse,
+            # use setup_flat_pulse to create a pulse with square envelope
+            # setup_flat_pulse supports smooth rise and fall transitions for the pulse,
             # but we keep it simple here
-            control_pulse = pls.setup_long_drive(
+            control_pulse = pls.setup_flat_pulse(
                 self.control_port,
                 group=0,
                 duration=self.control_duration_arr[0],
-                amplitude=1.0 + 1j,
-                envelope=False,
             )
 
             # Setup sampling window

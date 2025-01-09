@@ -194,12 +194,10 @@ class Rb(PlsBase):
             # we lose 3 dB compared to e.g. rabi_amp, so increase control amplitude
             pls.setup_scale_lut(self.control_port, 0, self.control_amp * np.sqrt(2))
 
-            readout_pulse = pls.setup_long_drive(
+            readout_pulse = pls.setup_flat_pulse(
                 self.readout_port,
                 group=0,
                 duration=self.readout_duration,
-                amplitude=1.0 + 1j,
-                envelope=False,
             )
 
             control_ns = int(round(self.control_duration * pls.get_fs("dac")))
