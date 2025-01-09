@@ -9,9 +9,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class DisplacementCalibration(PlsBase):
@@ -19,11 +21,11 @@ class DisplacementCalibration(PlsBase):
         self,
         readout_freq: float,
         control_freq: float,
-        control_df_arr: Union[List[float], npt.NDArray[np.float64]],
+        control_df_arr: FloatAny,
         memory_freq: float,
         readout_amp: float,
         control_amp: float,
-        memory_amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        memory_amp_arr: FloatAny,
         readout_duration: float,
         control_duration: float,
         memory_duration: float,
@@ -38,11 +40,11 @@ class DisplacementCalibration(PlsBase):
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
-        self.control_df_arr = control_df_arr
+        self.control_df_arr = asarray(control_df_arr, np.float64)
         self.memory_freq = memory_freq
         self.readout_amp = readout_amp
         self.control_amp = control_amp
-        self.memory_amp_arr = np.atleast_1d(memory_amp_arr).astype(np.float64)
+        self.memory_amp_arr = asarray(memory_amp_arr, np.float64)
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.memory_duration = memory_duration

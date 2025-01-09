@@ -13,9 +13,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt
+from presto.utils import asarray, rotate_opt
 
 from _base import PlsBase
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class RabiTime(PlsBase):
@@ -24,9 +26,9 @@ class RabiTime(PlsBase):
         readout_freq: float,
         control_freq: float,
         readout_amp: float,
-        control_amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        control_amp_arr: FloatAny,
         readout_duration: float,
-        control_duration_arr: Union[List[float], npt.NDArray[np.float64]],
+        control_duration_arr: FloatAny,
         sample_duration: float,
         readout_port: int,
         control_port: int,
@@ -39,9 +41,9 @@ class RabiTime(PlsBase):
         self.readout_freq = readout_freq
         self.control_freq = control_freq
         self.readout_amp = readout_amp
-        self.control_amp_arr = np.atleast_1d(control_amp_arr).astype(np.float64)
+        self.control_amp_arr = asarray(control_amp_arr, np.float64)
         self.readout_duration = readout_duration
-        self.control_duration_arr = np.atleast_1d(control_duration_arr).astype(np.float64)
+        self.control_duration_arr = asarray(control_duration_arr, np.float64)
         self.sample_duration = sample_duration
         self.readout_port = readout_port
         self.control_port = control_port

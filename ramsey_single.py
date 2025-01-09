@@ -6,16 +6,18 @@ The control pulse has a sin^2 envelope, while the readout pulse is square.
 """
 
 import ast
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union, overload
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class RamseySingle(PlsBase):
@@ -28,7 +30,7 @@ class RamseySingle(PlsBase):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: Union[List[float], npt.NDArray[np.float64]],
+        delay_arr: FloatAny,
         readout_port: int,
         control_port: int,
         sample_port: int,
@@ -45,7 +47,7 @@ class RamseySingle(PlsBase):
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
-        self.delay_arr = np.atleast_1d(delay_arr).astype(np.float64)
+        self.delay_arr = asarray(delay_arr, np.float64)
         self.readout_port = readout_port
         self.control_port = control_port
         self.sample_port = sample_port
@@ -199,27 +201,17 @@ class RamseySingle(PlsBase):
 
         return self
 
-    def analyze(self, all_plots: bool = False):
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: Literal[True]) -> float: ...
+
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: bool = False): ...
+
+    def analyze(self, *, all_plots: bool = False, batch: bool = False):
         if self.t_arr is None:
             raise RuntimeError
         if self.store_arr is None:
             raise RuntimeError
-
-        import matplotlib.pyplot as plt
-
-        ret_fig = []
-        if all_plots:
-            # Plot raw store data for first iteration as a check
-            t_low, t_high = self._store_t_analysis()
-            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-            ax11, ax12 = ax1
-            ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
-            ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
-            ax12.set_xlabel("Time [ns]")
-            fig1.show()
-            ret_fig.append(fig1)
 
         # Analyze T2
         idx_low, idx_high = self._store_idx_analysis()
@@ -242,50 +234,72 @@ class RamseySingle(PlsBase):
             print("Unable to fit data!")
             print(err)
             success = False
+            det = None
 
-        if all_plots:
-            fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-            ax21, ax22, ax23, ax24 = ax2
-            ax21.plot(1e6 * self.delay_arr, np.abs(data))
-            ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(data)))
-            ax23.plot(1e6 * self.delay_arr, np.real(data))
+        if not batch:
+            import matplotlib.pyplot as plt
+
+            ret_fig = []
+            if all_plots:
+                # Plot raw store data for first iteration as a check
+                t_low, t_high = self._store_t_analysis()
+                fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+                ax11, ax12 = ax1
+                ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
+                ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
+                ax12.set_xlabel("Time [ns]")
+                fig1.show()
+                ret_fig.append(fig1)
+
+            if all_plots:
+                fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
+                ax21, ax22, ax23, ax24 = ax2
+                ax21.plot(1e6 * self.delay_arr, np.abs(data))
+                ax22.plot(1e6 * self.delay_arr, np.unwrap(np.angle(data)))
+                ax23.plot(1e6 * self.delay_arr, np.real(data))
+                if success:
+                    ax23.plot(1e6 * self.delay_arr, _func(self.delay_arr, *popt), "--")  # pyright: ignore [reportPossiblyUnboundVariable]
+                ax24.plot(1e6 * self.delay_arr, np.imag(data))
+
+                ax21.set_ylabel("Amplitude [FS]")
+                ax22.set_ylabel("Phase [rad]")
+                ax23.set_ylabel("I [FS]")
+                ax24.set_ylabel("Q [FS]")
+                ax2[-1].set_xlabel("Ramsey delay [us]")
+                fig2.show()
+                ret_fig.append(fig2)
+
+            data_max = np.abs(data.real).max()
+            unit = ""
+            mult = 1.0
+            if data_max < 1e-6:
+                unit = "n"
+                mult = 1e9
+            elif data_max < 1e-3:
+                unit = "μ"
+                mult = 1e6
+            elif data_max < 1e0:
+                unit = "m"
+                mult = 1e3
+
+            fig3, ax3 = plt.subplots(tight_layout=True)
+            ax3.plot(1e6 * self.delay_arr, mult * np.real(data), ".")
+            ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
+            ax3.set_xlabel("Ramsey delay [μs]")
             if success:
-                ax23.plot(1e6 * self.delay_arr, _func(self.delay_arr, *popt), "--")  # pyright: ignore [reportPossiblyUnboundVariable]
-            ax24.plot(1e6 * self.delay_arr, np.imag(data))
+                ax3.plot(1e6 * self.delay_arr, mult * _func(self.delay_arr, *popt), "--")  # pyright: ignore [reportPossiblyUnboundVariable]
+                ax3.set_title(f"T2* = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")  # pyright: ignore [reportPossiblyUnboundVariable]
+            ax3.grid()
+            fig3.show()
+            ret_fig.append(fig3)
 
-            ax21.set_ylabel("Amplitude [FS]")
-            ax22.set_ylabel("Phase [rad]")
-            ax23.set_ylabel("I [FS]")
-            ax24.set_ylabel("Q [FS]")
-            ax2[-1].set_xlabel("Ramsey delay [us]")
-            fig2.show()
-            ret_fig.append(fig2)
+            return ret_fig
 
-        data_max = np.abs(data.real).max()
-        unit = ""
-        mult = 1.0
-        if data_max < 1e-6:
-            unit = "n"
-            mult = 1e9
-        elif data_max < 1e-3:
-            unit = "μ"
-            mult = 1e6
-        elif data_max < 1e0:
-            unit = "m"
-            mult = 1e3
-
-        fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(1e6 * self.delay_arr, mult * np.real(data), ".")
-        ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel("Ramsey delay [μs]")
-        if success:
-            ax3.plot(1e6 * self.delay_arr, mult * _func(self.delay_arr, *popt), "--")  # pyright: ignore [reportPossiblyUnboundVariable]
-            ax3.set_title(f"T2* = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")  # pyright: ignore [reportPossiblyUnboundVariable]
-        ax3.grid()
-        fig3.show()
-        ret_fig.append(fig3)
-
-        return ret_fig
+        else:
+            assert det is not None
+            return float(det)
 
 
 def _func(t, offset, amplitude, T2, frequency, phase):

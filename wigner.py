@@ -8,9 +8,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class Wigner(PlsBase):
@@ -21,8 +23,8 @@ class Wigner(PlsBase):
         memory_freq: float,
         readout_amp: float,
         control_amp: float,
-        memory_amp_arr_x: Union[List[float], npt.NDArray[np.float64]],
-        memory_amp_arr_y: Union[List[float], npt.NDArray[np.float64]],
+        memory_amp_arr_x: FloatAny,
+        memory_amp_arr_y: FloatAny,
         dt_wigner: float,
         readout_duration: float,
         control_duration: float,
@@ -41,8 +43,8 @@ class Wigner(PlsBase):
         self.memory_freq = memory_freq
         self.readout_amp = readout_amp
         self.control_amp = control_amp
-        self.memory_amp_arr_x = np.atleast_1d(memory_amp_arr_x).astype(np.float64)
-        self.memory_amp_arr_y = np.atleast_1d(memory_amp_arr_y).astype(np.float64)
+        self.memory_amp_arr_x = asarray(memory_amp_arr_x, np.float64)
+        self.memory_amp_arr_y = asarray(memory_amp_arr_y, np.float64)
         self.dt_wigner = dt_wigner
         self.readout_duration = readout_duration
         self.control_duration = control_duration

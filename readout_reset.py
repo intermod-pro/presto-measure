@@ -6,16 +6,18 @@ reference traces. Use feedback to correct the state of the qubit.
 """
 
 import ast
-from typing import Optional
+from typing import List, Optional, Union
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import sin2
+from presto.utils import asarray, sin2
 
 from _base import PlsBase
+
+ComplexAny = Union[complex, List[complex], npt.NDArray[np.complexfloating]]
 
 
 class ReadoutReset(PlsBase):
@@ -34,8 +36,8 @@ class ReadoutReset(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         readout_match_delay: float,
-        ref_g: npt.NDArray[np.complex128],
-        ref_e: npt.NDArray[np.complex128],
+        ref_g: ComplexAny,
+        ref_e: ComplexAny,
         num_averages: int,
         extra_wait: float = 0.0,
         jpa_params: Optional[dict] = None,
@@ -54,8 +56,8 @@ class ReadoutReset(PlsBase):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.readout_match_delay = readout_match_delay
-        self.ref_g = np.atleast_1d(ref_g).astype(np.complex128)
-        self.ref_e = np.atleast_1d(ref_e).astype(np.complex128)
+        self.ref_g = asarray(ref_g, np.complex128)
+        self.ref_e = asarray(ref_e, np.complex128)
         self.num_averages = num_averages
         self.extra_wait = extra_wait
         self.drag = drag

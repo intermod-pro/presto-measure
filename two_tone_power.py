@@ -10,9 +10,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import lockin
-from presto.utils import ProgressBar, rotate_opt
+from presto.utils import ProgressBar, asarray, rotate_opt
 
 from _base import Base
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class TwoTonePower(Base):
@@ -23,7 +25,7 @@ class TwoTonePower(Base):
         control_freq_span: float,
         df: float,
         readout_amp: float,
-        control_amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        control_amp_arr: FloatAny,
         readout_port: int,
         control_port: int,
         input_port: int,
@@ -36,7 +38,7 @@ class TwoTonePower(Base):
         self.control_freq_span = control_freq_span
         self.df = df
         self.readout_amp = readout_amp
-        self.control_amp_arr = np.atleast_1d(control_amp_arr).astype(np.float64)
+        self.control_amp_arr = asarray(control_amp_arr, np.float64)
         self.readout_port = readout_port
         self.control_port = control_port
         self.input_port = input_port

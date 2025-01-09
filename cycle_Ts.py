@@ -12,11 +12,13 @@ import matplotlib.widgets as mwidgets
 import numpy as np
 import numpy.typing as npt
 
-from presto.utils import format_precision
+from presto.utils import asarray, format_precision
 
 from _base import Base
 from ramsey_echo import RamseyEcho
 from t1 import T1 as T1Class
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 KEEP_GOING = True
 
@@ -32,7 +34,7 @@ class CycleTs(Base):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: Union[List[float], npt.NDArray[np.float64]],
+        delay_arr: FloatAny,
         readout_port: int,
         control_port: int,
         sample_port: int,
@@ -52,7 +54,7 @@ class CycleTs(Base):
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
-        self.delay_arr = np.atleast_1d(delay_arr).astype(np.float64)
+        self.delay_arr = asarray(delay_arr, np.float64)
         self.readout_port = readout_port
         self.control_port = control_port
         self.sample_port = sample_port

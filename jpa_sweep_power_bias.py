@@ -11,9 +11,12 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import lockin
-from presto.utils import ProgressBar
+from presto.utils import ProgressBar, asarray
 
 from _base import Base
+
+IntAny = Union[int, List[int], npt.NDArray[np.integer]]
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class JpaSweepPowerBias(Base):
@@ -24,8 +27,8 @@ class JpaSweepPowerBias(Base):
         df: float,
         num_averages: int,
         amp: float,
-        bias_arr: Union[List[float], npt.NDArray[np.float64]],
-        pump_pwr_arr: Union[List[int], npt.NDArray[np.int64]],
+        bias_arr: FloatAny,
+        pump_pwr_arr: IntAny,
         output_port: int,
         input_port: int,
         bias_port: int,
@@ -39,8 +42,8 @@ class JpaSweepPowerBias(Base):
         self.df = df  # modified after tuning
         self.num_averages = num_averages
         self.amp = amp
-        self.bias_arr = np.atleast_1d(bias_arr).astype(np.float64)
-        self.pump_pwr_arr = np.atleast_1d(pump_pwr_arr).astype(np.int64)
+        self.bias_arr = asarray(bias_arr, np.float64)
+        self.pump_pwr_arr = asarray(pump_pwr_arr, np.int64)
         self.output_port = output_port
         self.input_port = input_port
         self.bias_port = bias_port

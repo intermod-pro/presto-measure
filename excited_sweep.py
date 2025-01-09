@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator with and without a π/2 control pulse."""
 
-from typing import Optional
+from typing import Literal, Optional, overload
 
 import h5py
 import numpy as np
@@ -211,7 +211,13 @@ class ExcitedSweep(PlsBase):
 
         return self
 
-    def analyze(self, all_plots: bool = False):
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: Literal[True]) -> float: ...
+
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: bool = False): ...
+
+    def analyze(self, *, all_plots: bool = False, batch: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
         assert self.readout_freq_arr is not None
@@ -220,7 +226,6 @@ class ExcitedSweep(PlsBase):
         assert len(self.readout_freq_arr) == self.readout_freq_nr
         assert len(self.readout_if_arr) == self.readout_freq_nr
 
-        import matplotlib.pyplot as plt
         from scipy.optimize import curve_fit
 
         try:
@@ -229,20 +234,6 @@ class ExcitedSweep(PlsBase):
             _has_resonator_tools = True
         except ImportError:
             _has_resonator_tools = False
-
-        ret_fig = []
-        if all_plots:
-            # Plot raw store data for first iteration as a check
-            t_low, t_high = self._store_t_analysis()
-            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-            ax11, ax12 = ax1
-            ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
-            ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
-            ax12.set_xlabel("Time [ns]")
-            fig1.show()
-            ret_fig.append(fig1)
 
         # Analyze
         idx_low, idx_high = self._store_idx_analysis()
@@ -314,57 +305,77 @@ class ExcitedSweep(PlsBase):
         print(f"ω_opt / 2π = {f_o * 1e-9:.6f} GHz")
         print("----------------")
 
-        fig2, ax2 = plt.subplots(3, 1, sharex=True, tight_layout=True, figsize=(6.4, 6.4))
-        ax21, ax22, ax23 = ax2
+        if not batch:
+            import matplotlib.pyplot as plt
 
-        for ax_ in ax2:
+            ret_fig = []
+            if all_plots:
+                # Plot raw store data for first iteration as a check
+                t_low, t_high = self._store_t_analysis()
+                fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+                ax11, ax12 = ax1
+                ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
+                ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
+                ax12.set_xlabel("Time [ns]")
+                fig1.show()
+                ret_fig.append(fig1)
+
+            fig2, ax2 = plt.subplots(3, 1, sharex=True, tight_layout=True, figsize=(6.4, 6.4))
+            ax21, ax22, ax23 = ax2
+
+            for ax_ in ax2:
+                if _has_resonator_tools:
+                    ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
+                    ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
+                ax_.axvline(1e-9 * popt[0], ls="--", c="C5", alpha=0.5)
+
+            ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="C0", label="|g>")
+            ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], c="C1", label="|e>")
+            ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="C0")
+            ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[1, :], c="C1")
+            ax23.plot(1e-9 * self.readout_freq_arr, 1e3 * separation, c="C2", label="||e> - |g>|")
+
             if _has_resonator_tools:
-                ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
-                ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
-            ax_.axvline(1e-9 * popt[0], ls="--", c="C5", alpha=0.5)
+                ax21.plot(
+                    1e-9 * port_g.f_data,  # pyright: ignore
+                    20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
+                    c="C3",
+                    ls="--",
+                )
+                ax21.plot(
+                    1e-9 * port_e.f_data,  # pyright: ignore
+                    20 * np.log10(np.abs(port_e.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
+                    c="C4",
+                    ls="--",
+                )
+                ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="C3", ls="--")  # pyright: ignore
+                ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="C4", ls="--")  # pyright: ignore
 
-        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="C0", label="|g>")
-        ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], c="C1", label="|e>")
-        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="C0")
-        ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[1, :], c="C1")
-        ax23.plot(1e-9 * self.readout_freq_arr, 1e3 * separation, c="C2", label="||e> - |g>|")
-
-        if _has_resonator_tools:
-            ax21.plot(
-                1e-9 * port_g.f_data,  # pyright: ignore
-                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
-                c="C3",
+            ax23.plot(
+                1e-9 * self.readout_freq_arr,
+                1e3 * _gaussian(self.readout_freq_arr, *popt),
+                c="C5",
                 ls="--",
             )
-            ax21.plot(
-                1e-9 * port_e.f_data,  # pyright: ignore
-                20 * np.log10(np.abs(port_e.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
-                c="C4",
-                ls="--",
-            )
-            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="C3", ls="--")  # pyright: ignore
-            ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="C4", ls="--")  # pyright: ignore
 
-        ax23.plot(
-            1e-9 * self.readout_freq_arr,
-            1e3 * _gaussian(self.readout_freq_arr, *popt),
-            c="C5",
-            ls="--",
-        )
+            ax21.set_ylabel("Amplitude [dBFS]")
+            ax22.set_ylabel("Phase [rad]")
+            ax23.set_ylabel("Separation [mFS]")
+            ax2[-1].set_xlabel("Readout frequency [GHz]")
+            ax21.legend(ncol=2, loc="lower right")
+            ax23.legend(loc="upper right")
+            ax21.grid()
+            ax22.grid()
+            ax23.grid()
+            fig2.show()
+            ret_fig.append(fig2)
 
-        ax21.set_ylabel("Amplitude [dBFS]")
-        ax22.set_ylabel("Phase [rad]")
-        ax23.set_ylabel("Separation [mFS]")
-        ax2[-1].set_xlabel("Readout frequency [GHz]")
-        ax21.legend(ncol=2, loc="lower right")
-        ax23.legend(loc="upper right")
-        ax21.grid()
-        ax22.grid()
-        ax23.grid()
-        fig2.show()
-        ret_fig.append(fig2)
+            return ret_fig
 
-        return ret_fig
+        else:
+            return float(f_o)
 
 
 def _gaussian(x, x0, s, a, o):

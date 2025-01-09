@@ -4,7 +4,7 @@ Two-tone spectroscopy with Pulsed mode: sweep of pump frequency, with fixed pump
 """
 
 import ast
-from typing import Optional
+from typing import Literal, Optional, overload
 
 import h5py
 import numpy as np
@@ -225,27 +225,18 @@ class TwoTonePulsed(PlsBase):
 
         return self
 
-    def analyze(self, all_plots: bool = False):
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: Literal[True]) -> float: ...
+
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: bool = False): ...
+
+    def analyze(self, *, all_plots: bool = False, batch: bool = False):
         assert self.t_arr is not None
         assert self.store_arr is not None
         assert self.control_freq_arr is not None
 
-        import matplotlib.pyplot as plt
         from scipy.optimize import curve_fit
-
-        ret_fig = []
-        if all_plots:
-            # Plot raw store data for first iteration as a check
-            t_low, t_high = self._store_t_analysis()
-            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-            ax11, ax12 = ax1
-            ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
-            ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
-            ax12.set_xlabel("Time [ns]")
-            fig1.show()
-            ret_fig.append(fig1)
 
         # Analyze
         idx_low, idx_high = self._store_idx_analysis()
@@ -277,42 +268,66 @@ class TwoTonePulsed(PlsBase):
             print("fit failed")
             popt = None
 
-        if all_plots:
-            fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-            ax21, ax22, ax23, ax24 = ax2
-            ax21.plot(1e-9 * self.control_freq_arr, mult * np.abs(data))
-            ax22.plot(1e-9 * self.control_freq_arr, np.angle(data))
-            ax23.plot(1e-9 * self.control_freq_arr, mult * np.real(data))
-            ax24.plot(1e-9 * self.control_freq_arr, mult * np.imag(data))
+        if not batch:
+            import matplotlib.pyplot as plt
+
+            ret_fig = []
+            if all_plots:
+                # Plot raw store data for first iteration as a check
+                t_low, t_high = self._store_t_analysis()
+                fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+                ax11, ax12 = ax1
+                ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
+                ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
+                ax12.set_xlabel("Time [ns]")
+                fig1.show()
+                ret_fig.append(fig1)
+
+            if all_plots:
+                fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
+                ax21, ax22, ax23, ax24 = ax2
+                ax21.plot(1e-9 * self.control_freq_arr, mult * np.abs(data))
+                ax22.plot(1e-9 * self.control_freq_arr, np.angle(data))
+                ax23.plot(1e-9 * self.control_freq_arr, mult * np.real(data))
+                ax24.plot(1e-9 * self.control_freq_arr, mult * np.imag(data))
+                if popt is not None:
+                    ax23.plot(
+                        1e-9 * self.control_freq_arr,
+                        mult * _gaussian(self.control_freq_arr, *popt),
+                        "--",
+                    )
+
+                ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
+                ax22.set_ylabel("Phase [rad]")
+                ax23.set_ylabel(f"I [{unit:s}FS]")
+                ax24.set_ylabel(f"Q [{unit:s}FS]")
+                ax2[-1].set_xlabel("Control frequency [GHz]")
+                fig2.show()
+                ret_fig.append(fig2)
+
+            # bigger plot just for I quadrature
+            fig3, ax3 = plt.subplots(tight_layout=True)
+            ax3.plot(1e-9 * self.control_freq_arr, mult * np.real(data), ".")
             if popt is not None:
-                ax23.plot(
+                ax3.plot(
                     1e-9 * self.control_freq_arr,
                     mult * _gaussian(self.control_freq_arr, *popt),
                     "--",
                 )
+            ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
+            ax3.set_xlabel(r"Control frequency [GHz]")
+            ax3.grid()
+            fig3.show()
+            ret_fig.append(fig3)
 
-            ax21.set_ylabel(f"Amplitude [{unit:s}FS]")
-            ax22.set_ylabel("Phase [rad]")
-            ax23.set_ylabel(f"I [{unit:s}FS]")
-            ax24.set_ylabel(f"Q [{unit:s}FS]")
-            ax2[-1].set_xlabel("Control frequency [GHz]")
-            fig2.show()
-            ret_fig.append(fig2)
+            return ret_fig
 
-        # bigger plot just for I quadrature
-        fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(1e-9 * self.control_freq_arr, mult * np.real(data), ".")
-        if popt is not None:
-            ax3.plot(
-                1e-9 * self.control_freq_arr, mult * _gaussian(self.control_freq_arr, *popt), "--"
-            )
-        ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel(r"Control frequency [GHz]")
-        ax3.grid()
-        fig3.show()
-        ret_fig.append(fig3)
-
-        return ret_fig
+        else:
+            assert popt is not None
+            f0 = float(popt[0])
+            return f0
 
 
 def _gaussian(x, x0, s, a, o):

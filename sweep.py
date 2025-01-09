@@ -3,7 +3,7 @@
 Simple frequency sweep using the Lockin mode.
 """
 
-from typing import Optional
+from typing import Literal, Optional, overload
 
 import h5py
 import numpy as np
@@ -146,14 +146,20 @@ class Sweep(Base):
 
         return self
 
-    def analyze(self):
+    @overload
+    def analyze(self): ...
+
+    @overload
+    def analyze(self, *, batch: Literal[False]): ...
+
+    @overload
+    def analyze(self, *, batch: Literal[True]) -> float: ...
+
+    def analyze(self, *, batch: bool = False):
         if self.freq_arr is None:
             raise RuntimeError
         if self.resp_arr is None:
             raise RuntimeError
-
-        import matplotlib.pyplot as plt
-        import matplotlib.widgets as mwidgets
 
         try:
             from resonator_tools import circuit
@@ -164,31 +170,11 @@ class Sweep(Base):
 
         resp_dB = 20.0 * np.log10(np.abs(self.resp_arr))
 
-        fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-        ax11, ax12 = ax1
-        ax11.plot(1e-9 * self.freq_arr, resp_dB, ".")
-        # ax11.plot(1e-9 * freq_arr, np.abs(resp_arr))
-        (line_fit_a,) = ax11.plot(
-            1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
-        )
-        ax12.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr), ".", label="data")
-        (line_fit_p,) = ax12.plot(
-            1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", label="fit"
-        )
-        ax12.set_xlabel("Frequency [GHz]")
-        ax11.set_ylabel("Amplitude [dB]")
-        ax12.set_ylabel("Phase [rad]")
-        ax12.legend()
-        ax11.grid()
-        ax12.grid()
-
-        def onselect(xmin, xmax):
+        def do_fit(fmin, fmax):
             if _do_fit:
                 port = circuit.notch_port(self.freq_arr, self.resp_arr)  # pyright: ignore[reportPossiblyUnboundVariable]
-                port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
+                port.autofit(fcrop=(fmin, fmax))
                 sim_db = 20 * np.log10(np.abs(port.z_data_sim))
-                line_fit_a.set_data(1e-9 * port.f_data, sim_db)  # type: ignore
-                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))  # type: ignore
                 f_min = port.f_data[np.argmin(sim_db)]  # type: ignore
                 print("----------------")
                 print(f"fr = {port.fitresults['fr']}")
@@ -198,22 +184,66 @@ class Sweep(Base):
                 print(f"kappa = {port.fitresults['fr'] / port.fitresults['Qc_dia_corr']}")
                 print(f"f_min = {f_min}")
                 print("----------------")
-                fig1.canvas.draw()
+
+                return port
             else:
                 print("unable to perform fit: resonator_tools is not installed")
+                return None
 
-        # SpanSelector messes up x limits in some versions of matplotlib
-        # save limits now and restore them later on
-        xlims = ax11.get_xlim()
-        rectprops = dict(facecolor="tab:gray", alpha=0.5)
-        span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
-        span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
-        # keep references to span selectors
-        fig1._span_a = span_a  # type: ignore
-        fig1._span_p = span_p  # type: ignore
-        # restore x limits
-        ax11.set_xlim(xlims)
+        if not batch:
+            import matplotlib.pyplot as plt
+            import matplotlib.widgets as mwidgets
 
-        fig1.show()
+            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+            ax11, ax12 = ax1
+            ax11.plot(1e-9 * self.freq_arr, resp_dB, ".")
+            # ax11.plot(1e-9 * freq_arr, np.abs(resp_arr))
+            (line_fit_a,) = ax11.plot(
+                1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
+            )
+            ax12.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr), ".", label="data")
+            (line_fit_p,) = ax12.plot(
+                1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", label="fit"
+            )
+            ax12.set_xlabel("Frequency [GHz]")
+            ax11.set_ylabel("Amplitude [dB]")
+            ax12.set_ylabel("Phase [rad]")
+            ax12.legend()
+            ax11.grid()
+            ax12.grid()
 
-        return fig1
+            def onselect(xmin, xmax):
+                port = do_fit(xmin * 1e9, xmax * 1e9)
+                if port is not None:
+                    sim_db = 20 * np.log10(np.abs(port.z_data_sim))
+                    line_fit_a.set_data(1e-9 * port.f_data, sim_db)  # type: ignore
+                    line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))  # type: ignore
+                    fig1.canvas.draw()
+
+            # SpanSelector messes up x limits in some versions of matplotlib
+            # save limits now and restore them later on
+            xlims = ax11.get_xlim()
+            rectprops = dict(facecolor="tab:gray", alpha=0.5)
+            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
+            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
+            # keep references to span selectors
+            fig1._span_a = span_a  # type: ignore
+            fig1._span_p = span_p  # type: ignore
+            # restore x limits
+            ax11.set_xlim(xlims)
+
+            fig1.show()
+            return fig1
+
+        else:
+            # (try to) do the first fit
+            # center first fit on ampitude minimum
+            f_ctr = self.freq_arr[np.argmin(np.abs(self.resp_arr))]
+            # fit at most half of the sweep span
+            f_min = max(f_ctr - self.freq_span / 4, self.freq_arr.min())
+            f_max = min(f_ctr + self.freq_span / 4, self.freq_arr.max())
+            port = do_fit(f_min, f_max)
+            assert port is not None
+            sim_db = 20 * np.log10(np.abs(port.z_data_sim))
+            f_min = port.f_data[np.argmin(sim_db)]  # type: ignore
+            return float(f_min)

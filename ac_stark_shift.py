@@ -12,9 +12,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class AcStarkShift(PlsBase):
@@ -28,8 +30,8 @@ class AcStarkShift(PlsBase):
         control_duration: float,
         sample_duration: float,
         ringup_duration: float,
-        delay_arr: Union[List[float], npt.NDArray[np.float64]],
-        ringup_amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        delay_arr: FloatAny,
+        ringup_amp_arr: FloatAny,
         readout_port: int,
         control_port: int,
         sample_port: int,
@@ -47,8 +49,8 @@ class AcStarkShift(PlsBase):
         self.control_duration = control_duration
         self.sample_duration = sample_duration
         self.ringup_duration = ringup_duration
-        self.delay_arr = np.atleast_1d(delay_arr).astype(np.float64)
-        self.ringup_amp_arr = np.atleast_1d(ringup_amp_arr).astype(np.float64)
+        self.delay_arr = asarray(delay_arr, np.float64)
+        self.ringup_amp_arr = asarray(ringup_amp_arr, np.float64)
         self.readout_port = readout_port
         self.control_port = control_port
         self.sample_port = sample_port

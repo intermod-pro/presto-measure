@@ -22,12 +22,14 @@ from qiskit.compiler import transpile
 from qiskit_experiments.library import StandardRB
 
 from presto import pulsed
-from presto.utils import rotate_opt, sin2
+from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
 
 Gate = Tuple[str, int]
 GateSeq = List[Gate]
+
+IntAny = Union[int, List[int], npt.NDArray[np.integer]]
 
 
 class Rb(PlsBase):
@@ -46,7 +48,7 @@ class Rb(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        rb_len_arr: Union[List[int], npt.NDArray[np.int64]],
+        rb_len_arr: IntAny,
         rb_nr_realizations: int,
         drag: float = 0.0,
         jpa_params: Optional[dict] = None,
@@ -64,7 +66,7 @@ class Rb(PlsBase):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
-        self.rb_len_arr = np.atleast_1d(rb_len_arr).astype(np.int64)
+        self.rb_len_arr = asarray(rb_len_arr, np.int64)
         self.rb_nr_realizations = rb_nr_realizations
         self.drag = drag
         self.jpa_params = jpa_params
@@ -264,7 +266,7 @@ class Rb(PlsBase):
             return ret
 
     def _rbgen(self) -> List[List[GateSeq]]:
-        return _singlequbitrb(self.rb_len_arr.tolist(), self.rb_nr_realizations)
+        return _singlequbitrb(self.rb_len_arr.tolist(), self.rb_nr_realizations)  # pyright: ignore[reportArgumentType]
 
     def analyze(self):
         if self.t_arr is None:

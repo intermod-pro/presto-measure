@@ -9,9 +9,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import asarray, format_precision, rotate_opt, sin2
 
 from _base import PlsBase, project
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class T1(PlsBase):
@@ -24,7 +26,7 @@ class T1(PlsBase):
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
-        delay_arr: Union[List[float], npt.NDArray[np.float64]],
+        delay_arr: FloatAny,
         readout_port: int,
         control_port: int,
         sample_port: int,
@@ -41,7 +43,7 @@ class T1(PlsBase):
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
-        self.delay_arr = np.atleast_1d(delay_arr).astype(np.float64)
+        self.delay_arr = asarray(delay_arr, np.float64)
         self.readout_port = readout_port
         self.control_port = control_port
         self.sample_port = sample_port

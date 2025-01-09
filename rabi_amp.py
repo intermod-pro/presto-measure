@@ -7,16 +7,18 @@ The control pulse has a sin^2 envelope, while the readout pulse is square.
 
 import ast
 import math
-from typing import List, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union, overload
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt, sin2
+from presto.utils import asarray, format_precision, rotate_opt, sin2
 
 from _base import PlsBase
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class RabiAmp(PlsBase):
@@ -25,7 +27,7 @@ class RabiAmp(PlsBase):
         readout_freq: float,
         control_freq: float,
         readout_amp: float,
-        control_amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        control_amp_arr: FloatAny,
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
@@ -42,7 +44,7 @@ class RabiAmp(PlsBase):
         self.readout_freq = readout_freq
         self.control_freq = control_freq
         self.readout_amp = readout_amp
-        self.control_amp_arr = np.atleast_1d(control_amp_arr).astype(np.float64)
+        self.control_amp_arr = asarray(control_amp_arr, np.float64)
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
@@ -206,27 +208,17 @@ class RabiAmp(PlsBase):
 
         return self
 
-    def analyze(self, all_plots: bool = False):
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: Literal[True]) -> Tuple[float, float]: ...
+
+    @overload
+    def analyze(self, *, all_plots: bool = False, batch: bool = False): ...
+
+    def analyze(self, *, all_plots: bool = False, batch: bool = False):
         if self.t_arr is None:
             raise RuntimeError
         if self.store_arr is None:
             raise RuntimeError
-
-        import matplotlib.pyplot as plt
-
-        ret_fig = []
-        if all_plots:
-            # Plot raw store data for first iteration as a check
-            t_low, t_high = self._store_t_analysis()
-            fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
-            ax11, ax12 = ax1
-            ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
-            ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
-            ax12.set_xlabel("Time [ns]")
-            fig1.show()
-            ret_fig.append(fig1)
 
         # Analyze Rabi
         idx_low, idx_high = self._store_idx_analysis()
@@ -249,48 +241,68 @@ class RabiAmp(PlsBase):
         print(f"control_amp_180 = {pi_amp:.5f}")
         print(f"control_amp_90 = {pi_2_amp:.5f}")
 
-        if all_plots:
-            fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
-            ax21, ax22, ax23, ax24 = ax2
-            ax21.plot(self.control_amp_arr, np.abs(data))
-            ax22.plot(self.control_amp_arr, np.angle(data))
-            ax23.plot(self.control_amp_arr, np.real(data))
-            ax23.plot(self.control_amp_arr, _func(self.control_amp_arr, *popt_x), "--")
-            ax24.plot(self.control_amp_arr, np.imag(data))
+        if not batch:
+            import matplotlib.pyplot as plt
 
-            ax21.set_ylabel("Amplitude [FS]")
-            ax22.set_ylabel("Phase [rad]")
-            ax23.set_ylabel("I [FS]")
-            ax24.set_ylabel("Q [FS]")
-            ax2[-1].set_xlabel("Pulse amplitude [FS]")
-            fig2.show()
-            ret_fig.append(fig2)
+            ret_fig = []
+            if all_plots:
+                # Plot raw store data for first iteration as a check
+                t_low, t_high = self._store_t_analysis()
+                fig1, ax1 = plt.subplots(2, 1, sharex=True, tight_layout=True)
+                ax11, ax12 = ax1
+                ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
+                ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[0, 0, :]))
+                ax12.plot(1e9 * self.t_arr, np.angle(self.store_arr[0, 0, :]))
+                ax12.set_xlabel("Time [ns]")
+                fig1.show()
+                ret_fig.append(fig1)
 
-        data_max = np.abs(data).max()
-        unit = ""
-        mult = 1.0
-        if data_max < 1e-6:
-            unit = "n"
-            mult = 1e9
-        elif data_max < 1e-3:
-            unit = "μ"
-            mult = 1e6
-        elif data_max < 1e0:
-            unit = "m"
-            mult = 1e3
+            if all_plots:
+                fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
+                ax21, ax22, ax23, ax24 = ax2
+                ax21.plot(self.control_amp_arr, np.abs(data))
+                ax22.plot(self.control_amp_arr, np.angle(data))
+                ax23.plot(self.control_amp_arr, np.real(data))
+                ax23.plot(self.control_amp_arr, _func(self.control_amp_arr, *popt_x), "--")
+                ax24.plot(self.control_amp_arr, np.imag(data))
 
-        fig3, ax3 = plt.subplots(tight_layout=True)
-        ax3.plot(self.control_amp_arr, mult * np.real(data), ".")
-        ax3.plot(self.control_amp_arr, mult * _func(self.control_amp_arr, *popt_x), "--")
-        ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
-        ax3.set_xlabel("Pulse amplitude [FS]")
-        ax3.grid()
-        if self.num_pulses > 1:
-            ax3.set_title(f"{self.num_pulses} pulses")
-        fig3.show()
-        ret_fig.append(fig3)
+                ax21.set_ylabel("Amplitude [FS]")
+                ax22.set_ylabel("Phase [rad]")
+                ax23.set_ylabel("I [FS]")
+                ax24.set_ylabel("Q [FS]")
+                ax2[-1].set_xlabel("Pulse amplitude [FS]")
+                fig2.show()
+                ret_fig.append(fig2)
 
-        return ret_fig
+            data_max = np.abs(data).max()
+            unit = ""
+            mult = 1.0
+            if data_max < 1e-6:
+                unit = "n"
+                mult = 1e9
+            elif data_max < 1e-3:
+                unit = "μ"
+                mult = 1e6
+            elif data_max < 1e0:
+                unit = "m"
+                mult = 1e3
+
+            fig3, ax3 = plt.subplots(tight_layout=True)
+            ax3.plot(self.control_amp_arr, mult * np.real(data), ".")
+            ax3.plot(self.control_amp_arr, mult * _func(self.control_amp_arr, *popt_x), "--")
+            ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
+            ax3.set_xlabel("Pulse amplitude [FS]")
+            ax3.grid()
+            if self.num_pulses > 1:
+                ax3.set_title(f"{self.num_pulses} pulses")
+            fig3.show()
+            ret_fig.append(fig3)
+
+            return ret_fig
+
+        else:
+            return (float(pi_amp), float(pi_2_amp))
 
 
 def _func(t, offset, amplitude, T2, period, phase):

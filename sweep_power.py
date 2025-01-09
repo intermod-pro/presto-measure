@@ -10,9 +10,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import lockin
-from presto.utils import ProgressBar
+from presto.utils import ProgressBar, asarray
 
 from _base import Base
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class SweepPower(Base):
@@ -22,7 +24,7 @@ class SweepPower(Base):
         freq_span: float,
         df: float,
         num_averages: int,
-        amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        amp_arr: FloatAny,
         output_port: int,
         input_port: int,
         dither: bool = True,
@@ -32,7 +34,7 @@ class SweepPower(Base):
         self.freq_span = freq_span
         self.df = df  # modified after tuning
         self.num_averages = num_averages
-        self.amp_arr = np.atleast_1d(amp_arr).astype(np.float64)
+        self.amp_arr = asarray(amp_arr, np.float64)
         self.output_port = output_port
         self.input_port = input_port
         self.dither = dither

@@ -14,9 +14,11 @@ import numpy as np
 import numpy.typing as npt
 
 from presto import pulsed
-from presto.utils import format_precision, rotate_opt
+from presto.utils import asarray, format_precision, rotate_opt
 
 from _base import PlsBase
+
+FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
 
 
 class RabiAmp(PlsBase):
@@ -25,7 +27,7 @@ class RabiAmp(PlsBase):
         readout_freq: float,
         control_freq: float,
         readout_amp: float,
-        control_amp_arr: Union[List[float], npt.NDArray[np.float64]],
+        control_amp_arr: FloatAny,
         readout_duration: float,
         control_duration: float,
         sample_duration: float,
@@ -42,7 +44,7 @@ class RabiAmp(PlsBase):
         self.readout_freq = readout_freq
         self.control_freq = control_freq
         self.readout_amp = readout_amp
-        self.control_amp_arr = np.atleast_1d(control_amp_arr).astype(np.float64)
+        self.control_amp_arr = asarray(control_amp_arr, np.float64)
         self.readout_duration = readout_duration
         self.control_duration = control_duration
         self.sample_duration = sample_duration
