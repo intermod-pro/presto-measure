@@ -108,7 +108,11 @@ class TwoTonePower(Base):
             ig.set_frequencies(0.0)
 
             lck.apply_settings()
+
+            # disable automatic selection of sampling rate
+            # so it doesn't change in the middle of the sweep
             lck.hardware.dac_autoconfig = False
+            lck.hardware._defer_mixer_config = False
 
             pb = ProgressBar(nr_amps * nr_freq)
             pb.start()
@@ -258,7 +262,7 @@ class TwoTonePower(Base):
         )
         if linecut:
             line_sel = ax1.axhline(amp_dBFS[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit)
-        ax1.set_title(f"Probe frequency: {self.readout_freq/1e9:.2f} GHz")
+        ax1.set_title(f"Probe frequency: {self.readout_freq / 1e9:.2f} GHz")
         ax1.set_xlabel("Pump frequency [GHz]")
         ax1.set_ylabel("Pump amplitude [dBFS]")
         cb = fig1.colorbar(im)

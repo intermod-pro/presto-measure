@@ -95,7 +95,11 @@ class JpaSweepBias(Base):
             ig.set_frequencies(0.0)
 
             lck.apply_settings()
+
+            # disable automatic selection of sampling rate
+            # so it doesn't change in the middle of the sweep
             lck.hardware.dac_autoconfig = False
+            lck.hardware._defer_mixer_config = False
 
             pb = ProgressBar(nr_bias * nr_freq)
             pb.start()
