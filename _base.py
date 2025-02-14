@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime
 import os
-import time
 from typing import Optional, Tuple
 
 import h5py
@@ -33,7 +33,7 @@ class Base:
         if save_filename is None:
             current_dir, script_basename = os.path.split(script_path)
             script_filename = os.path.splitext(script_basename)[0]  # name of current script
-            timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())  # current date and time
+            timestamp = datetime.now().isoformat(timespec="seconds")  # current date and time
             save_basename = f"{script_filename:s}_{timestamp:s}.h5"  # name of save file
             save_path = os.path.join(current_dir, "data", save_basename)  # full path of save file
         else:
