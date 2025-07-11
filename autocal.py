@@ -257,7 +257,7 @@ if __name__ == "__main__":
 
     main(_settings)
 
-    _timestamp = datetime.now().isoformat(timespec="seconds")
+    _timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     _new_filename = f"qubit{_which_qubit}_{_timestamp}.toml"
     _settings.save(_new_filename)
     rprint(f"Saved qubit parameters to {_new_filename}")
