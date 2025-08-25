@@ -74,10 +74,11 @@ class Settings:
     def from_latest(cls, which_qubit: int):
         filename = sorted(
             filter(
-                lambda x: x.startswith(f"qubit{which_qubit}") and x.endswith(".toml"), os.listdir()
+                lambda x: x.startswith(f"qubit{which_qubit}") and x.endswith(".toml"),
+                os.listdir("data/"),
             )
         )[-1]
-        return cls.load(filename)
+        return cls.load(os.path.join("data", filename))
 
     @classmethod
     def load(cls, filename: str):

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
+import os
 import shutil
 import sys
 
@@ -258,7 +259,7 @@ if __name__ == "__main__":
     main(_settings)
 
     _timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _new_filename = f"qubit{_which_qubit}_{_timestamp}.toml"
+    _new_filename = os.path.join("data", f"qubit{_which_qubit}_{_timestamp}.toml")
     _settings.save(_new_filename)
     rprint(f"Saved qubit parameters to {_new_filename}")
 
