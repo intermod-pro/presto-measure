@@ -21,6 +21,7 @@ def main(settings: Settings):
     sweep(settings)
     two_tone_pulsed(settings)
     rabi_amp(settings, num_pulses=1)
+    ramsey_single(settings, coarse=True)
     ramsey_single(settings)
     rabi_amp(settings, num_pulses=10)
     two_tone_ef(settings)
@@ -119,10 +120,15 @@ def rabi_amp(settings: Settings, num_pulses: int):
     settings.control_amp_90 = control_amp_90
 
 
-def ramsey_single(settings: Settings):
+def ramsey_single(settings: Settings, coarse: bool = False):
     from ramsey_single import RamseySingle
 
-    detuning = 1.1e6  ## Hz
+    if coarse:
+        detuning = 11e6  ## Hz
+        step = 2e-9
+    else:
+        detuning = 1.1e6  ## Hz
+        step = 20e-9
 
     exp = RamseySingle(
         readout_freq=settings.readout_freq,
@@ -132,7 +138,7 @@ def ramsey_single(settings: Settings):
         readout_duration=settings.readout_duration,
         control_duration=settings.control_duration,
         sample_duration=settings.sample_duration,
-        delay_arr=20e-9 * np.arange(256),
+        delay_arr=step * np.arange(256),
         readout_port=settings.readout_port,
         control_port=settings.control_port,
         sample_port=settings.sample_port,
