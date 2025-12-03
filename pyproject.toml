@@ -7,6 +7,7 @@ max-line-length = 99
 [tool.pyright]
 ignore = ["bak/", "data/"]
 reportMissingImports = false
+typeCheckingMode = "standard"
 
 [tool.ruff]
 extend-exclude = ["bak/", "data/"]
@@ -15,4 +16,9 @@ line-length = 99
 [tool.yapf]
 based_on_style = "pep8"
 column_limit = 99
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.34.0",
+]
 
