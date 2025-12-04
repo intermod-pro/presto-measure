@@ -3,8 +3,6 @@
 Two-tone spectroscopy in Lockin mode: 2D sweep of pump power and frequency, with fixed probe.
 """
 
-from typing import List, Optional, Union
-
 import h5py
 import numpy as np
 import numpy.typing as npt
@@ -14,7 +12,7 @@ from presto.utils import ProgressBar, asarray, rotate_opt
 
 from _base import Base
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class TwoTonePower(Base):
@@ -52,7 +50,7 @@ class TwoTonePower(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
@@ -145,7 +143,7 @@ class TwoTonePower(Base):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod

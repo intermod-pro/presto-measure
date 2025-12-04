@@ -2,7 +2,7 @@
 """Measure a Ramsey fringes pattern by changing the frequency of two π/2 pulses and their delay."""
 
 import ast
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import h5py
 import numpy as np
@@ -13,7 +13,7 @@ from presto.utils import asarray, format_precision, rotate_opt, sin2, si_prefix_
 
 from _base import PlsBase
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class RamseyFringes(PlsBase):
@@ -35,7 +35,7 @@ class RamseyFringes(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -64,7 +64,7 @@ class RamseyFringes(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -170,7 +170,7 @@ class RamseyFringes(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod

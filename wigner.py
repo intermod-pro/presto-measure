@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Measure the Wigner function of a bosonic mode."""
 
-from typing import List, Optional, Union
-
 import h5py
 import numpy as np
 import numpy.typing as npt
@@ -12,7 +10,7 @@ from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class Wigner(PlsBase):
@@ -64,7 +62,7 @@ class Wigner(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -179,7 +177,7 @@ class Wigner(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod

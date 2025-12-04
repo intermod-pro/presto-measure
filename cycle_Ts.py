@@ -3,7 +3,6 @@ import ast
 import os
 import signal
 import time
-from typing import List, Optional, Union
 
 import h5py
 from matplotlib import _pylab_helpers
@@ -18,7 +17,7 @@ from _base import Base
 from ramsey_echo import RamseyEcho
 from t1 import T1 as T1Class
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 KEEP_GOING = True
 
@@ -41,10 +40,10 @@ class CycleTs(Base):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
-        ref_g: Optional[List[complex]] = None,
-        ref_e: Optional[List[complex]] = None,
+        ref_g: list[complex] | None = None,
+        ref_e: list[complex] | None = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -89,7 +88,7 @@ class CycleTs(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ):
         self.time_start = time.time()
@@ -113,7 +112,7 @@ class CycleTs(Base):
         global KEEP_GOING
         while KEEP_GOING:
             print("\n\n\n")
-            print(f"******* Run number {count+1:d} *******")
+            print(f"******* Run number {count + 1:d} *******")
             count += 1
 
             print("\n")
@@ -152,7 +151,7 @@ class CycleTs(Base):
         print("Done")
         input("___ Press Enter to close ___")
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         # save parameters
         self._save_filename = super()._save(__file__, save_filename=save_filename)
         # add growable arrays

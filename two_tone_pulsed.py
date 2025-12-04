@@ -4,7 +4,7 @@ Two-tone spectroscopy with Pulsed mode: sweep of pump frequency, with fixed pump
 """
 
 import ast
-from typing import Literal, Optional, overload
+from typing import Literal, overload
 
 import h5py
 import numpy as np
@@ -34,7 +34,7 @@ class TwoTonePulsed(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -63,7 +63,7 @@ class TwoTonePulsed(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with pulsed.Pulsed(
@@ -165,7 +165,7 @@ class TwoTonePulsed(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod

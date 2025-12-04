@@ -7,7 +7,7 @@ The control pulse has a sin^2 envelope, while the readout pulse is square.
 
 import ast
 import math
-from typing import List, Literal, Optional, Tuple, Union, overload
+from typing import Literal, overload
 
 import h5py
 import numpy as np
@@ -18,7 +18,7 @@ from presto.utils import asarray, format_precision, rotate_opt, sin2
 
 from _base import PlsBase
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class RabiAmp(PlsBase):
@@ -38,7 +38,7 @@ class RabiAmp(PlsBase):
         readout_sample_delay: float,
         num_averages: int,
         num_pulses: int = 1,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -65,7 +65,7 @@ class RabiAmp(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -152,7 +152,7 @@ class RabiAmp(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
@@ -207,7 +207,7 @@ class RabiAmp(PlsBase):
         return self
 
     @overload
-    def analyze(self, *, all_plots: bool = False, batch: Literal[True]) -> Tuple[float, float]: ...
+    def analyze(self, *, all_plots: bool = False, batch: Literal[True]) -> tuple[float, float]: ...
 
     @overload
     def analyze(self, *, all_plots: bool = False, batch: bool = False): ...
@@ -310,7 +310,7 @@ def _func(t, offset, amplitude, T2, period, phase):
 
 def _fit_period(
     x: npt.NDArray[np.float64], y: npt.NDArray[np.float64]
-) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     from scipy.optimize import curve_fit
 
     pkpk = np.max(y) - np.min(y)

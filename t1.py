@@ -2,7 +2,6 @@
 """Measure the energy-relaxation time T1."""
 
 import ast
-from typing import List, Optional, Union
 
 import h5py
 import numpy as np
@@ -13,7 +12,7 @@ from presto.utils import asarray, format_precision, rotate_opt, sin2
 
 from _base import PlsBase, project
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class T1(PlsBase):
@@ -33,7 +32,7 @@ class T1(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -60,7 +59,7 @@ class T1(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
         save: bool = True,
     ) -> str:
@@ -145,7 +144,7 @@ class T1(PlsBase):
         else:
             return ""
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
@@ -195,7 +194,7 @@ class T1(PlsBase):
 
         return self
 
-    def analyze_batch(self, reference_templates: Optional[tuple] = None):
+    def analyze_batch(self, reference_templates: tuple | None = None):
         assert self.t_arr is not None
         assert self.store_arr is not None
 

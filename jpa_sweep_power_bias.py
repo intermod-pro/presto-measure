@@ -4,7 +4,6 @@
 """
 
 import math
-from typing import List, Optional, Union
 
 import h5py
 import numpy as np
@@ -15,8 +14,8 @@ from presto.utils import ProgressBar, asarray
 
 from _base import Base
 
-IntAny = Union[int, List[int], npt.NDArray[np.integer]]
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+IntAny = int | list[int] | npt.NDArray[np.integer]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class JpaSweepPowerBias(Base):
@@ -33,7 +32,7 @@ class JpaSweepPowerBias(Base):
         input_port: int,
         bias_port: int,
         pump_port: int,
-        pump_freq: Optional[float] = None,
+        pump_freq: float | None = None,
         dither: bool = True,
         num_skip: int = 0,
     ) -> None:
@@ -61,7 +60,7 @@ class JpaSweepPowerBias(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
@@ -150,7 +149,7 @@ class JpaSweepPowerBias(Base):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
@@ -201,7 +200,7 @@ class JpaSweepPowerBias(Base):
 
         return self
 
-    def analyze(self, quantity: str = "signal", marker_freq: Optional[float] = None):
+    def analyze(self, quantity: str = "signal", marker_freq: float | None = None):
         assert self.freq_arr is not None
         assert self.ref_resp_arr is not None
         assert self.ref_pwr_arr is not None

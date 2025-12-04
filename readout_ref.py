@@ -5,7 +5,7 @@ Acquire reference templates for template matching.
 """
 
 import ast
-from typing import Dict, Optional, overload, Literal, Any, Tuple, Union
+from typing import overload, Literal, Any
 
 import h5py
 import numpy as np
@@ -34,7 +34,7 @@ class ReadoutRef(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -60,7 +60,7 @@ class ReadoutRef(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -155,7 +155,7 @@ class ReadoutRef(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
@@ -205,19 +205,19 @@ class ReadoutRef(PlsBase):
 
     @overload
     def analyze(
-        self, plot: Literal[True], rotate: bool = False, match_len: Optional[int] = None
-    ) -> Tuple[Dict, Any]: ...
+        self, plot: Literal[True], rotate: bool = False, match_len: int | None = None
+    ) -> tuple[dict, Any]: ...
     @overload
     def analyze(
-        self, plot: Literal[False], rotate: bool = False, match_len: Optional[int] = None
-    ) -> Dict: ...
+        self, plot: Literal[False], rotate: bool = False, match_len: int | None = None
+    ) -> dict: ...
     @overload
     def analyze(
-        self, plot: bool = True, rotate: bool = False, match_len: Optional[int] = None
-    ) -> Union[Dict, Tuple[Dict, Any]]: ...
+        self, plot: bool = True, rotate: bool = False, match_len: int | None = None
+    ) -> dict | tuple[dict, Any]: ...
     def analyze(
-        self, plot: bool = True, rotate: bool = False, match_len: Optional[int] = None
-    ) -> Union[Dict, Tuple[Dict, Any]]:
+        self, plot: bool = True, rotate: bool = False, match_len: int | None = None
+    ) -> dict | tuple[dict, Any]:
         assert self.t_arr is not None
         assert self.store_arr is not None
 

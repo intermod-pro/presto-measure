@@ -5,7 +5,6 @@
 from dataclasses import dataclass
 import math
 import os
-from typing import Optional
 
 import tomlkit
 
@@ -37,7 +36,7 @@ class Settings:
     _drag_use: bool
     _drag_lambda: float
 
-    _jpa: Optional[dict]
+    _jpa: dict | None
 
     _path: str
     _doc: tomlkit.TOMLDocument
@@ -51,7 +50,7 @@ class Settings:
             return 0.0
 
     @property
-    def jpa(self) -> Optional[dict]:
+    def jpa(self) -> dict | None:
         if self._jpa is not None:
             pump_freq = 2 * (self.readout_freq + self._jpa["_pump_offset"])
             jpa = self._jpa.copy()

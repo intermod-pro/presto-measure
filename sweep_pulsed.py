@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator."""
 
-from typing import Optional
-
 import h5py
 import numpy as np
 import numpy.typing as npt
@@ -49,7 +47,7 @@ class SweepPulsed(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -129,7 +127,7 @@ class SweepPulsed(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod

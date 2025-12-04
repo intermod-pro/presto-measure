@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 import os
-from typing import Optional, Tuple
 
 import h5py
 import numpy as np
@@ -27,7 +26,7 @@ class Base:
     }
     """Parameters to configure the data converters (ADC and DAC)"""
 
-    def _save(self, script_path: str, save_filename: Optional[str] = None) -> str:
+    def _save(self, script_path: str, save_filename: str | None = None) -> str:
         script_path = os.path.realpath(script_path)  # full path of current script
 
         if save_filename is None:
@@ -74,13 +73,13 @@ class PlsBase(Base):
     """Analyze only ``store`` data starting from index ``IDX_LOW`` (inclusive), default from the
     beginning. Has not effect on ``match`` data or in lockin mode.
     """
-    IDX_HIGH: Optional[int] = None
+    IDX_HIGH: int | None = None
     """Analyze only ``store`` data up to index ``IDX_HIGH`` (exclusive), or until the end if
     ``None`` (default). Has not effect on ``match`` data or in lockin mode.
     """
 
     def _jpa_setup(self, pls: Pulsed):
-        self.jpa_params: Optional[dict]
+        self.jpa_params: dict | None
         if self.jpa_params is not None:
             pls.hardware.set_lmx(
                 self.jpa_params["pump_freq"],
@@ -91,13 +90,13 @@ class PlsBase(Base):
             pls.hardware.sleep(1.0, False)
 
     def _jpa_stop(self, pls: Pulsed):
-        self.jpa_params: Optional[dict]
+        self.jpa_params: dict | None
         if self.jpa_params is not None:
             pls.hardware.set_lmx(0.0, 0, self.jpa_params["pump_port"])
             pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
 
     def _jpa_tweak(self, T: float, pls: Pulsed) -> float:
-        self.jpa_params: Optional[dict]
+        self.jpa_params: dict | None
         self.readout_freq: float
         if self.jpa_params is not None:
             # adjust period to minimize effect of JPA idler
@@ -116,8 +115,8 @@ class PlsBase(Base):
         else:
             return T
 
-    def _store_idx_analysis(self) -> Tuple[int, int]:
-        self.t_arr: Optional[npt.NDArray[np.float64]]
+    def _store_idx_analysis(self) -> tuple[int, int]:
+        self.t_arr: npt.NDArray[np.float64] | None
         assert self.t_arr is not None
 
         idx_low = self.IDX_LOW
@@ -125,8 +124,8 @@ class PlsBase(Base):
 
         return (idx_low, idx_high)
 
-    def _store_t_analysis(self) -> Tuple[float, float]:
-        self.t_arr: Optional[npt.NDArray[np.float64]]
+    def _store_t_analysis(self) -> tuple[float, float]:
+        self.t_arr: npt.NDArray[np.float64] | None
         assert self.t_arr is not None
         idx_low, idx_high = self._store_idx_analysis()
 
