@@ -79,7 +79,6 @@ class PlsBase(Base):
     """
 
     def _jpa_setup(self, pls: Pulsed):
-        self.jpa_params: dict | None
         if self.jpa_params is not None:
             pls.hardware.set_lmx(
                 self.jpa_params["pump_freq"],
@@ -90,7 +89,6 @@ class PlsBase(Base):
             pls.hardware.sleep(1.0, False)
 
     def _jpa_stop(self, pls: Pulsed):
-        self.jpa_params: dict | None
         if self.jpa_params is not None:
             pls.hardware.set_lmx(0.0, 0, self.jpa_params["pump_port"])
             pls.hardware.set_dc_bias(0.0, self.jpa_params["bias_port"])
@@ -116,7 +114,6 @@ class PlsBase(Base):
             return T
 
     def _store_idx_analysis(self) -> tuple[int, int]:
-        self.t_arr: npt.NDArray[np.float64] | None
         assert self.t_arr is not None
 
         idx_low = self.IDX_LOW
