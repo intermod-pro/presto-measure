@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import ast
 import os
 import signal
@@ -118,7 +119,7 @@ class CycleTs(Base):
             print("\n")
             print("------- measure T1 -------")
             self._data1, t1, t1_err = self.measure_t1(presto_address, presto_port, ext_ref_clk)
-            print("T1 = {:s} μs".format(format_precision(1e6 * t1, 1e6 * t1_err)))
+            print(f"T1 = {format_precision(1e6 * t1, 1e6 * t1_err):s} μs")
 
             # self._data1 = np.vstack((self._data1, data1))
             self._t1_arr = np.r_[self._t1_arr, t1]
@@ -134,7 +135,7 @@ class CycleTs(Base):
             print("\n")
             print("------- measure T2 -------")
             self._data2, t2, t2_err = self.measure_t2(presto_address, presto_port, ext_ref_clk)
-            print("T2 = {:s} μs".format(format_precision(1e6 * t2, 1e6 * t2_err)))
+            print(f"T2 = {format_precision(1e6 * t2, 1e6 * t2_err):s} μs")
 
             # self._data2 = np.vstack((self._data2, data2))
             self._t2_arr = np.r_[self._t2_arr, t2]
@@ -232,7 +233,7 @@ class CycleTs(Base):
         print(f"Data appended to: {self._save_filename}")
 
     @classmethod
-    def load(cls, load_filename: str) -> "CycleTs":
+    def load(cls, load_filename: str) -> CycleTs:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

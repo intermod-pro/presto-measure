@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
 """Pulsed readout starting from ground and excited state.
 
 Acquire reference templates for template matching.
 """
+
+from __future__ import annotations
 
 import ast
 from typing import overload, Literal, Any
@@ -159,7 +160,7 @@ class ReadoutRef(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "ReadoutRef":
+    def load(cls, load_filename: str) -> ReadoutRef:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

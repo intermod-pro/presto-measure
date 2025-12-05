@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Find |e> -> |f> transition with two-tone spectroscopy with Pulsed mode.
 """
+
+from __future__ import annotations
 
 import ast
 from typing import Literal, overload
@@ -201,7 +202,7 @@ class TwoToneEF(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "TwoToneEF":
+    def load(cls, load_filename: str) -> TwoToneEF:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             ge_freq = float(h5f.attrs["ge_freq"])  # type: ignore

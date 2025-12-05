@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 2D sweep of drive power and frequency in Lockin mode.
 """
+
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -120,7 +121,7 @@ class SweepPower(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "SweepPower":
+    def load(cls, load_filename: str) -> SweepPower:
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore

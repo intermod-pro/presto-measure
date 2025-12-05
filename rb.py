@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Randomized benchmarking of a single qubit.
 
@@ -110,7 +109,7 @@ class Rb(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "Rb":
+    def load(cls, load_filename: str) -> Rb:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

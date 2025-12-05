@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Simple frequency sweep using the Lockin mode.
 """
+
+from __future__ import annotations
 
 from typing import Literal, overload
 
@@ -115,7 +116,7 @@ class Sweep(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "Sweep":
+    def load(cls, load_filename: str) -> Sweep:
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore

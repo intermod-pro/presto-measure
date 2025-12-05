@@ -1,9 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 Measure Rabi oscillation by changing the amplitude of the control pulse.
 
 The control pulse has a square envelope, while the readout pulse is square.
 """
+
+from __future__ import annotations
 
 import ast
 import math
@@ -144,7 +145,7 @@ class RabiAmp(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RabiAmp":
+    def load(cls, load_filename: str) -> RabiAmp:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

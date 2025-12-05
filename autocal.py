@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 from datetime import datetime
 import os
 import shutil

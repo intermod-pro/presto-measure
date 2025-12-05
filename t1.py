@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
+
+from __future__ import annotations
 
 import ast
 
@@ -148,7 +149,7 @@ class T1(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "T1":
+    def load(cls, load_filename: str) -> T1:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -244,7 +245,7 @@ class T1(PlsBase):
 
         T1 = popt[0]
         T1_err = perr[0]
-        print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+        print(f"T1 time I: {1e6 * T1} +- {1e6 * T1_err} us")
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
@@ -282,7 +283,7 @@ class T1(PlsBase):
         ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), "--")
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel(r"Control-readout delay [μs]")
-        ax3.set_title("T1 = {:s} μs".format(format_precision(1e6 * T1, 1e6 * T1_err)))
+        ax3.set_title(f"T1 = {format_precision(1e6 * T1, 1e6 * T1_err):s} μs")
         ax3.grid()
         fig3.show()
         ret_fig.append(fig3)

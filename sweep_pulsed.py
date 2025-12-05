@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator."""
+
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -131,7 +132,7 @@ class SweepPulsed(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "SweepPulsed":
+    def load(cls, load_filename: str) -> SweepPulsed:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq_center = float(h5f.attrs["readout_freq_center"])  # type: ignore
             readout_freq_span = float(h5f.attrs["readout_freq_span"])  # type: ignore

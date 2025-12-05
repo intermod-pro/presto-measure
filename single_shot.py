@@ -1,9 +1,10 @@
-# -*- coding: utf-8 -*-
 """Single-shot readout.
 
 Perform pulsed readout starting from ground and excited state using template matching with known
 reference traces. Compare with standard IQ readout.
 """
+
+from __future__ import annotations
 
 import ast
 
@@ -205,7 +206,7 @@ class SingleShot(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "SingleShot":
+    def load(cls, load_filename: str) -> SingleShot:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

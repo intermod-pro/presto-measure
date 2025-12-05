@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 # pyright: reportArgumentType=false
 # pyright: reportIndexIssue=false
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 import math

@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 3D sweep of pump power, DC bias and frequency of probe, to see where we get gain.
 """
+
+from __future__ import annotations
 
 import math
 
@@ -153,7 +154,7 @@ class JpaSweepPowerBias(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "JpaSweepPowerBias":
+    def load(cls, load_filename: str) -> JpaSweepPowerBias:
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore

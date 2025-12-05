@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
+
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -160,7 +161,7 @@ class T2_memory_coherent(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "T2_memory_coherent":
+    def load(cls, load_filename: str) -> T2_memory_coherent:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -240,10 +241,10 @@ class T2_memory_coherent(PlsBase):
 
             T2 = popt[2]
             T2_err = perr[2]
-            print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+            print(f"T2 time: {1e6 * T2} +- {1e6 * T2_err} us")
             det = popt[3]
             det_err = perr[3]
-            print("detuning: {} +- {} Hz".format(det, det_err))
+            print(f"detuning: {det} +- {det_err} Hz")
         except Exception as err:
             popt = None
             T2 = None
@@ -290,7 +291,7 @@ class T2_memory_coherent(PlsBase):
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel(r"Delay [μs]")
         if T2 is not None and T2_err is not None:
-            ax3.set_title("T2 = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))
+            ax3.set_title(f"T2 = {format_precision(1e6 * T2, 1e6 * T2_err):s} μs")
         fig3.show()
         ret_fig.append(fig3)
 

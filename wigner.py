@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Measure the Wigner function of a bosonic mode."""
+
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -181,7 +182,7 @@ class Wigner(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "Wigner":
+    def load(cls, load_filename: str) -> Wigner:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

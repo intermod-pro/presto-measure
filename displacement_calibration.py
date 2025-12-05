@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Calibrate the amplitude of the displacement pulse."""
+
+from __future__ import annotations
 
 import math
 
@@ -187,7 +188,7 @@ class DisplacementCalibration(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "DisplacementCalibration":
+    def load(cls, load_filename: str) -> DisplacementCalibration:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -378,7 +379,7 @@ class DisplacementCalibration(PlsBase):
                 )  # skip the fitting for 0 amplitude that usually doesn't fit well
             else:
                 p = np.polyfit(presto_amp, fitted_alpha, 1)
-            print(r"Fitted dispacement conversion factor: alpha = %.4f*x[FS]+%.4f" % (p[0], p[1]))
+            print(f"Fitted dispacement conversion factor: alpha = {p[0]:.4f}*x[FS]+{p[1]:.4f}")
             ax3.plot(presto_amp, np.polyval(p, presto_amp), "--")
             ax3.set_xlabel("Memory drive amplitude [FS]")
             ax3.set_ylabel(r"Displacement amplitude $\alpha$")

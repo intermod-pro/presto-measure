@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Measure the decoherence time T2 with a Ramsey echo experiment."""
+
+from __future__ import annotations
 
 import ast
 
@@ -160,7 +161,7 @@ class RamseyEcho(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RamseyEcho":
+    def load(cls, load_filename: str) -> RamseyEcho:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -303,7 +304,7 @@ class RamseyEcho(PlsBase):
         ax3.set_xlabel("Ramsey delay [μs]")
         if success:
             ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), "--")  # pyright: ignore [reportPossiblyUnboundVariable]
-            ax3.set_title("T2 echo = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))  # pyright: ignore [reportPossiblyUnboundVariable]
+            ax3.set_title(f"T2 echo = {format_precision(1e6 * T2, 1e6 * T2_err):s} μs")  # pyright: ignore [reportPossiblyUnboundVariable]
         ax3.grid()
         fig3.show()
         ret_fig.append(fig3)

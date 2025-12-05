@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Measure a Ramsey fringes pattern by changing the frequency of two π/2 pulses and their delay."""
+
+from __future__ import annotations
 
 import ast
 from typing import Any
@@ -174,7 +175,7 @@ class RamseyFringes(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RamseyFringes":
+    def load(cls, load_filename: str) -> RamseyFringes:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq_center = float(h5f.attrs["control_freq_center"])  # type: ignore

@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Two-tone spectroscopy in Lockin mode: 2D sweep of pump power and frequency, with fixed probe.
 """
+
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -147,7 +148,7 @@ class TwoTonePower(Base):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "TwoTonePower":
+    def load(cls, load_filename: str) -> TwoTonePower:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq_center = float(h5f.attrs["control_freq_center"])  # type: ignore

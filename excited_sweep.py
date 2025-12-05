@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator with and without a π/2 control pulse."""
+
+from __future__ import annotations
 
 from typing import Literal, overload
 
@@ -159,7 +160,7 @@ class ExcitedSweep(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "ExcitedSweep":
+    def load(cls, load_filename: str) -> ExcitedSweep:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq_center = float(h5f.attrs["readout_freq_center"])  # type: ignore
             readout_freq_span = float(h5f.attrs["readout_freq_span"])  # type: ignore

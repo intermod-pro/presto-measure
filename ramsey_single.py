@@ -1,9 +1,10 @@
-# -*- coding: utf-8 -*-
 """Measure Ramsey oscillations by changing the delay between two π/2 pulses.
 
 Fit detuning of control drive frequency from qubit, and T2*.
 The control pulse has a sin^2 envelope, while the readout pulse is square.
 """
+
+from __future__ import annotations
 
 import ast
 from typing import Literal, overload
@@ -149,7 +150,7 @@ class RamseySingle(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RamseySingle":
+    def load(cls, load_filename: str) -> RamseySingle:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -222,10 +223,10 @@ class RamseySingle(PlsBase):
 
             T2 = popt[2]
             T2_err = perr[2]
-            print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+            print(f"T2 time: {1e6 * T2} +- {1e6 * T2_err} us")
             det = popt[3]
             det_err = perr[3]
-            print("detuning: {} +- {} Hz".format(det, det_err))
+            print(f"detuning: {det} +- {det_err} Hz")
 
             success = True
         except Exception as err:

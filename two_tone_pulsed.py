@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Two-tone spectroscopy with Pulsed mode: sweep of pump frequency, with fixed pump power and fixed probe.
 """
+
+from __future__ import annotations
 
 import ast
 from typing import Literal, overload
@@ -169,7 +170,7 @@ class TwoTonePulsed(PlsBase):
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "TwoTonePulsed":
+    def load(cls, load_filename: str) -> TwoTonePulsed:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq_center = float(h5f.attrs["control_freq_center"])  # type: ignore
