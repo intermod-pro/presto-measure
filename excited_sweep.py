@@ -227,13 +227,7 @@ class ExcitedSweep(PlsBase):
         assert len(self.readout_if_arr) == self.readout_freq_nr
 
         from scipy.optimize import curve_fit
-
-        try:
-            from resonator_tools import circuit
-
-            _has_resonator_tools = True
-        except ImportError:
-            _has_resonator_tools = False
+        from resfit import Notch
 
         # Analyze
         idx_low, idx_high = self._store_idx_analysis()
@@ -257,6 +251,7 @@ class ExcitedSweep(PlsBase):
                 Q_imag = -np.sum(data_slice.imag * sin) / nr_samples
                 resp_Q_arr[jj, ii] = Q_real + 1j * Q_imag
 
+        freqs = self.readout_freq_arr
         _, resp_H_arr = untwist_downconversion(resp_I_arr, resp_Q_arr)
         resp_dB = 20 * np.log10(np.abs(resp_H_arr))
         resp_phase = np.angle(resp_H_arr)
@@ -266,41 +261,34 @@ class ExcitedSweep(PlsBase):
         idx = np.zeros(self.readout_freq_nr, bool)
         idx[:N] = True
         idx[-N:] = True
-        pfit_g = np.polyfit(self.readout_freq_arr[idx], resp_phase[0, idx], 1)
-        pfit_e = np.polyfit(self.readout_freq_arr[idx], resp_phase[1, idx], 1)
+        pfit_g = np.polyfit(freqs[idx], resp_phase[0, idx], 1)
+        pfit_e = np.polyfit(freqs[idx], resp_phase[1, idx], 1)
         pfit = 0.5 * (pfit_g + pfit_e)
-        background = np.polyval(pfit, self.readout_freq_arr)
+        background = np.polyval(pfit, freqs)
         resp_phase[0, :] -= background
         resp_phase[1, :] -= background
         separation = np.abs(resp_H_arr[1, :] - resp_H_arr[0, :])
 
         p0 = [
-            self.readout_freq_arr[np.argmax(separation)],
+            freqs[np.argmax(separation)],
             1 / self.readout_duration,
             np.max(separation),
             0.0,
         ]
-        popt, _ = curve_fit(_gaussian, self.readout_freq_arr, separation, p0)
+        popt, _ = curve_fit(_gaussian, freqs, separation, p0)
 
         print("----------------")
-        if _has_resonator_tools:
-            port_g = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
-                self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
-            )
-            port_e = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
-                self.readout_freq_arr, resp_H_arr[1, :] * np.exp(-1j * background)
-            )
-            port_g.autofit()
-            port_e.autofit()
+        p_g = Notch.autofit(freqs, resp_H_arr[0, :] * np.exp(-1j * background))
+        p_e = Notch.autofit(freqs, resp_H_arr[1, :] * np.exp(-1j * background))
 
-            f_g = port_g.fitresults["fr"]
-            f_e = port_e.fitresults["fr"]
-            f_r = (f_e + f_g) / 2
-            chi_hz = (f_e - f_g) / 2
-            print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
-            print(f"ω_e / 2π = {f_e * 1e-9:.6f} GHz")
-            print(f"ω_r / 2π = {f_r * 1e-9:.6f} GHz")
-            print(f"χ / 2π = {chi_hz * 1e-3:.2f} kHz")
+        f_g = p_g.f_res()
+        f_e = p_e.f_res()
+        f_r = (f_e + f_g) / 2
+        chi_hz = (f_e - f_g) / 2
+        print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
+        print(f"ω_e / 2π = {f_e * 1e-9:.6f} GHz")
+        print(f"ω_r / 2π = {f_r * 1e-9:.6f} GHz")
+        print(f"χ / 2π = {chi_hz * 1e-3:.2f} kHz")
         f_o = popt[0]
         print(f"ω_opt / 2π = {f_o * 1e-9:.6f} GHz")
         print("----------------")
@@ -326,36 +314,24 @@ class ExcitedSweep(PlsBase):
             ax21, ax22, ax23 = ax2
 
             for ax_ in ax2:
-                if _has_resonator_tools:
-                    ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
-                    ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
+                ax_.axvline(1e-9 * f_g, ls="--", c="C3", alpha=0.5)
+                ax_.axvline(1e-9 * f_e, ls="--", c="C4", alpha=0.5)
                 ax_.axvline(1e-9 * popt[0], ls="--", c="C5", alpha=0.5)
 
-            ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="C0", label="|g>")
-            ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[1, :], c="C1", label="|e>")
-            ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="C0")
-            ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[1, :], c="C1")
-            ax23.plot(1e-9 * self.readout_freq_arr, 1e3 * separation, c="C2", label="||e> - |g>|")
+            ax21.plot(1e-9 * freqs, resp_dB[0, :], c="C0", label="|g>")
+            ax21.plot(1e-9 * freqs, resp_dB[1, :], c="C1", label="|e>")
+            ax22.plot(1e-9 * freqs, resp_phase[0, :], c="C0")
+            ax22.plot(1e-9 * freqs, resp_phase[1, :], c="C1")
+            ax23.plot(1e-9 * freqs, 1e3 * separation, c="C2", label="||e> - |g>|")
 
-            if _has_resonator_tools:
-                ax21.plot(
-                    1e-9 * port_g.f_data,  # pyright: ignore
-                    20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
-                    c="C3",
-                    ls="--",
-                )
-                ax21.plot(
-                    1e-9 * port_e.f_data,  # pyright: ignore
-                    20 * np.log10(np.abs(port_e.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
-                    c="C4",
-                    ls="--",
-                )
-                ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="C3", ls="--")  # pyright: ignore
-                ax22.plot(1e-9 * port_e.f_data, np.angle(port_e.z_data_sim), c="C4", ls="--")  # pyright: ignore
+            ax21.plot(1e-9 * freqs, p_g.s_db(freqs), c="C3", ls="--")
+            ax21.plot(1e-9 * freqs, p_e.s_db(freqs), c="C4", ls="--")
+            ax22.plot(1e-9 * freqs, np.angle(p_g.s(freqs)), c="C3", ls="--")
+            ax22.plot(1e-9 * freqs, np.angle(p_e.s(freqs)), c="C4", ls="--")
 
             ax23.plot(
-                1e-9 * self.readout_freq_arr,
-                1e3 * _gaussian(self.readout_freq_arr, *popt),
+                1e-9 * freqs,
+                1e3 * _gaussian(freqs, *popt),
                 c="C5",
                 ls="--",
             )

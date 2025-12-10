@@ -157,16 +157,11 @@ class SweepPower(Base):
             raise RuntimeError
         if self.resp_arr is None:
             raise RuntimeError
+        freqs = self.freq_arr
 
         import matplotlib.pyplot as plt
-
-        try:
-            from resonator_tools import circuit
-            import matplotlib.widgets as mwidgets
-
-            _do_fit = True
-        except ImportError:
-            _do_fit = False
+        import matplotlib.widgets as mwidgets
+        from resfit import Notch
 
         nr_amps = len(self.amp_arr)
         self._AMP_IDX = nr_amps // 2
@@ -187,9 +182,9 @@ class SweepPower(Base):
         highlim = np.percentile(resp_dB, 100.0 - cutoff)
 
         # extent
-        x_min = 1e-9 * self.freq_arr[0]
-        x_max = 1e-9 * self.freq_arr[-1]
-        dx = 1e-9 * (self.freq_arr[1] - self.freq_arr[0])
+        x_min = 1e-9 * freqs[0]
+        x_max = 1e-9 * freqs[-1]
+        dx = 1e-9 * (freqs[1] - freqs[0])
         y_min = amp_dBFS[0]
         y_max = amp_dBFS[-1]
         dy = amp_dBFS[1] - amp_dBFS[0]
@@ -206,8 +201,8 @@ class SweepPower(Base):
             aspect="auto",
             interpolation="none",
             extent=(x_min - dx / 2, x_max + dx / 2, y_min - dy / 2, y_max + dy / 2),
-            vmin=lowlim,  # type: ignore
-            vmax=highlim,  # type: ignore
+            vmin=lowlim,  # pyright: ignore[reportArgumentType]
+            vmax=highlim,  # pyright: ignore[reportArgumentType]
         )
         line_sel = ax1.axhline(amp_dBFS[self._AMP_IDX], ls="--", c="k", lw=3, animated=blit)
         # ax1.set_title(f"amp = {amp_arr[AMP_IDX]:.2e}")
@@ -233,25 +228,24 @@ class SweepPower(Base):
             ax3.yaxis.tick_right()
 
         (line_a,) = ax2.plot(
-            1e-9 * self.freq_arr, resp_dB[self._AMP_IDX], ".", label="measured", animated=blit
+            1e-9 * freqs, resp_dB[self._AMP_IDX], ".", label="measured", animated=blit
         )
         (line_p,) = ax3.plot(
-            1e-9 * self.freq_arr, np.angle(self.resp_arr[self._AMP_IDX]), ".", animated=blit
+            1e-9 * freqs, np.angle(self.resp_arr[self._AMP_IDX]), ".", animated=blit
         )
-        if _do_fit:
-            (line_fit_a,) = ax2.plot(
-                1e-9 * self.freq_arr,
-                np.full_like(self.freq_arr, np.nan),
-                ls="--",
-                label="fit",
-                animated=blit,
-            )
-            (line_fit_p,) = ax3.plot(
-                1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", animated=blit
-            )
+        (line_fit_a,) = ax2.plot(
+            1e-9 * freqs,
+            np.full_like(freqs, np.nan),
+            ls="--",
+            label="fit",
+            animated=blit,
+        )
+        (line_fit_p,) = ax3.plot(
+            1e-9 * freqs, np.full_like(self.freq_arr, np.nan), ls="--", animated=blit
+        )
 
-        f_min = 1e-9 * self.freq_arr.min()
-        f_max = 1e-9 * self.freq_arr.max()
+        f_min = 1e-9 * freqs.min()
+        f_max = 1e-9 * freqs.max()
         f_rng = f_max - f_min
         a_min = resp_dB.min()
         a_max = resp_dB.max()
@@ -298,12 +292,11 @@ class SweepPower(Base):
             )
             line_a.set_ydata(resp_dB[self._AMP_IDX])
             line_p.set_ydata(np.angle(self.resp_arr[self._AMP_IDX]))
-            if _do_fit:
-                line_fit_a.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportPossiblyUnboundVariable]
-                line_fit_p.set_ydata(np.full_like(self.freq_arr, np.nan))  # pyright: ignore [reportPossiblyUnboundVariable]
+            line_fit_a.set_ydata(np.full_like(freqs, np.nan))
+            line_fit_p.set_ydata(np.full_like(freqs, np.nan))
             # ax2.set_title("")
             if blit:
-                fig1.canvas.restore_region(self._bg)  # type: ignore
+                fig1.canvas.restore_region(self._bg)  # pyright: ignore[reportAttributeAccessIssue]
                 ax1.draw_artist(line_sel)
                 ax2.draw_artist(line_a)
                 ax3.draw_artist(line_p)
@@ -312,49 +305,46 @@ class SweepPower(Base):
             else:
                 fig1.canvas.draw()
 
-        if _do_fit:
+        def onselect(xmin, xmax):
+            assert self.resp_arr is not None
+            idx = np.logical_and(freqs >= xmin * 1e9, freqs <= xmax * 1e9)
+            p = Notch.autofit(freqs[idx], self.resp_arr[self._AMP_IDX, idx])
+            if norm:
+                line_fit_a.set_data(
+                    1e-9 * freqs,
+                    20 * np.log10(np.abs(p.s(freqs) / self.amp_arr[self._AMP_IDX])),
+                )
+            else:
+                line_fit_a.set_data(1e-9 * freqs, p.s_db(freqs))
+            line_fit_p.set_data(1e-9 * freqs, np.angle(p.s(freqs)))
+            print("----------------")
+            print(f"fr = {p.f_res()}")
+            print(f"Qi = {p.q_internal()}")
+            print(f"Qc = {p.q_coupling()}")
+            print(f"Ql = {p.q_loaded()}")
+            print(f"kappa = {p.f_res() / p.q_coupling()}")
+            print("----------------")
+            # ax2.set_title(
+            #     f"fr = {1e-6*fr:.0f} MHz, Ql = {Ql:.0f}, Qi = {Qi:.0f}, Qc = {Qc:.0f}, kappa = {1e-3*kappa:.0f} kHz")
+            if blit:
+                fig1.canvas.restore_region(self._bg)  # pyright: ignore[reportAttributeAccessIssue]
+                ax1.draw_artist(line_sel)
+                ax2.draw_artist(line_a)
+                ax2.draw_artist(line_fit_a)
+                ax3.draw_artist(line_p)
+                ax3.draw_artist(line_fit_p)
+                fig1.canvas.blit(fig1.bbox)
+                fig1.canvas.flush_events()
+            else:
+                fig1.canvas.draw()
 
-            def onselect(xmin, xmax):
-                assert self.resp_arr is not None
-                port = circuit.notch_port(self.freq_arr, self.resp_arr[self._AMP_IDX])  # pyright: ignore [reportPossiblyUnboundVariable]
-                port.autofit(fcrop=(xmin * 1e9, xmax * 1e9))
-                if norm:
-                    line_fit_a.set_data(  # pyright: ignore [reportPossiblyUnboundVariable]
-                        1e-9 * port.f_data,  # type: ignore
-                        20 * np.log10(np.abs(port.z_data_sim / self.amp_arr[self._AMP_IDX])),
-                    )
-                else:
-                    line_fit_a.set_data(1e-9 * port.f_data, 20 * np.log10(np.abs(port.z_data_sim)))  # pyright: ignore
-                line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))  # pyright: ignore
-                # print(port.fitresults)
-                print("----------------")
-                print(f"fr = {port.fitresults['fr']}")
-                print(f"Qi = {port.fitresults['Qi_dia_corr']}")
-                print(f"Qc = {port.fitresults['Qc_dia_corr']}")
-                print(f"Ql = {port.fitresults['Ql']}")
-                print(f"kappa = {port.fitresults['fr'] / port.fitresults['Qc_dia_corr']}")
-                print("----------------")
-                # ax2.set_title(
-                #     f"fr = {1e-6*fr:.0f} MHz, Ql = {Ql:.0f}, Qi = {Qi:.0f}, Qc = {Qc:.0f}, kappa = {1e-3*kappa:.0f} kHz")
-                if blit:
-                    fig1.canvas.restore_region(self._bg)  # type: ignore
-                    ax1.draw_artist(line_sel)
-                    ax2.draw_artist(line_a)
-                    ax2.draw_artist(line_fit_a)  # pyright: ignore [reportPossiblyUnboundVariable]
-                    ax3.draw_artist(line_p)
-                    ax3.draw_artist(line_fit_p)  # pyright: ignore [reportPossiblyUnboundVariable]
-                    fig1.canvas.blit(fig1.bbox)
-                    fig1.canvas.flush_events()
-                else:
-                    fig1.canvas.draw()
-
-            rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            fig1._span_a = mwidgets.SpanSelector(  # type: ignore
-                ax2, onselect, "horizontal", props=rectprops, useblit=blit
-            )
-            fig1._span_p = mwidgets.SpanSelector(  # type: ignore
-                ax3, onselect, "horizontal", props=rectprops, useblit=blit
-            )
+        rectprops = dict(facecolor="tab:gray", alpha=0.5)
+        fig1._span_a = mwidgets.SpanSelector(  # pyright: ignore[reportAttributeAccessIssue]
+            ax2, onselect, "horizontal", props=rectprops, useblit=blit
+        )
+        fig1._span_p = mwidgets.SpanSelector(  # pyright: ignore[reportAttributeAccessIssue]
+            ax3, onselect, "horizontal", props=rectprops, useblit=blit
+        )
 
         fig1.canvas.mpl_connect("button_press_event", onbuttonpress)
         fig1.canvas.mpl_connect("key_press_event", onkeypress)
@@ -362,7 +352,7 @@ class SweepPower(Base):
         if blit:
             fig1.canvas.draw()
             fig1.canvas.flush_events()
-            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # type: ignore
+            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # pyright: ignore[reportAttributeAccessIssue]
             ax1.draw_artist(line_sel)
             ax2.draw_artist(line_a)
             ax3.draw_artist(line_p)
