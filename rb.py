@@ -97,9 +97,7 @@ class Rb(PlsBase):
                 cnt = cnt + 1
                 print()
                 print(f"****** {cnt}/{tot} ******")
-                self.t_arr, data = self._run_sequence(
-                    seq, presto_address, presto_port, ext_ref_clk
-                )
+                self.t_arr, data = self._run_sequence(seq, presto_address, presto_port, ext_ref_clk)
                 self.store_arr[i, j, :] = data[0, 0, :]
                 time.sleep(0.01)
 

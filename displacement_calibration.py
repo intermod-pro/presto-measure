@@ -177,9 +177,7 @@ class DisplacementCalibration(PlsBase):
             # *** Run the experiment ***
             # **************************
 
-            pls.run(
-                period=T, repeat_count=len(self.memory_amp_arr), num_averages=self.num_averages
-            )
+            pls.run(period=T, repeat_count=len(self.memory_amp_arr), num_averages=self.num_averages)
             self.t_arr, self.store_arr = pls.get_store_data()
 
         return self.save()

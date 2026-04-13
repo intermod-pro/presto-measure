@@ -193,9 +193,7 @@ class SweepPulsed(PlsBase):
             ax11, ax12 = ax1
             ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
             ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(
-                1e9 * self.t_arr, np.abs(self.store_arr[int(self.readout_freq_nr / 2), 0, :])
-            )
+            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[int(self.readout_freq_nr / 2), 0, :]))
             ax12.plot(
                 1e9 * self.t_arr, np.angle(self.store_arr[int(self.readout_freq_nr / 2), 0, :])
             )

@@ -131,9 +131,7 @@ class Notch:
             / (-2 * f * self._ql + (2 * self._ql + 1j) * self._fr) ** 2
         )
         # ds/k_real
-        jac[:, 2] = _c2r(
-            -self._s_baseline(f) * self._ql / (1 + 2j * self._ql * (f / self._fr - 1))
-        )
+        jac[:, 2] = _c2r(-self._s_baseline(f) * self._ql / (1 + 2j * self._ql * (f / self._fr - 1)))
 
         # ds/k_imag
         jac[:, 3] = _c2r(
