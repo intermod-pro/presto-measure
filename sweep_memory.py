@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 """Measure the frequency of the memory."""
 
-from typing import Optional
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -63,7 +62,7 @@ class Sweep_memory(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -166,11 +165,11 @@ class Sweep_memory(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "Sweep_memory":
+    def load(cls, load_filename: str) -> Sweep_memory:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

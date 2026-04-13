@@ -1,20 +1,20 @@
-# -*- coding: utf-8 -*-
 """
 2D sweep of DC bias and frequency of probe to find the modulation curve of the JPA.
 """
 
-from typing import List, Optional, Union
+from __future__ import annotations
 
 import h5py
 import numpy as np
 import numpy.typing as npt
 
 from presto import lockin
+from presto import dcbias
 from presto.utils import ProgressBar, asarray
 
 from _base import Base
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class SweepFreqAndDC(Base):
@@ -52,7 +52,7 @@ class SweepFreqAndDC(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
@@ -80,9 +80,7 @@ class SweepFreqAndDC(Base):
             max_bias = max(self.bias_arr)
             min_bias = min(self.bias_arr)
             active_bias, active_range = lck.hardware.get_dc_bias(self.bias_port, get_range=True)
-            active_range_max_voltage, active_range_min_voltage = lck.hardware._dc_max_min(
-                active_range
-            )
+            active_range_max_voltage, active_range_min_voltage = dcbias._dc_max_min(active_range)
             if max_bias > active_range_max_voltage or min_bias < active_range_min_voltage:
                 if max_bias > 10 or min_bias < 10:
                     raise ValueError("Value of DC bias has to be between -10 and 10V")
@@ -151,11 +149,11 @@ class SweepFreqAndDC(Base):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "SweepFreqAndDC":
+    def load(cls, load_filename: str) -> SweepFreqAndDC:
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore

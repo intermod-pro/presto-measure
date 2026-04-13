@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """Single-shot readout.
 
 Perform pulsed readout starting from ground and excited state using template matching with known
 reference traces. Compare with standard IQ readout.
 """
 
+from __future__ import annotations
+
 import ast
-from typing import List, Optional, Union
 
 import h5py
 import numpy as np
@@ -17,7 +17,7 @@ from presto.utils import asarray, sin2
 
 from _base import PlsBase
 
-ComplexAny = Union[complex, List[complex], npt.NDArray[np.complexfloating]]
+ComplexAny = complex | list[complex] | npt.NDArray[np.complexfloating]
 
 
 class SingleShot(PlsBase):
@@ -39,7 +39,7 @@ class SingleShot(PlsBase):
         ref_g: ComplexAny,
         ref_e: ComplexAny,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -74,7 +74,7 @@ class SingleShot(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -202,11 +202,11 @@ class SingleShot(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "SingleShot":
+    def load(cls, load_filename: str) -> SingleShot:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -341,7 +341,7 @@ class SingleShot(PlsBase):
 def _analyze_hist(
     ax,
     data: npt.NDArray[np.float64],
-    threshold: Optional[float] = None,
+    threshold: float | None = None,
     fix_sum: bool = True,
     logscale: bool = False,
 ):

@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 """Measure the energy-relaxation time T1."""
 
-from typing import List, Optional, Union
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -12,7 +11,7 @@ from presto.utils import asarray, format_precision, rotate_opt, sin2
 
 from _base import PlsBase
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class T1_cavity(PlsBase):
@@ -60,7 +59,7 @@ class T1_cavity(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -163,11 +162,11 @@ class T1_cavity(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "T1_cavity":
+    def load(cls, load_filename: str) -> T1_cavity:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -244,7 +243,7 @@ class T1_cavity(PlsBase):
 
         T1 = popt[0]
         T1_err = perr[0]
-        print("T1 time I: {} +- {} us".format(1e6 * T1, 1e6 * T1_err))
+        print(f"T1 time I: {1e6 * T1} +- {1e6 * T1_err} us")
 
         if all_plots:
             fig2, ax2 = plt.subplots(4, 1, sharex=True, figsize=(6.4, 6.4), tight_layout=True)
@@ -282,7 +281,7 @@ class T1_cavity(PlsBase):
         ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), "--")
         ax3.set_ylabel(f"I quadrature [{unit:s}FS]")
         ax3.set_xlabel(r"Delay [μs]")
-        ax3.set_title("T1 = {:s} μs".format(format_precision(1e6 * T1, 1e6 * T1_err)))
+        ax3.set_title(f"T1 = {format_precision(1e6 * T1, 1e6 * T1_err):s} μs")
         fig3.show()
         ret_fig.append(fig3)
 

@@ -1,9 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 Simple frequency sweep using the Lockin mode.
 """
 
-from typing import Literal, Optional, overload
+from __future__ import annotations
+
+from typing import Literal, overload
 
 import h5py
 import numpy as np
@@ -44,7 +45,7 @@ class Sweep(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
@@ -111,11 +112,11 @@ class Sweep(Base):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "Sweep":
+    def load(cls, load_filename: str) -> Sweep:
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore
@@ -161,34 +162,28 @@ class Sweep(Base):
         if self.resp_arr is None:
             raise RuntimeError
 
-        try:
-            from resonator_tools import circuit
-
-            _do_fit = True
-        except ImportError:
-            _do_fit = False
+        from resfit import Notch
 
         resp_dB = 20.0 * np.log10(np.abs(self.resp_arr))
 
         def do_fit(fmin, fmax):
-            if _do_fit:
-                port = circuit.notch_port(self.freq_arr, self.resp_arr)  # pyright: ignore[reportPossiblyUnboundVariable]
-                port.autofit(fcrop=(fmin, fmax))
-                sim_db = 20 * np.log10(np.abs(port.z_data_sim))
-                f_min = port.f_data[np.argmin(sim_db)]  # type: ignore
-                print("----------------")
-                print(f"fr = {port.fitresults['fr']}")
-                print(f"Qi = {port.fitresults['Qi_dia_corr']}")
-                print(f"Qc = {port.fitresults['Qc_dia_corr']}")
-                print(f"Ql = {port.fitresults['Ql']}")
-                print(f"kappa = {port.fitresults['fr'] / port.fitresults['Qc_dia_corr']}")
-                print(f"f_min = {f_min}")
-                print("----------------")
+            assert self.freq_arr is not None
+            assert self.resp_arr is not None
 
-                return port
-            else:
-                print("unable to perform fit: resonator_tools is not installed")
-                return None
+            idx = np.logical_and(self.freq_arr >= fmin, self.freq_arr <= fmax)
+            p = Notch.autofit(self.freq_arr[idx], self.resp_arr[idx])
+            sim_abs = np.abs(p.s(self.freq_arr[idx]))
+            f_min = self.freq_arr[idx][np.argmin(sim_abs)]
+            print("----------------")
+            print(f"fr = {p.f_res()}")
+            print(f"Qi = {p.q_internal()}")
+            print(f"Qc = {p.q_coupling()}")
+            print(f"Ql = {p.q_loaded()}")
+            print(f"kappa = {p.f_res() / p.q_coupling()}")
+            print(f"f_min = {f_min}")
+            print("----------------")
+
+            return p
 
         if not batch:
             import matplotlib.pyplot as plt
@@ -201,9 +196,15 @@ class Sweep(Base):
             (line_fit_a,) = ax11.plot(
                 1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
             )
+            (line_fit_a2,) = ax11.plot(
+                1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
+            )
             ax12.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr), ".", label="data")
             (line_fit_p,) = ax12.plot(
                 1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", label="fit"
+            )
+            (line_fit_p2,) = ax12.plot(
+                1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", label="fit2"
             )
             ax12.set_xlabel("Frequency [GHz]")
             ax11.set_ylabel("Amplitude [dB]")
@@ -213,22 +214,25 @@ class Sweep(Base):
             ax12.grid()
 
             def onselect(xmin, xmax):
-                port = do_fit(xmin * 1e9, xmax * 1e9)
-                if port is not None:
-                    sim_db = 20 * np.log10(np.abs(port.z_data_sim))
-                    line_fit_a.set_data(1e-9 * port.f_data, sim_db)  # type: ignore
-                    line_fit_p.set_data(1e-9 * port.f_data, np.angle(port.z_data_sim))  # type: ignore
-                    fig1.canvas.draw()
+                assert self.freq_arr is not None
+                assert self.resp_arr is not None
+
+                p = do_fit(xmin * 1e9, xmax * 1e9)
+                s_db = p.s_db(self.freq_arr)
+                s_angle = np.angle(p.s(self.freq_arr))
+                line_fit_a.set_data(1e-9 * self.freq_arr, s_db)
+                line_fit_p.set_data(1e-9 * self.freq_arr, s_angle)
+                fig1.canvas.draw()
 
             # SpanSelector messes up x limits in some versions of matplotlib
             # save limits now and restore them later on
             xlims = ax11.get_xlim()
             rectprops = dict(facecolor="tab:gray", alpha=0.5)
-            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
-            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)  # pyright: ignore[reportPossiblyUnboundVariable]
+            span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)
+            span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)
             # keep references to span selectors
-            fig1._span_a = span_a  # type: ignore
-            fig1._span_p = span_p  # type: ignore
+            fig1._span_a = span_a  # pyright: ignore[reportAttributeAccessIssue]
+            fig1._span_p = span_p  # pyright: ignore[reportAttributeAccessIssue]
             # restore x limits
             ax11.set_xlim(xlims)
 
@@ -242,8 +246,7 @@ class Sweep(Base):
             # fit at most half of the sweep span
             f_min = max(f_ctr - self.freq_span / 4, self.freq_arr.min())
             f_max = min(f_ctr + self.freq_span / 4, self.freq_arr.max())
-            port = do_fit(f_min, f_max)
-            assert port is not None
-            sim_db = 20 * np.log10(np.abs(port.z_data_sim))
-            f_min = port.f_data[np.argmin(sim_db)]  # type: ignore
+            p = do_fit(f_min, f_max)
+            sim_abs = np.abs(p.s(self.freq_arr))
+            f_min = self.freq_arr[np.argmin(sim_abs)]
             return float(f_min)

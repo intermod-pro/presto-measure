@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 """Pulsed frequency sweep on the resonator."""
 
-from typing import Optional
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -49,7 +48,7 @@ class SweepPulsed(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -129,11 +128,11 @@ class SweepPulsed(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "SweepPulsed":
+    def load(cls, load_filename: str) -> SweepPulsed:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq_center = float(h5f.attrs["readout_freq_center"])  # type: ignore
             readout_freq_span = float(h5f.attrs["readout_freq_span"])  # type: ignore
@@ -184,13 +183,7 @@ class SweepPulsed(PlsBase):
         assert len(self.readout_if_arr) == self.readout_freq_nr
 
         import matplotlib.pyplot as plt
-
-        try:
-            from resonator_tools import circuit
-
-            _has_resonator_tools = True
-        except ImportError:
-            _has_resonator_tools = False
+        from resfit import Notch
 
         ret_fig = []
         if all_plots:
@@ -200,9 +193,7 @@ class SweepPulsed(PlsBase):
             ax11, ax12 = ax1
             ax11.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
             ax12.axvspan(1e9 * t_low, 1e9 * t_high, facecolor="#dfdfdf")
-            ax11.plot(
-                1e9 * self.t_arr, np.abs(self.store_arr[int(self.readout_freq_nr / 2), 0, :])
-            )
+            ax11.plot(1e9 * self.t_arr, np.abs(self.store_arr[int(self.readout_freq_nr / 2), 0, :]))
             ax12.plot(
                 1e9 * self.t_arr, np.angle(self.store_arr[int(self.readout_freq_nr / 2), 0, :])
             )
@@ -245,46 +236,41 @@ class SweepPulsed(PlsBase):
         background = np.polyval(pfit_g, self.readout_freq_arr)
         resp_phase[0, :] -= background
 
-        if _has_resonator_tools:
-            print("----------------")
-            try:
-                # port_g = circuit.reflection_port(
-                #    self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
-                # )
-                port_g = circuit.notch_port(  # pyright: ignore [reportPossiblyUnboundVariable]
-                    self.readout_freq_arr, resp_H_arr[0, :] * np.exp(-1j * background)
-                )
-                port_g.autofit(electric_delay=-6.1e-9)
+        print("----------------")
+        p_g = Notch.autofit(
+            self.readout_freq_arr,
+            resp_H_arr[0, :] * np.exp(-1j * background),
+            x0={"tau": -6.1e-9},
+        )
+        f_g = p_g.f_res()
 
-                f_g = port_g.fitresults["fr"]
-
-                print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
-                _fit_success = True
-            except Exception:
-                print("fit failed")
-                _fit_success = False
-            print("----------------")
-        else:
-            _fit_success = False
+        print(f"ω_g / 2π = {f_g * 1e-9:.6f} GHz")
+        _fit_success = True
+        print("----------------")
 
         fig2, ax2 = plt.subplots(2, 1, sharex=True, tight_layout=True, figsize=(6.4, 6.4))
         ax21, ax22 = ax2
 
         for ax_ in ax2:
             if _fit_success:
-                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)  # pyright: ignore [reportPossiblyUnboundVariable]
+                ax_.axvline(1e-9 * f_g, ls="--", c="tab:red", alpha=0.5)
 
         ax21.plot(1e-9 * self.readout_freq_arr, resp_dB[0, :], c="tab:blue", label="|g>")
         ax22.plot(1e-9 * self.readout_freq_arr, resp_phase[0, :], c="tab:blue")
 
         if _fit_success:
             ax21.plot(
-                1e-9 * port_g.f_data,  # pyright: ignore
-                20 * np.log10(np.abs(port_g.z_data_sim)),  # pyright: ignore [reportPossiblyUnboundVariable]
+                1e-9 * self.readout_freq_arr,
+                p_g.s_db(self.readout_freq_arr),
                 c="tab:red",
                 ls="--",
             )
-            ax22.plot(1e-9 * port_g.f_data, np.angle(port_g.z_data_sim), c="tab:red", ls="--")  # pyright: ignore
+            ax22.plot(
+                1e-9 * self.readout_freq_arr,
+                np.angle(p_g.s(self.readout_freq_arr)),
+                c="tab:red",
+                ls="--",
+            )
 
         ax21.set_ylabel("Amplitude [dBFS]")
         ax22.set_ylabel("Phase [rad]")

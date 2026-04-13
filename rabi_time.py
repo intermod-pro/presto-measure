@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 Measure Rabi oscillation by changing the amplitude and the duration of the control pulse.
 
 Both control pulse and readout pulse have a square envelope.
 """
 
+from __future__ import annotations
+
 import math
-from typing import List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
@@ -17,7 +17,7 @@ from presto.utils import asarray, rotate_opt
 
 from _base import PlsBase
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class RabiTime(PlsBase):
@@ -59,7 +59,7 @@ class RabiTime(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -139,11 +139,11 @@ class RabiTime(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RabiTime":
+    def load(cls, load_filename: str) -> RabiTime:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -312,7 +312,7 @@ def _func(t, offset, amplitude, T2, period, phase):
 
 def _fit_period(
     x: npt.NDArray[np.float64], y: npt.NDArray[np.float64]
-) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     from scipy.optimize import curve_fit
 
     pkpk = np.max(y) - np.min(y)

@@ -1,12 +1,13 @@
-# -*- coding: utf-8 -*-
 """Measure Ramsey oscillations by changing the delay between two π/2 pulses.
 
 Fit detuning of control drive frequency from qubit, and T2*.
 The control pulse has a sin^2 envelope, while the readout pulse is square.
 """
 
+from __future__ import annotations
+
 import ast
-from typing import List, Literal, Optional, Union, overload
+from typing import Literal, overload
 
 import h5py
 import numpy as np
@@ -17,7 +18,7 @@ from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class RamseySingle(PlsBase):
@@ -37,7 +38,7 @@ class RamseySingle(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -63,7 +64,7 @@ class RamseySingle(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         # Instantiate interface class
@@ -145,11 +146,11 @@ class RamseySingle(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RamseySingle":
+    def load(cls, load_filename: str) -> RamseySingle:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -222,10 +223,10 @@ class RamseySingle(PlsBase):
 
             T2 = popt[2]
             T2_err = perr[2]
-            print("T2 time: {} +- {} us".format(1e6 * T2, 1e6 * T2_err))
+            print(f"T2 time: {1e6 * T2} +- {1e6 * T2_err} us")
             det = popt[3]
             det_err = perr[3]
-            print("detuning: {} +- {} Hz".format(det, det_err))
+            print(f"detuning: {det} +- {det_err} Hz")
 
             success = True
         except Exception as err:
@@ -288,7 +289,7 @@ class RamseySingle(PlsBase):
             ax3.set_xlabel("Ramsey delay [μs]")
             if success:
                 ax3.plot(1e6 * self.delay_arr, mult * _func(self.delay_arr, *popt), "--")  # pyright: ignore [reportPossiblyUnboundVariable]
-                ax3.set_title(f"T2* = {1e6*T2:.0f} ± {1e6*T2_err:.0f} μs")  # pyright: ignore [reportPossiblyUnboundVariable]
+                ax3.set_title(f"T2* = {1e6 * T2:.0f} ± {1e6 * T2_err:.0f} μs")  # pyright: ignore [reportPossiblyUnboundVariable]
             ax3.grid()
             fig3.show()
             ret_fig.append(fig3)

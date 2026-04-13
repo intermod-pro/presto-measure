@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import ast
 import os
 import signal
 import time
-from typing import List, Optional, Union
 
 import h5py
 from matplotlib import _pylab_helpers
@@ -18,7 +18,7 @@ from _base import Base
 from ramsey_echo import RamseyEcho
 from t1 import T1 as T1Class
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 KEEP_GOING = True
 
@@ -41,10 +41,10 @@ class CycleTs(Base):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
-        ref_g: Optional[List[complex]] = None,
-        ref_e: Optional[List[complex]] = None,
+        ref_g: list[complex] | None = None,
+        ref_e: list[complex] | None = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -89,7 +89,7 @@ class CycleTs(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ):
         self.time_start = time.time()
@@ -113,13 +113,13 @@ class CycleTs(Base):
         global KEEP_GOING
         while KEEP_GOING:
             print("\n\n\n")
-            print(f"******* Run number {count+1:d} *******")
+            print(f"******* Run number {count + 1:d} *******")
             count += 1
 
             print("\n")
             print("------- measure T1 -------")
             self._data1, t1, t1_err = self.measure_t1(presto_address, presto_port, ext_ref_clk)
-            print("T1 = {:s} μs".format(format_precision(1e6 * t1, 1e6 * t1_err)))
+            print(f"T1 = {format_precision(1e6 * t1, 1e6 * t1_err):s} μs")
 
             # self._data1 = np.vstack((self._data1, data1))
             self._t1_arr = np.r_[self._t1_arr, t1]
@@ -135,7 +135,7 @@ class CycleTs(Base):
             print("\n")
             print("------- measure T2 -------")
             self._data2, t2, t2_err = self.measure_t2(presto_address, presto_port, ext_ref_clk)
-            print("T2 = {:s} μs".format(format_precision(1e6 * t2, 1e6 * t2_err)))
+            print(f"T2 = {format_precision(1e6 * t2, 1e6 * t2_err):s} μs")
 
             # self._data2 = np.vstack((self._data2, data2))
             self._t2_arr = np.r_[self._t2_arr, t2]
@@ -152,7 +152,7 @@ class CycleTs(Base):
         print("Done")
         input("___ Press Enter to close ___")
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         # save parameters
         self._save_filename = super()._save(__file__, save_filename=save_filename)
         # add growable arrays
@@ -233,7 +233,7 @@ class CycleTs(Base):
         print(f"Data appended to: {self._save_filename}")
 
     @classmethod
-    def load(cls, load_filename: str) -> "CycleTs":
+    def load(cls, load_filename: str) -> CycleTs:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore

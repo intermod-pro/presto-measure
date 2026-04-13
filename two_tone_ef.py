@@ -1,10 +1,11 @@
-# -*- coding: utf-8 -*-
 """
 Find |e> -> |f> transition with two-tone spectroscopy with Pulsed mode.
 """
 
+from __future__ import annotations
+
 import ast
-from typing import Literal, Optional, overload
+from typing import Literal, overload
 
 import h5py
 import numpy as np
@@ -37,7 +38,7 @@ class TwoToneEF(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.ge_freq = ge_freq
@@ -67,7 +68,7 @@ class TwoToneEF(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with pulsed.Pulsed(
@@ -197,11 +198,11 @@ class TwoToneEF(PlsBase):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "TwoToneEF":
+    def load(cls, load_filename: str) -> TwoToneEF:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             ge_freq = float(h5f.attrs["ge_freq"])  # type: ignore

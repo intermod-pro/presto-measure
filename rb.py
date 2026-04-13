@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Randomized benchmarking of a single qubit.
 
@@ -12,7 +11,6 @@ from __future__ import annotations
 
 import ast
 import time
-from typing import List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
@@ -26,10 +24,10 @@ from presto.utils import asarray, rotate_opt, sin2
 
 from _base import PlsBase
 
-Gate = Tuple[str, int]
-GateSeq = List[Gate]
+Gate = tuple[str, int]
+GateSeq = list[Gate]
 
-IntAny = Union[int, List[int], npt.NDArray[np.integer]]
+IntAny = int | list[int] | npt.NDArray[np.integer]
 
 
 class Rb(PlsBase):
@@ -51,7 +49,7 @@ class Rb(PlsBase):
         rb_len_arr: IntAny,
         rb_nr_realizations: int,
         drag: float = 0.0,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -73,12 +71,12 @@ class Rb(PlsBase):
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
-        self._rb_sequences: List[List[GateSeq]] = []  # replaced by run
+        self._rb_sequences: list[list[GateSeq]] = []  # replaced by run
 
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         rb_nr_lengths = len(self.rb_len_arr)
@@ -99,19 +97,17 @@ class Rb(PlsBase):
                 cnt = cnt + 1
                 print()
                 print(f"****** {cnt}/{tot} ******")
-                self.t_arr, data = self._run_sequence(
-                    seq, presto_address, presto_port, ext_ref_clk
-                )
+                self.t_arr, data = self._run_sequence(seq, presto_address, presto_port, ext_ref_clk)
                 self.store_arr[i, j, :] = data[0, 0, :]
                 time.sleep(0.01)
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "Rb":
+    def load(cls, load_filename: str) -> Rb:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -131,7 +127,7 @@ class Rb(PlsBase):
             drag = float(h5f.attrs["drag"])  # type: ignore
 
             try:
-                jpa_params: Optional[dict] = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
+                jpa_params: dict | None = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
             except KeyError:
                 jpa_params = None
 
@@ -166,7 +162,7 @@ class Rb(PlsBase):
         self,
         sequence: GateSeq,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ):
         with pulsed.Pulsed(
@@ -263,7 +259,7 @@ class Rb(PlsBase):
 
             return ret
 
-    def _rbgen(self) -> List[List[GateSeq]]:
+    def _rbgen(self) -> list[list[GateSeq]]:
         return _singlequbitrb(self.rb_len_arr.tolist(), self.rb_nr_realizations)  # pyright: ignore[reportArgumentType]
 
     def analyze(self):
@@ -348,7 +344,7 @@ class Rb(PlsBase):
         fid = 1.0 - r
         fid_std = r_std
         print(f"F: {fid} +/- {fid_std:e}")
-        fid_label = f"$\\mathcal{{F}} = {100*fid:.3f}\\%$"
+        fid_label = f"$\\mathcal{{F}} = {100 * fid:.3f}\\%$"
 
         xg = A
         xe = B - 2 * (A - B)
@@ -433,15 +429,15 @@ class Rb(PlsBase):
         return ret_fig
 
 
-def _singlequbitrb(lengths: List[int], num_samples: int) -> List[List[GateSeq]]:
+def _singlequbitrb(lengths: list[int], num_samples: int) -> list[list[GateSeq]]:
     qubits = [1]
 
     exp = StandardRB(qubits, lengths, num_samples=num_samples)
     basis_gates = ["sx", "rz"]
     ct = transpile(exp.circuits(), basis_gates=basis_gates)
-    sequences: List[List[GateSeq]] = []
+    sequences: list[list[GateSeq]] = []
     for i in range(num_samples):
-        inner: List[GateSeq] = []
+        inner: list[GateSeq] = []
         sequences.append(inner)
         for j in range(len(lengths)):
             inner.append(_translateseq(ct[i * len(lengths) + j]))

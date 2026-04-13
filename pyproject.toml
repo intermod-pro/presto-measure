@@ -1,24 +1,40 @@
-[tool.black]
-line-length = 99
+[project]
+name = "presto-measure"
+version = "0.1.0"
+authors = [
+    {name = "Intermodulation Products AB", email = "support@intermod.pro"},
+]
+description = "Collection of measurement and analysis scripts for the Presto platform"
+license = "MIT"
 
-[tool.pylint.format]
-max-line-length = 99
-
-[tool.pyright]
-ignore = ["bak/", "data/"]
-reportMissingImports = false
-typeCheckingMode = "standard"
-
-[tool.ruff]
-extend-exclude = ["bak/", "data/"]
-line-length = 99
-
-[tool.yapf]
-based_on_style = "pep8"
-column_limit = 99
+requires-python = ">= 3.10"
+dependencies = [
+    "h5py >= 3.9",
+    "matplotlib >= 3.8",
+    "numpy >= 1.25",
+    "scipy >= 1.11",
+    "intermod-presto",
+]
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.34.0",
+    "basedpyright>=1.39.0",
+    "pyqt6 >= 6.11",  # otherwise matplotlib 3.8 doesn't work in uv
 ]
 
+[tool.pyright]
+ignore = ["bak/", "data/"]
+typeCheckingMode = "standard"
+deprecateTypingAliases = true
+reportDeprecated = "warning"
+reportMissingImports = false
+
+[tool.ruff]
+extend-exclude = ["bak/", "data/"]
+line-length = 100
+
+[tool.uv]
+config-settings-package = { intermod-presto = { editable_mode = "compat" } }
+
+[tool.uv.sources]
+intermod-presto = { path = "../presto-api", editable = true }

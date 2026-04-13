@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Simple frequency sweep using the Lockin mode.
 """
 
-from typing import List, Optional, Union
+from __future__ import annotations
 
 import h5py
 import numpy as np
@@ -14,7 +13,7 @@ from presto.utils import ProgressBar, asarray
 
 from _base import Base
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class SweepFreqAndDC(Base):
@@ -50,7 +49,7 @@ class SweepFreqAndDC(Base):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
     ) -> str:
         with lockin.Lockin(
@@ -130,11 +129,11 @@ class SweepFreqAndDC(Base):
 
         return self.save()
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "SweepFreqAndDC":
+    def load(cls, load_filename: str) -> SweepFreqAndDC:
         with h5py.File(load_filename, "r") as h5f:
             freq_center = float(h5f.attrs["freq_center"])  # type: ignore
             freq_span = float(h5f.attrs["freq_span"])  # type: ignore

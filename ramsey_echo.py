@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """Measure the decoherence time T2 with a Ramsey echo experiment."""
 
+from __future__ import annotations
+
 import ast
-from typing import List, Optional, Union
 
 import h5py
 import numpy as np
@@ -13,7 +13,7 @@ from presto.utils import asarray, format_precision, rotate_opt, sin2
 
 from _base import PlsBase, project
 
-FloatAny = Union[float, List[float], npt.NDArray[np.floating]]
+FloatAny = float | list[float] | npt.NDArray[np.floating]
 
 
 class RamseyEcho(PlsBase):
@@ -34,7 +34,7 @@ class RamseyEcho(PlsBase):
         wait_delay: float,
         readout_sample_delay: float,
         num_averages: int,
-        jpa_params: Optional[dict] = None,
+        jpa_params: dict | None = None,
         drag: float = 0.0,
     ) -> None:
         self.readout_freq = readout_freq
@@ -61,7 +61,7 @@ class RamseyEcho(PlsBase):
     def run(
         self,
         presto_address: str,
-        presto_port: Optional[int] = None,
+        presto_port: int | None = None,
         ext_ref_clk: bool = False,
         save: bool = True,
     ) -> str:
@@ -157,11 +157,11 @@ class RamseyEcho(PlsBase):
         else:
             return ""
 
-    def save(self, save_filename: Optional[str] = None) -> str:
+    def save(self, save_filename: str | None = None) -> str:
         return super()._save(__file__, save_filename=save_filename)
 
     @classmethod
-    def load(cls, load_filename: str) -> "RamseyEcho":
+    def load(cls, load_filename: str) -> RamseyEcho:
         with h5py.File(load_filename, "r") as h5f:
             readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
             control_freq = float(h5f.attrs["control_freq"])  # type: ignore
@@ -209,7 +209,7 @@ class RamseyEcho(PlsBase):
 
         return self
 
-    def analyze_batch(self, reference_templates: Optional[tuple] = None):
+    def analyze_batch(self, reference_templates: tuple | None = None):
         assert self.t_arr is not None
         assert self.store_arr is not None
 
@@ -260,7 +260,7 @@ class RamseyEcho(PlsBase):
 
             T2 = popt[0]
             T2_err = perr[0]
-            print(f"T2_echo time: {1e6*T2} ± {1e6*T2_err} μs")
+            print(f"T2_echo time: {1e6 * T2} ± {1e6 * T2_err} μs")
 
             success = True
         except Exception:
@@ -304,7 +304,7 @@ class RamseyEcho(PlsBase):
         ax3.set_xlabel("Ramsey delay [μs]")
         if success:
             ax3.plot(1e6 * self.delay_arr, mult * _decay(self.delay_arr, *popt), "--")  # pyright: ignore [reportPossiblyUnboundVariable]
-            ax3.set_title("T2 echo = {:s} μs".format(format_precision(1e6 * T2, 1e6 * T2_err)))  # pyright: ignore [reportPossiblyUnboundVariable]
+            ax3.set_title(f"T2 echo = {format_precision(1e6 * T2, 1e6 * T2_err):s} μs")  # pyright: ignore [reportPossiblyUnboundVariable]
         ax3.grid()
         fig3.show()
         ret_fig.append(fig3)
