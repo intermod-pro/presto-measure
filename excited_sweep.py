@@ -11,7 +11,7 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import sin2, untwist_downconversion
 
-from _base import PlsBase
+from _base import PlsBase, attr_or
 
 
 class ExcitedSweep(PlsBase):
@@ -33,6 +33,9 @@ class ExcitedSweep(PlsBase):
         readout_sample_delay: float,
         num_averages: int,
         drag: float = 0.0,
+        readout_current: int = PlsBase.DAC_CURRENT,
+        control_current: int = PlsBase.DAC_CURRENT,
+        sample_attenuation: float = PlsBase.ADC_ATTENUATION,
     ) -> None:
         self.readout_freq_center = readout_freq_center
         self.readout_freq_span = readout_freq_span
@@ -50,6 +53,9 @@ class ExcitedSweep(PlsBase):
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
         self.drag = drag
+        self.readout_current = readout_current
+        self.control_current = control_current
+        self.sample_attenuation = sample_attenuation
 
         self.readout_freq_arr = None  # replaced by run
         self.readout_if_arr = None  # replaced by run
@@ -82,9 +88,9 @@ class ExcitedSweep(PlsBase):
             self.readout_nco = self.readout_freq_center - readout_if_center
             self.readout_freq_arr = self.readout_nco + self.readout_if_arr
 
-            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
-            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.sample_attenuation)
+            pls.hardware.set_dac_current(self.readout_port, self.readout_current)
+            pls.hardware.set_dac_current(self.control_port, self.control_current)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
@@ -123,7 +129,7 @@ class ExcitedSweep(PlsBase):
             )
 
             # number of samples in the control template
-            control_ns = int(round(self.control_duration * pls.get_fs("dac")))
+            control_ns = round(self.control_duration * pls.get_fs("dac"))
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 self.control_port, group=0, template=control_envelope, envelope=False
@@ -162,28 +168,32 @@ class ExcitedSweep(PlsBase):
     @classmethod
     def load(cls, load_filename: str) -> ExcitedSweep:
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq_center = float(h5f.attrs["readout_freq_center"])  # type: ignore
-            readout_freq_span = float(h5f.attrs["readout_freq_span"])  # type: ignore
-            readout_freq_nr = int(h5f.attrs["readout_freq_nr"])  # type: ignore
-            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
-            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
-            control_amp = float(h5f.attrs["control_amp"])  # type: ignore
-            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
-            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
-            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
-            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
-            control_port = int(h5f.attrs["control_port"])  # type: ignore
-            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
-            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
-            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
-            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
-            drag = float(h5f.attrs["drag"])  # type: ignore
-            readout_nco = float(h5f.attrs["readout_nco"])  # type: ignore
+            readout_freq_center = float(h5f.attrs["readout_freq_center"])
+            readout_freq_span = float(h5f.attrs["readout_freq_span"])
+            readout_freq_nr = int(h5f.attrs["readout_freq_nr"])
+            control_freq = float(h5f.attrs["control_freq"])
+            readout_amp = float(h5f.attrs["readout_amp"])
+            control_amp = float(h5f.attrs["control_amp"])
+            readout_duration = float(h5f.attrs["readout_duration"])
+            control_duration = float(h5f.attrs["control_duration"])
+            sample_duration = float(h5f.attrs["sample_duration"])
+            readout_port = int(h5f.attrs["readout_port"])
+            control_port = int(h5f.attrs["control_port"])
+            sample_port = int(h5f.attrs["sample_port"])
+            wait_delay = float(h5f.attrs["wait_delay"])
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])
+            num_averages = int(h5f.attrs["num_averages"])
+            drag = float(h5f.attrs["drag"])
+            readout_nco = float(h5f.attrs["readout_nco"])
 
-            readout_freq_arr: npt.NDArray[np.float64] = h5f["readout_freq_arr"][()]  # type: ignore
-            readout_if_arr: npt.NDArray[np.float64] = h5f["readout_if_arr"][()]  # type: ignore
-            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
-            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
+            readout_current = int(attr_or(h5f, "readout_current", PlsBase.DAC_CURRENT))
+            control_current = int(attr_or(h5f, "control_current", PlsBase.DAC_CURRENT))
+            sample_attenuation = float(attr_or(h5f, "sample_attenuation", PlsBase.ADC_ATTENUATION))
+
+            readout_freq_arr: npt.NDArray[np.float64] = h5f["readout_freq_arr"][()]
+            readout_if_arr: npt.NDArray[np.float64] = h5f["readout_if_arr"][()]
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]
 
         self = cls(
             readout_freq_center=readout_freq_center,
@@ -202,6 +212,9 @@ class ExcitedSweep(PlsBase):
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
             drag=drag,
+            readout_current=readout_current,
+            control_current=control_current,
+            sample_attenuation=sample_attenuation,
         )
         self.readout_freq_arr = readout_freq_arr
         self.readout_if_arr = readout_if_arr
@@ -227,6 +240,7 @@ class ExcitedSweep(PlsBase):
         assert len(self.readout_if_arr) == self.readout_freq_nr
 
         from scipy.optimize import curve_fit
+
         from resfit import Notch
 
         # Analyze

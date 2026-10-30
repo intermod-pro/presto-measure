@@ -153,3 +153,10 @@ def project(resp_arr, reference_templates):
     res_rng = res_e - res_g
     data = (res - res_min) / res_rng
     return data
+
+
+def attr_or[T](h5f: h5py.File, attr: str, default: T) -> T:
+    try:
+        return h5f.attrs[attr]
+    except KeyError:
+        return default

@@ -11,7 +11,7 @@ import numpy.typing as npt
 from presto import lockin
 from presto.utils import ProgressBar, asarray
 
-from _base import Base
+from _base import Base, attr_or
 
 FloatAny = float | list[float] | npt.NDArray[np.floating]
 
@@ -28,6 +28,8 @@ class SweepPower(Base):
         input_port: int,
         dither: bool = True,
         num_skip: int = 0,
+        output_current: int = Base.DAC_CURRENT,
+        input_attenuation: float = Base.ADC_ATTENUATION,
     ) -> None:
         self.freq_center = freq_center
         self.freq_span = freq_span
@@ -38,6 +40,8 @@ class SweepPower(Base):
         self.input_port = input_port
         self.dither = dither
         self.num_skip = num_skip
+        self.output_current = output_current
+        self.input_attenuation = input_attenuation
 
         self.freq_arr = None  # replaced by run
         self.resp_arr = None  # replaced by run
@@ -54,8 +58,8 @@ class SweepPower(Base):
             ext_ref_clk=ext_ref_clk,
             **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
-            lck.hardware.set_dac_current(self.output_port, self.DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.input_attenuation)
+            lck.hardware.set_dac_current(self.output_port, self.output_current)
             lck.hardware.set_inv_sinc(self.output_port, 0)
 
             nr_amps = len(self.amp_arr)
@@ -66,8 +70,8 @@ class SweepPower(Base):
 
             f_start = self.freq_center - self.freq_span / 2
             f_stop = self.freq_center + self.freq_span / 2
-            n_start = int(round(f_start / self.df))
-            n_stop = int(round(f_stop / self.df))
+            n_start = round(f_start / self.df)
+            n_stop = round(f_stop / self.df)
             n_arr = np.arange(n_start, n_stop + 1)
             nr_freq = len(n_arr)
             self.freq_arr = self.df * n_arr
@@ -123,18 +127,21 @@ class SweepPower(Base):
     @classmethod
     def load(cls, load_filename: str) -> SweepPower:
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = float(h5f.attrs["freq_center"])  # type: ignore
-            freq_span = float(h5f.attrs["freq_span"])  # type: ignore
-            df = float(h5f.attrs["df"])  # type: ignore
-            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
-            output_port = int(h5f.attrs["output_port"])  # type: ignore
-            input_port = int(h5f.attrs["input_port"])  # type: ignore
-            dither = bool(h5f.attrs["dither"])  # type: ignore
-            num_skip = int(h5f.attrs["num_skip"])  # type: ignore
+            freq_center = float(h5f.attrs["freq_center"])
+            freq_span = float(h5f.attrs["freq_span"])
+            df = float(h5f.attrs["df"])
+            num_averages = int(h5f.attrs["num_averages"])
+            output_port = int(h5f.attrs["output_port"])
+            input_port = int(h5f.attrs["input_port"])
+            dither = bool(h5f.attrs["dither"])
+            num_skip = int(h5f.attrs["num_skip"])
 
-            amp_arr: npt.NDArray[np.float64] = h5f["amp_arr"][()]  # type: ignore
-            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]  # type: ignore
-            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]  # type: ignore
+            output_current = int(attr_or(h5f, "output_current", Base.DAC_CURRENT))
+            input_attenuation = float(attr_or(h5f, "input_attenuation", Base.ADC_ATTENUATION))
+
+            amp_arr: npt.NDArray[np.float64] = h5f["amp_arr"][()]
+            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]
+            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]
 
         self = cls(
             freq_center=freq_center,
@@ -146,6 +153,8 @@ class SweepPower(Base):
             input_port=input_port,
             dither=dither,
             num_skip=num_skip,
+            output_current=output_current,
+            input_attenuation=input_attenuation,
         )
         self.freq_arr = freq_arr
         self.resp_arr = resp_arr
@@ -161,6 +170,7 @@ class SweepPower(Base):
 
         import matplotlib.pyplot as plt
         import matplotlib.widgets as mwidgets
+
         from resfit import Notch
 
         nr_amps = len(self.amp_arr)
@@ -267,7 +277,7 @@ class SweepPower(Base):
 
         def onbuttonpress(event):
             if event.inaxes == ax1:
-                self._AMP_IDX = np.argmin(np.abs(amp_dBFS - event.ydata))
+                self._AMP_IDX = int(np.argmin(np.abs(amp_dBFS - event.ydata)))
                 update()
 
         def onkeypress(event):
@@ -279,8 +289,7 @@ class SweepPower(Base):
                     update()
                 elif event.key == "down":
                     self._AMP_IDX -= 1
-                    if self._AMP_IDX < 0:
-                        self._AMP_IDX = 0
+                    self._AMP_IDX = max(self._AMP_IDX, 0)
                     update()
 
         def update():
@@ -296,7 +305,7 @@ class SweepPower(Base):
             line_fit_p.set_ydata(np.full_like(freqs, np.nan))
             # ax2.set_title("")
             if blit:
-                fig1.canvas.restore_region(self._bg)  # pyright: ignore[reportAttributeAccessIssue]
+                fig1.canvas.restore_region(self._bg)  # ty: ignore[unresolved-attribute]
                 ax1.draw_artist(line_sel)
                 ax2.draw_artist(line_a)
                 ax3.draw_artist(line_p)
@@ -327,7 +336,7 @@ class SweepPower(Base):
             # ax2.set_title(
             #     f"fr = {1e-6*fr:.0f} MHz, Ql = {Ql:.0f}, Qi = {Qi:.0f}, Qc = {Qc:.0f}, kappa = {1e-3*kappa:.0f} kHz")
             if blit:
-                fig1.canvas.restore_region(self._bg)  # pyright: ignore[reportAttributeAccessIssue]
+                fig1.canvas.restore_region(self._bg)  # ty: ignore[unresolved-attribute]
                 ax1.draw_artist(line_sel)
                 ax2.draw_artist(line_a)
                 ax2.draw_artist(line_fit_a)
@@ -338,11 +347,11 @@ class SweepPower(Base):
             else:
                 fig1.canvas.draw()
 
-        rectprops = dict(facecolor="tab:gray", alpha=0.5)
-        fig1._span_a = mwidgets.SpanSelector(  # pyright: ignore[reportAttributeAccessIssue]
+        rectprops = {"facecolor": "tab:gray", "alpha": 0.5}
+        fig1._span_a = mwidgets.SpanSelector(  # ty: ignore[unresolved-attribute]
             ax2, onselect, "horizontal", props=rectprops, useblit=blit
         )
-        fig1._span_p = mwidgets.SpanSelector(  # pyright: ignore[reportAttributeAccessIssue]
+        fig1._span_p = mwidgets.SpanSelector(  # ty: ignore[unresolved-attribute]
             ax3, onselect, "horizontal", props=rectprops, useblit=blit
         )
 
@@ -352,7 +361,7 @@ class SweepPower(Base):
         if blit:
             fig1.canvas.draw()
             fig1.canvas.flush_events()
-            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # pyright: ignore[reportAttributeAccessIssue]
+            self._bg = fig1.canvas.copy_from_bbox(fig1.bbox)  # ty: ignore[unresolved-attribute]
             ax1.draw_artist(line_sel)
             ax2.draw_artist(line_a)
             ax3.draw_artist(line_p)

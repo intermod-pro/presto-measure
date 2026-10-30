@@ -7,31 +7,29 @@ authors = [
 description = "Collection of measurement and analysis scripts for the Presto platform"
 license = "MIT"
 
-requires-python = ">= 3.10"
+requires-python = ">= 3.12"
 dependencies = [
-    "h5py >= 3.9",
-    "matplotlib >= 3.8",
-    "numpy >= 1.25",
-    "scipy >= 1.11",
+    "h5py >= 3.11",
+    "matplotlib >= 3.9",
+    "numpy >= 2.0",
+    "scipy >= 1.12",
+    "tomlkit >= 0.13",
     "intermod-presto",
 ]
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.39.0",
-    "pyqt6 >= 6.11",  # otherwise matplotlib 3.8 doesn't work in uv
+    "ruff>=0.17.3",
+    "ty>=0.0.95",
 ]
-
-[tool.pyright]
-ignore = ["bak/", "data/"]
-typeCheckingMode = "standard"
-deprecateTypingAliases = true
-reportDeprecated = "warning"
-reportMissingImports = false
 
 [tool.ruff]
 extend-exclude = ["bak/", "data/"]
 line-length = 100
+
+[tool.ruff.lint.isort]
+known-first-party = ["presto"]
+known-local-folder = ["_base"]
 
 [tool.uv]
 config-settings-package = { intermod-presto = { editable_mode = "compat" } }

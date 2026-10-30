@@ -13,7 +13,7 @@ import numpy.typing as npt
 from presto import lockin
 from presto.utils import ProgressBar
 
-from _base import Base
+from _base import Base, attr_or
 
 
 class Sweep(Base):
@@ -28,6 +28,8 @@ class Sweep(Base):
         input_port: int,
         dither: bool = True,
         num_skip: int = 0,
+        output_current: int = Base.DAC_CURRENT,
+        input_attenuation: float = Base.ADC_ATTENUATION,
     ) -> None:
         self.freq_center = freq_center
         self.freq_span = freq_span
@@ -38,6 +40,8 @@ class Sweep(Base):
         self.input_port = input_port
         self.dither = dither
         self.num_skip = num_skip
+        self.output_current = output_current
+        self.input_attenuation = input_attenuation
 
         self.freq_arr = None  # replaced by run
         self.resp_arr = None  # replaced by run
@@ -54,16 +58,16 @@ class Sweep(Base):
             ext_ref_clk=ext_ref_clk,
             **self.DC_PARAMS,
         ) as lck:
-            lck.hardware.set_adc_attenuation(self.input_port, self.ADC_ATTENUATION)
-            lck.hardware.set_dac_current(self.output_port, self.DAC_CURRENT)
+            lck.hardware.set_adc_attenuation(self.input_port, self.input_attenuation)
+            lck.hardware.set_dac_current(self.output_port, self.output_current)
             lck.hardware.set_inv_sinc(self.output_port, 0)
 
             # tune frequencies
             _, self.df = lck.tune(0.0, self.df)
             f_start = self.freq_center - self.freq_span / 2
             f_stop = self.freq_center + self.freq_span / 2
-            n_start = int(round(f_start / self.df))
-            n_stop = int(round(f_stop / self.df))
+            n_start = round(f_start / self.df)
+            n_stop = round(f_stop / self.df)
             n_arr = np.arange(n_start, n_stop + 1)
             nr_freq = len(n_arr)
             self.freq_arr = self.df * n_arr
@@ -118,18 +122,21 @@ class Sweep(Base):
     @classmethod
     def load(cls, load_filename: str) -> Sweep:
         with h5py.File(load_filename, "r") as h5f:
-            freq_center = float(h5f.attrs["freq_center"])  # type: ignore
-            freq_span = float(h5f.attrs["freq_span"])  # type: ignore
-            df = float(h5f.attrs["df"])  # type: ignore
-            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
-            amp = float(h5f.attrs["amp"])  # type: ignore
-            output_port = int(h5f.attrs["output_port"])  # type: ignore
-            input_port = int(h5f.attrs["input_port"])  # type: ignore
-            dither = bool(h5f.attrs["dither"])  # type: ignore
-            num_skip = int(h5f.attrs["num_skip"])  # type: ignore
+            freq_center = float(h5f.attrs["freq_center"])
+            freq_span = float(h5f.attrs["freq_span"])
+            df = float(h5f.attrs["df"])
+            num_averages = int(h5f.attrs["num_averages"])
+            amp = float(h5f.attrs["amp"])
+            output_port = int(h5f.attrs["output_port"])
+            input_port = int(h5f.attrs["input_port"])
+            dither = bool(h5f.attrs["dither"])
+            num_skip = int(h5f.attrs["num_skip"])
 
-            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]  # type: ignore
-            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]  # type: ignore
+            output_current = int(attr_or(h5f, "output_current", Base.DAC_CURRENT))
+            input_attenuation = float(attr_or(h5f, "input_attenuation", Base.ADC_ATTENUATION))
+
+            freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]
+            resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]
 
         self = cls(
             freq_center=freq_center,
@@ -141,6 +148,8 @@ class Sweep(Base):
             input_port=input_port,
             dither=dither,
             num_skip=num_skip,
+            output_current=output_current,
+            input_attenuation=input_attenuation,
         )
         self.freq_arr = freq_arr
         self.resp_arr = resp_arr
@@ -196,14 +205,12 @@ class Sweep(Base):
             (line_fit_a,) = ax11.plot(
                 1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
             )
-            (line_fit_a2,) = ax11.plot(
-                1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--"
-            )
+            ax11.plot(1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--")
             ax12.plot(1e-9 * self.freq_arr, np.angle(self.resp_arr), ".", label="data")
             (line_fit_p,) = ax12.plot(
                 1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", label="fit"
             )
-            (line_fit_p2,) = ax12.plot(
+            ax12.plot(
                 1e-9 * self.freq_arr, np.full_like(self.freq_arr, np.nan), ls="--", label="fit2"
             )
             ax12.set_xlabel("Frequency [GHz]")
@@ -227,12 +234,12 @@ class Sweep(Base):
             # SpanSelector messes up x limits in some versions of matplotlib
             # save limits now and restore them later on
             xlims = ax11.get_xlim()
-            rectprops = dict(facecolor="tab:gray", alpha=0.5)
+            rectprops = {"facecolor": "tab:gray", "alpha": 0.5}
             span_a = mwidgets.SpanSelector(ax11, onselect, "horizontal", props=rectprops)
             span_p = mwidgets.SpanSelector(ax12, onselect, "horizontal", props=rectprops)
             # keep references to span selectors
-            fig1._span_a = span_a  # pyright: ignore[reportAttributeAccessIssue]
-            fig1._span_p = span_p  # pyright: ignore[reportAttributeAccessIssue]
+            fig1._span_a = span_a  # ty: ignore[unresolved-attribute]
+            fig1._span_p = span_p  # ty: ignore[unresolved-attribute]
             # restore x limits
             ax11.set_xlim(xlims)
 

@@ -17,7 +17,7 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import asarray, format_precision, rotate_opt, sin2
 
-from _base import PlsBase
+from _base import PlsBase, attr_or
 
 FloatAny = float | list[float] | npt.NDArray[np.floating]
 
@@ -41,6 +41,9 @@ class RabiAmp(PlsBase):
         num_pulses: int = 1,
         jpa_params: dict | None = None,
         drag: float = 0.0,
+        readout_current: int = PlsBase.DAC_CURRENT,
+        control_current: int = PlsBase.DAC_CURRENT,
+        sample_attenuation: float = PlsBase.ADC_ATTENUATION,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -57,6 +60,9 @@ class RabiAmp(PlsBase):
         self.num_averages = num_averages
         self.num_pulses = num_pulses
         self.drag = drag
+        self.readout_current = readout_current
+        self.control_current = control_current
+        self.sample_attenuation = sample_attenuation
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
@@ -76,9 +82,9 @@ class RabiAmp(PlsBase):
             ext_ref_clk=ext_ref_clk,
             **self.DC_PARAMS,
         ) as pls:
-            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
-            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.sample_attenuation)
+            pls.hardware.set_dac_current(self.readout_port, self.readout_current)
+            pls.hardware.set_dac_current(self.control_port, self.control_current)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
@@ -112,7 +118,7 @@ class RabiAmp(PlsBase):
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
             # number of samples in the control template
-            control_ns = int(round(self.control_duration * pls.get_fs("dac")))
+            control_ns = round(self.control_duration * pls.get_fs("dac"))
             control_envelope = sin2(control_ns, drag=self.drag)
             control_pulse = pls.setup_template(
                 self.control_port,
@@ -159,28 +165,32 @@ class RabiAmp(PlsBase):
     @classmethod
     def load(cls, load_filename: str) -> RabiAmp:
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
-            control_freq = float(h5f.attrs["control_freq"])  # type: ignore
-            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
-            control_amp_arr: npt.NDArray[np.float64] = h5f["control_amp_arr"][()]  # type: ignore
-            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
-            control_duration = float(h5f.attrs["control_duration"])  # type: ignore
-            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
-            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
-            control_port = int(h5f.attrs["control_port"])  # type: ignore
-            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
-            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
-            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
-            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
-            num_pulses = int(h5f.attrs["num_pulses"])  # type: ignore
+            readout_freq = float(h5f.attrs["readout_freq"])
+            control_freq = float(h5f.attrs["control_freq"])
+            readout_amp = float(h5f.attrs["readout_amp"])
+            control_amp_arr: npt.NDArray[np.float64] = h5f["control_amp_arr"][()]
+            readout_duration = float(h5f.attrs["readout_duration"])
+            control_duration = float(h5f.attrs["control_duration"])
+            sample_duration = float(h5f.attrs["sample_duration"])
+            readout_port = int(h5f.attrs["readout_port"])
+            control_port = int(h5f.attrs["control_port"])
+            sample_port = int(h5f.attrs["sample_port"])
+            wait_delay = float(h5f.attrs["wait_delay"])
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])
+            num_averages = int(h5f.attrs["num_averages"])
+            num_pulses = int(h5f.attrs["num_pulses"])
 
-            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
-            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
+            readout_current = int(attr_or(h5f, "readout_current", PlsBase.DAC_CURRENT))
+            control_current = int(attr_or(h5f, "control_current", PlsBase.DAC_CURRENT))
+            sample_attenuation = float(attr_or(h5f, "sample_attenuation", PlsBase.ADC_ATTENUATION))
+
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]
 
             try:
-                drag = float(h5f.attrs["drag"])  # type: ignore
+                drag = float(h5f.attrs["drag"])
             except KeyError:
                 drag = 0.0
 
@@ -201,6 +211,9 @@ class RabiAmp(PlsBase):
             num_pulses=num_pulses,
             jpa_params=jpa_params,
             drag=drag,
+            readout_current=readout_current,
+            control_current=control_current,
+            sample_attenuation=sample_attenuation,
         )
         self.t_arr = t_arr
         self.store_arr = store_arr

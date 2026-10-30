@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
 import os
 import shutil
+import subprocess
 import sys
+from datetime import datetime
 
 import numpy as np
 
@@ -49,8 +50,9 @@ def sweep(settings: Settings):
         output_port=settings.readout_port,
         input_port=settings.sample_port,
         dither=True,
+        output_current=settings.readout_current,
+        input_attenuation=settings.sample_attenuation,
     )
-    exp.DAC_CURRENT = settings.dac_current
     exp.run(settings.address, settings.port)
 
     f_min = round(exp.analyze(batch=True), -3)
@@ -79,8 +81,10 @@ def two_tone_pulsed(settings: Settings):
         num_averages=_NR_AVG,
         jpa_params=settings.jpa,
         drag=settings.drag,
+        readout_current=settings.readout_current,
+        control_current=settings.control_current,
+        sample_attenuation=settings.sample_attenuation,
     )
-    exp.DAC_CURRENT = settings.dac_current
     exp.run(settings.address, settings.port)
 
     f_q = round(exp.analyze(batch=True), -3)
@@ -108,8 +112,10 @@ def rabi_amp(settings: Settings, num_pulses: int):
         num_pulses=num_pulses,
         jpa_params=settings.jpa,
         drag=settings.drag,
+        readout_current=settings.readout_current,
+        control_current=settings.control_current,
+        sample_attenuation=settings.sample_attenuation,
     )
-    exp.DAC_CURRENT = settings.dac_current
     exp.run(settings.address, settings.port)
 
     control_amp_180, control_amp_90 = exp.analyze(batch=True)
@@ -148,8 +154,10 @@ def ramsey_single(settings: Settings, coarse: bool = False):
         num_averages=_NR_AVG,
         jpa_params=settings.jpa,
         drag=settings.drag,
+        readout_current=settings.readout_current,
+        control_current=settings.control_current,
+        sample_attenuation=settings.sample_attenuation,
     )
-    exp.DAC_CURRENT = settings.dac_current
     exp.run(settings.address, settings.port)
 
     measured = exp.analyze(batch=True)
@@ -181,8 +189,10 @@ def two_tone_ef(settings: Settings):
         readout_sample_delay=settings.readout_sample_delay,
         num_averages=_NR_AVG,
         jpa_params=settings.jpa,
+        readout_current=settings.readout_current,
+        control_current=settings.control_current,
+        sample_attenuation=settings.sample_attenuation,
     )
-    exp.DAC_CURRENT = settings.dac_current
     exp.run(settings.address, settings.port)
 
     anharmonicity = round(exp.analyze(batch=True), -5)
@@ -210,8 +220,10 @@ def excited_sweep(settings: Settings):
         readout_sample_delay=settings.readout_sample_delay,
         num_averages=_NR_AVG,
         drag=settings.drag,
+        readout_current=settings.readout_current,
+        control_current=settings.control_current,
+        sample_attenuation=settings.sample_attenuation,
     )
-    exp.DAC_CURRENT = settings.dac_current
     exp.run(settings.address, settings.port)
 
     f_opt = round(exp.analyze(batch=True), -3)
@@ -271,3 +283,8 @@ if __name__ == "__main__":
     rprint(f"Saved qubit parameters to {_new_filename}")
 
     compare(Settings.load(_old_filename), Settings.load(_new_filename))
+
+    subprocess.run(
+        ["/usr/bin/paplay", "/usr/share/sounds/freedesktop/stereo/complete.oga"],
+        check=False,
+    )

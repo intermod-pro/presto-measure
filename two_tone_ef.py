@@ -14,7 +14,7 @@ import numpy.typing as npt
 from presto import pulsed
 from presto.utils import rotate_opt, sin2
 
-from _base import PlsBase
+from _base import PlsBase, attr_or
 
 
 class TwoToneEF(PlsBase):
@@ -39,6 +39,9 @@ class TwoToneEF(PlsBase):
         readout_sample_delay: float,
         num_averages: int,
         jpa_params: dict | None = None,
+        readout_current: int = PlsBase.DAC_CURRENT,
+        control_current: int = PlsBase.DAC_CURRENT,
+        sample_attenuation: float = PlsBase.ADC_ATTENUATION,
     ) -> None:
         self.readout_freq = readout_freq
         self.ge_freq = ge_freq
@@ -58,6 +61,9 @@ class TwoToneEF(PlsBase):
         self.wait_delay = wait_delay
         self.readout_sample_delay = readout_sample_delay
         self.num_averages = num_averages
+        self.readout_current = readout_current
+        self.control_current = control_current
+        self.sample_attenuation = sample_attenuation
 
         self.t_arr = None  # replaced by run
         self.store_arr = None  # replaced by run
@@ -87,9 +93,9 @@ class TwoToneEF(PlsBase):
             alpha_stop = self.alpha_center + half
             self.alpha_arr = np.linspace(alpha_start, alpha_stop, self.alpha_nr)
 
-            pls.hardware.set_adc_attenuation(self.sample_port, self.ADC_ATTENUATION)
-            pls.hardware.set_dac_current(self.readout_port, self.DAC_CURRENT)
-            pls.hardware.set_dac_current(self.control_port, self.DAC_CURRENT)
+            pls.hardware.set_adc_attenuation(self.sample_port, self.sample_attenuation)
+            pls.hardware.set_dac_current(self.readout_port, self.readout_current)
+            pls.hardware.set_dac_current(self.control_port, self.control_current)
             pls.hardware.set_inv_sinc(self.readout_port, 0)
             pls.hardware.set_inv_sinc(self.control_port, 0)
 
@@ -136,7 +142,7 @@ class TwoToneEF(PlsBase):
             # For the control pulse we create a sine-squared envelope,
             # and use setup_template to use the user-defined envelope
             # number of samples in the control template
-            ge_ns = int(round(self.ge_duration * pls.get_fs("dac")))
+            ge_ns = round(self.ge_duration * pls.get_fs("dac"))
             ge_envelope = sin2(ge_ns)
             ge_pulse = pls.setup_template(
                 self.control_port,
@@ -145,7 +151,7 @@ class TwoToneEF(PlsBase):
                 envelope=False,
             )
 
-            ef_ns = int(round(self.ef_duration * pls.get_fs("dac")))
+            ef_ns = round(self.ef_duration * pls.get_fs("dac"))
             ef_envelope = sin2(ef_ns)
             ef_pulse = pls.setup_template(
                 self.control_port,
@@ -204,30 +210,34 @@ class TwoToneEF(PlsBase):
     @classmethod
     def load(cls, load_filename: str) -> TwoToneEF:
         with h5py.File(load_filename, "r") as h5f:
-            readout_freq = float(h5f.attrs["readout_freq"])  # type: ignore
-            ge_freq = float(h5f.attrs["ge_freq"])  # type: ignore
-            alpha_center = float(h5f.attrs["alpha_center"])  # type: ignore
-            alpha_span = float(h5f.attrs["alpha_span"])  # type: ignore
-            alpha_nr = int(h5f.attrs["alpha_nr"])  # type: ignore
-            readout_amp = float(h5f.attrs["readout_amp"])  # type: ignore
-            ge_amp = float(h5f.attrs["ge_amp"])  # type: ignore
-            ef_amp = float(h5f.attrs["ef_amp"])  # type: ignore
-            readout_duration = float(h5f.attrs["readout_duration"])  # type: ignore
-            ge_duration = float(h5f.attrs["ge_duration"])  # type: ignore
-            ef_duration = float(h5f.attrs["ef_duration"])  # type: ignore
-            sample_duration = float(h5f.attrs["sample_duration"])  # type: ignore
-            readout_port = int(h5f.attrs["readout_port"])  # type: ignore
-            control_port = int(h5f.attrs["control_port"])  # type: ignore
-            sample_port = int(h5f.attrs["sample_port"])  # type: ignore
-            wait_delay = float(h5f.attrs["wait_delay"])  # type: ignore
-            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])  # type: ignore
-            num_averages = int(h5f.attrs["num_averages"])  # type: ignore
+            readout_freq = float(h5f.attrs["readout_freq"])
+            ge_freq = float(h5f.attrs["ge_freq"])
+            alpha_center = float(h5f.attrs["alpha_center"])
+            alpha_span = float(h5f.attrs["alpha_span"])
+            alpha_nr = int(h5f.attrs["alpha_nr"])
+            readout_amp = float(h5f.attrs["readout_amp"])
+            ge_amp = float(h5f.attrs["ge_amp"])
+            ef_amp = float(h5f.attrs["ef_amp"])
+            readout_duration = float(h5f.attrs["readout_duration"])
+            ge_duration = float(h5f.attrs["ge_duration"])
+            ef_duration = float(h5f.attrs["ef_duration"])
+            sample_duration = float(h5f.attrs["sample_duration"])
+            readout_port = int(h5f.attrs["readout_port"])
+            control_port = int(h5f.attrs["control_port"])
+            sample_port = int(h5f.attrs["sample_port"])
+            wait_delay = float(h5f.attrs["wait_delay"])
+            readout_sample_delay = float(h5f.attrs["readout_sample_delay"])
+            num_averages = int(h5f.attrs["num_averages"])
 
-            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])  # type: ignore
+            jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]  # type: ignore
-            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]  # type: ignore
-            alpha_arr: npt.NDArray[np.float64] = h5f["alpha_arr"][()]  # type: ignore
+            readout_current = int(attr_or(h5f, "readout_current", PlsBase.DAC_CURRENT))
+            control_current = int(attr_or(h5f, "control_current", PlsBase.DAC_CURRENT))
+            sample_attenuation = float(attr_or(h5f, "sample_attenuation", PlsBase.ADC_ATTENUATION))
+
+            t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]
+            store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]
+            alpha_arr: npt.NDArray[np.float64] = h5f["alpha_arr"][()]
 
         self = cls(
             readout_freq=readout_freq,
@@ -249,6 +259,9 @@ class TwoToneEF(PlsBase):
             readout_sample_delay=readout_sample_delay,
             num_averages=num_averages,
             jpa_params=jpa_params,
+            readout_current=readout_current,
+            control_current=control_current,
+            sample_attenuation=sample_attenuation,
         )
         self.t_arr = t_arr
         self.store_arr = store_arr
@@ -295,7 +308,7 @@ class TwoToneEF(PlsBase):
             popt, _ = curve_fit(_gaussian, self.alpha_arr, data.real, p0)
             print(f"f0 = {popt[0]} Hz")
             print(f"sigma = {abs(popt[1])} Hz")
-        except Exception:
+        except Exception:  # noqa
             print("fit failed")
             popt = None
 

@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 import os
+from dataclasses import dataclass
 
 import tomlkit
+from tomlkit.exceptions import NonExistentKey
 
 
 @dataclass
@@ -15,15 +16,15 @@ class Settings:
     address: str
     port: int
 
-    dac_current: int
-
     readout_port: int
     readout_duration: float
     readout_amp: float
     readout_freq: float
+    readout_current: int
 
     sample_port: int
     sample_duration: float
+    sample_attenuation: float
     wait_delay: float
     readout_sample_delay: float
 
@@ -32,6 +33,7 @@ class Settings:
     control_freq: float
     control_amp_180: float
     control_amp_90: float
+    control_current: int
 
     anharmonicity: float
     _drag_use: bool
@@ -71,13 +73,13 @@ class Settings:
         return cls.load(settings_path)
 
     @classmethod
-    def from_latest(cls, which_qubit: int):
-        filename = sorted(
+    def from_latest(cls, which_qubit: int) -> Settings:
+        filename = max(
             filter(
                 lambda x: x.startswith(f"qubit{which_qubit}") and x.endswith(".toml"),
                 os.listdir("data/"),
             )
-        )[-1]
+        )
         return cls.load(os.path.join("data", filename))
 
     @classmethod
@@ -96,18 +98,43 @@ class Settings:
         else:
             jpa = None
 
+        try:
+            readout_current = int(doc["readout"]["current"])
+        except NonExistentKey:
+            try:
+                readout_current = int(doc["hardware"]["dac-current"])
+                print("WARN: readout.current not found, fall back to legacy hardware.dac-current")
+            except NonExistentKey:
+                readout_current = 32_000
+                print("WARN: readout.current not found, fall back to default 32000")
+        try:
+            control_current = int(doc["control"]["current"])
+        except NonExistentKey:
+            try:
+                control_current = int(doc["hardware"]["dac-current"])
+                print("WARN: control.current not found, fall back to legacy hardware.dac-current")
+            except NonExistentKey:
+                control_current = 32_000
+                print("WARN: control.current not found, fall back to default 32000")
+        try:
+            sample_attenuation = float(doc["sample"]["attenuation"])
+        except NonExistentKey:
+            sample_attenuation = 0.0
+            print("WARN: sample.attenuation not found, fall back to default 0.0")
+
         settings = cls(
             _path=filename,
             _doc=doc,
             address=str(doc["hardware"]["address"]),
             port=int(doc["hardware"]["port"]),
-            dac_current=int(doc["hardware"]["dac-current"]),
             readout_port=int(doc["readout"]["port"]),
             readout_duration=float(doc["readout"]["duration"]),
             readout_amp=float(doc["readout"]["amplitude"]),
             readout_freq=float(doc["readout"]["frequency"]),
+            readout_current=readout_current,
             sample_port=int(doc["sample"]["port"]),
             sample_duration=float(doc["sample"]["duration"]),
+            sample_attenuation=sample_attenuation,
             wait_delay=float(doc["measurement"]["delay"]),
             readout_sample_delay=float(doc["sample"]["delay"]),
             control_port=int(doc["control"]["port"]),
@@ -115,6 +142,7 @@ class Settings:
             control_freq=float(doc["control"]["frequency"]),
             control_amp_180=float(doc["control"]["amplitude_180"]),
             control_amp_90=float(doc["control"]["amplitude_90"]),
+            control_current=control_current,
             anharmonicity=float(doc["control"]["drag"]["anharmonicity"]),
             _drag_use=bool(doc["control"]["drag"]["use"]),
             _drag_lambda=float(doc["control"]["drag"]["lambda"]),
@@ -130,13 +158,14 @@ class Settings:
     def _update_toml(self):
         self._doc["hardware"]["address"] = self.address
         self._doc["hardware"]["port"] = self.port
-        self._doc["hardware"]["dac-current"] = self.dac_current
         self._doc["readout"]["port"] = self.readout_port
         self._doc["readout"]["duration"] = self.readout_duration
         self._doc["readout"]["amplitude"] = self.readout_amp
         self._doc["readout"]["frequency"] = self.readout_freq
+        self._doc["readout"]["current"] = self.readout_current
         self._doc["sample"]["port"] = self.sample_port
         self._doc["sample"]["duration"] = self.sample_duration
+        self._doc["sample"]["attenuation"] = self.sample_attenuation
         self._doc["measurement"]["delay"] = self.wait_delay
         self._doc["sample"]["delay"] = self.readout_sample_delay
         self._doc["control"]["port"] = self.control_port
@@ -144,6 +173,7 @@ class Settings:
         self._doc["control"]["frequency"] = self.control_freq
         self._doc["control"]["amplitude_180"] = self.control_amp_180
         self._doc["control"]["amplitude_90"] = self.control_amp_90
+        self._doc["control"]["current"] = self.control_current
 
         self._doc["control"]["drag"]["use"] = self._drag_use
         self._doc["control"]["drag"]["lambda"] = self._drag_lambda
