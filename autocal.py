@@ -53,7 +53,7 @@ def sweep(settings: Settings):
         output_current=settings.readout_current,
         input_attenuation=settings.sample_attenuation,
     )
-    exp.run(settings.address, settings.port)
+    exp.run(settings.address, settings.port, force_config=True, **settings.dc_params)
 
     f_min = round(exp.analyze(batch=True), -3)
     rprint(f"Readout frequency: {settings.readout_freq} --> {f_min}")
@@ -85,7 +85,7 @@ def two_tone_pulsed(settings: Settings):
         control_current=settings.control_current,
         sample_attenuation=settings.sample_attenuation,
     )
-    exp.run(settings.address, settings.port)
+    exp.run(settings.address, settings.port, force_config=True, **settings.dc_params)
 
     f_q = round(exp.analyze(batch=True), -3)
     rprint(f"Control frequency: {settings.control_freq} --> {f_q}")
@@ -116,7 +116,7 @@ def rabi_amp(settings: Settings, num_pulses: int):
         control_current=settings.control_current,
         sample_attenuation=settings.sample_attenuation,
     )
-    exp.run(settings.address, settings.port)
+    exp.run(settings.address, settings.port, force_config=True, **settings.dc_params)
 
     control_amp_180, control_amp_90 = exp.analyze(batch=True)
     control_amp_180 = round(control_amp_180, 5)
@@ -158,7 +158,7 @@ def ramsey_single(settings: Settings, coarse: bool = False):
         control_current=settings.control_current,
         sample_attenuation=settings.sample_attenuation,
     )
-    exp.run(settings.address, settings.port)
+    exp.run(settings.address, settings.port, force_config=True, **settings.dc_params)
 
     measured = exp.analyze(batch=True)
     control_freq = round(settings.control_freq + detuning - measured, -3)
@@ -193,7 +193,7 @@ def two_tone_ef(settings: Settings):
         control_current=settings.control_current,
         sample_attenuation=settings.sample_attenuation,
     )
-    exp.run(settings.address, settings.port)
+    exp.run(settings.address, settings.port, force_config=True, **settings.dc_params)
 
     anharmonicity = round(exp.analyze(batch=True), -5)
     rprint(f"Anharmonicity: {settings.anharmonicity} --> {anharmonicity}")
@@ -224,7 +224,7 @@ def excited_sweep(settings: Settings):
         control_current=settings.control_current,
         sample_attenuation=settings.sample_attenuation,
     )
-    exp.run(settings.address, settings.port)
+    exp.run(settings.address, settings.port, force_config=True, **settings.dc_params)
 
     f_opt = round(exp.analyze(batch=True), -3)
     rprint(f"Readout frequency: {settings.readout_freq} --> {f_opt}")

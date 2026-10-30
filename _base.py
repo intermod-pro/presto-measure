@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
 import os
+from datetime import datetime
 
 import h5py
 import numpy as np
@@ -17,11 +17,11 @@ class Base:
     Base class for measurements
     """
 
-    DAC_CURRENT: int = 32_000
+    _DAC_CURRENT: int = 32_000
     """μA -- Change to increase or decrease DAC analog output range"""
-    ADC_ATTENUATION: float = 0.0  # dB
+    _ADC_ATTENUATION: float = 0.0  # dB
     """dB -- Change to increase or decrease ADC analog input range"""
-    DC_PARAMS: dict = {
+    _DC_PARAMS: dict = {
         "adc_mode": AdcMode.Mixed,
         "dac_mode": DacMode.Mixed,
     }
@@ -59,7 +59,7 @@ class Base:
                         h5f.attrs[attribute] = self.__dict__[attribute]
                     else:
                         h5f.create_dataset(attribute, data=self.__dict__[attribute])
-                except Exception as err:
+                except Exception as err:  # noqa
                     print(f"WARN: unable to save {attribute}: {err}")
         print(f"Data saved to: {save_path}")
         return save_path
@@ -102,8 +102,8 @@ class PlsBase(Base):
             idler_freq = self.jpa_params["pump_freq"] - self.readout_freq
             idler_if = abs(idler_freq - self.readout_freq)  # NCO at readout_freq
             idler_period = 1 / idler_if
-            T_clk = int(round(T * pls.get_clk_f()))
-            idler_period_clk = int(round(idler_period * pls.get_clk_f()))
+            T_clk = round(T * pls.get_clk_f())
+            idler_period_clk = round(idler_period * pls.get_clk_f())
             # first make T a multiple of idler period
             if T_clk % idler_period_clk > 0:
                 T_clk += idler_period_clk - (T_clk % idler_period_clk)

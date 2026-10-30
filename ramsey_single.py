@@ -40,9 +40,9 @@ class RamseySingle(PlsBase):
         num_averages: int,
         jpa_params: dict | None = None,
         drag: float = 0.0,
-        readout_current: int = PlsBase.DAC_CURRENT,
-        control_current: int = PlsBase.DAC_CURRENT,
-        sample_attenuation: float = PlsBase.ADC_ATTENUATION,
+        readout_current: int = PlsBase._DAC_CURRENT,
+        control_current: int = PlsBase._DAC_CURRENT,
+        sample_attenuation: float = PlsBase._ADC_ATTENUATION,
     ) -> None:
         self.readout_freq = readout_freq
         self.control_freq = control_freq
@@ -72,13 +72,16 @@ class RamseySingle(PlsBase):
         presto_address: str,
         presto_port: int | None = None,
         ext_ref_clk: bool = False,
+        **kwargs,
     ) -> str:
+        all_params = self._DC_PARAMS.copy()
+        all_params.update(kwargs)
         # Instantiate interface class
         with pulsed.Pulsed(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **self.DC_PARAMS,
+            **all_params,
         ) as pls:
             pls.hardware.set_adc_attenuation(self.sample_port, self.sample_attenuation)
             pls.hardware.set_dac_current(self.readout_port, self.readout_current)
@@ -175,9 +178,9 @@ class RamseySingle(PlsBase):
 
             jpa_params: dict = ast.literal_eval(h5f.attrs["jpa_params"])
 
-            readout_current = int(attr_or(h5f, "readout_current", PlsBase.DAC_CURRENT))
-            control_current = int(attr_or(h5f, "control_current", PlsBase.DAC_CURRENT))
-            sample_attenuation = float(attr_or(h5f, "sample_attenuation", PlsBase.ADC_ATTENUATION))
+            readout_current = int(attr_or(h5f, "readout_current", PlsBase._DAC_CURRENT))
+            control_current = int(attr_or(h5f, "control_current", PlsBase._DAC_CURRENT))
+            sample_attenuation = float(attr_or(h5f, "sample_attenuation", PlsBase._ADC_ATTENUATION))
 
             t_arr: npt.NDArray[np.float64] = h5f["t_arr"][()]
             store_arr: npt.NDArray[np.complex128] = h5f["store_arr"][()]

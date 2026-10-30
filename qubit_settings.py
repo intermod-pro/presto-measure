@@ -10,11 +10,14 @@ from dataclasses import dataclass
 import tomlkit
 from tomlkit.exceptions import NonExistentKey
 
+from presto.hardware import AdcFSample, AdcMode, DacFSample, DacMode
+
 
 @dataclass
 class Settings:
     address: str
     port: int
+    dc_params: dict
 
     readout_port: int
     readout_duration: float
@@ -87,6 +90,64 @@ class Settings:
         with open(filename, "r") as f:
             doc = tomlkit.load(f)
 
+        if "dc-params" in doc["hardware"]:
+            params = doc["hardware"]["dc-params"]
+            adc_mode = params.get("adc-mode", AdcMode.Mixed.value)
+            dac_mode = params.get("dac-mode", DacMode.Mixed.value)
+            adc_fsample = params.get("adc-fsample", None)
+            dac_fsample = params.get("dac-fsample", None)
+            if isinstance(adc_mode, int):
+                adc_mode = AdcMode(adc_mode)
+            elif isinstance(adc_mode, list):
+                assert len(adc_mode) == 4
+                assert [isinstance(m, int) for m in adc_mode]
+                adc_mode = [AdcMode(m) for m in adc_mode]
+            else:
+                raise TypeError(f"unknown type for adc-mode: {type(adc_mode) = }, {adc_mode = }")
+            if isinstance(dac_mode, int):
+                dac_mode = DacMode(dac_mode)
+            elif isinstance(dac_mode, list):
+                assert len(dac_mode) == 4
+                assert [isinstance(m, int) for m in dac_mode]
+                dac_mode = [DacMode(m) for m in dac_mode]
+            else:
+                raise TypeError(f"unknown type for dac-mode: {type(dac_mode) = }, {dac_mode = }")
+            if adc_fsample is not None:
+                if isinstance(adc_fsample, int):
+                    adc_fsample = AdcFSample(adc_fsample)
+                elif isinstance(adc_fsample, list):
+                    assert len(adc_fsample) == 4
+                    assert [isinstance(m, int) for m in adc_fsample]
+                    adc_fsample = [AdcFSample(m) for m in adc_fsample]
+                else:
+                    raise TypeError(
+                        f"unknown type for adc-fsample: {type(adc_fsample) = }, {adc_fsample = }"
+                    )
+            if dac_fsample is not None:
+                if isinstance(dac_fsample, int):
+                    dac_fsample = DacFSample(dac_fsample)
+                elif isinstance(dac_fsample, list):
+                    assert len(dac_fsample) == 4
+                    assert [isinstance(m, int) for m in dac_fsample]
+                    dac_fsample = [DacFSample(m) for m in dac_fsample]
+                else:
+                    raise TypeError(
+                        f"unknown type for dac-fsample: {type(dac_fsample) = }, {dac_fsample = }"
+                    )
+            dc_params = {
+                "adc_mode": adc_mode,
+                "adc_fsample": adc_fsample,
+                "dac_mode": dac_mode,
+                "dac_fsample": dac_fsample,
+            }
+        else:
+            dc_params = {
+                "adc_mode": AdcMode.Mixed,
+                "adc_fsample": None,
+                "dac_mode": DacMode.Mixed,
+                "dac_fsample": None,
+            }
+
         if doc["jpa"]["use"]:
             jpa = {
                 "pump_port": int(doc["jpa"]["pump-port"]),
@@ -127,6 +188,7 @@ class Settings:
             _doc=doc,
             address=str(doc["hardware"]["address"]),
             port=int(doc["hardware"]["port"]),
+            dc_params=dc_params,
             readout_port=int(doc["readout"]["port"]),
             readout_duration=float(doc["readout"]["duration"]),
             readout_amp=float(doc["readout"]["amplitude"]),
@@ -178,6 +240,21 @@ class Settings:
         self._doc["control"]["drag"]["use"] = self._drag_use
         self._doc["control"]["drag"]["lambda"] = self._drag_lambda
         self._doc["control"]["drag"]["anharmonicity"] = self.anharmonicity
+
+        self._doc["hardware"]["dc-params"]["adc-mode"] = [
+            m.value for m in self.dc_params["adc_mode"]
+        ]
+        self._doc["hardware"]["dc-params"]["dac-mode"] = [
+            m.value for m in self.dc_params["dac_mode"]
+        ]
+        if self.dc_params["adc_fsample"] is not None:
+            self._doc["hardware"]["dc-params"]["adc-fsample"] = [
+                m.value for m in self.dc_params["adc_fsample"]
+            ]
+        if self.dc_params["dac_fsample"] is not None:
+            self._doc["hardware"]["dc-params"]["dac-fsample"] = [
+                m.value for m in self.dc_params["dac_fsample"]
+            ]
 
         if self._jpa is None:
             self._doc["jpa"]["use"] = False

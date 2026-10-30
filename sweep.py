@@ -28,8 +28,8 @@ class Sweep(Base):
         input_port: int,
         dither: bool = True,
         num_skip: int = 0,
-        output_current: int = Base.DAC_CURRENT,
-        input_attenuation: float = Base.ADC_ATTENUATION,
+        output_current: int = Base._DAC_CURRENT,
+        input_attenuation: float = Base._ADC_ATTENUATION,
     ) -> None:
         self.freq_center = freq_center
         self.freq_span = freq_span
@@ -51,12 +51,15 @@ class Sweep(Base):
         presto_address: str,
         presto_port: int | None = None,
         ext_ref_clk: bool = False,
+        **kwargs,
     ) -> str:
+        all_params = self._DC_PARAMS.copy()
+        all_params.update(kwargs)
         with lockin.Lockin(
             address=presto_address,
             port=presto_port,
             ext_ref_clk=ext_ref_clk,
-            **self.DC_PARAMS,
+            **all_params,
         ) as lck:
             lck.hardware.set_adc_attenuation(self.input_port, self.input_attenuation)
             lck.hardware.set_dac_current(self.output_port, self.output_current)
@@ -132,8 +135,8 @@ class Sweep(Base):
             dither = bool(h5f.attrs["dither"])
             num_skip = int(h5f.attrs["num_skip"])
 
-            output_current = int(attr_or(h5f, "output_current", Base.DAC_CURRENT))
-            input_attenuation = float(attr_or(h5f, "input_attenuation", Base.ADC_ATTENUATION))
+            output_current = int(attr_or(h5f, "output_current", Base._DAC_CURRENT))
+            input_attenuation = float(attr_or(h5f, "input_attenuation", Base._ADC_ATTENUATION))
 
             freq_arr: npt.NDArray[np.float64] = h5f["freq_arr"][()]
             resp_arr: npt.NDArray[np.complex128] = h5f["resp_arr"][()]
